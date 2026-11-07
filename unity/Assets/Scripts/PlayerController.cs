@@ -1,0 +1,1066 @@
+using UnityEngine;
+
+/// Third-person controller: camera behind the shoulder (Naraka-style), mouse look, crosshair aim,
+/// two weapon slots (guns and melee), energy, regenerating armor, dash with brief invulnerability.
+[RequireComponent(typeof(CharacterController))]
+[DefaultExecutionOrder(100)] // after CharacterAnim, so the hand IK sees the final animated pose
+public partial class PlayerController : MonoBehaviour
+{
+    public static PlayerController Current;
+
+    float Speed = 6f; // per class
+    const float Accel = 60f;
+    const float DashSpeed = 16f;
+    const float DashTime = 0.22f;
+    const float DashCooldown = 0.3f;
+    const float JumpVelocity = 7.6f; // apex ~1.45 m: chest-height orbs pass under the feet
+    const float Gravity = 20f;
+    const float AirControl = 0.25f;
+    const float StaminaRegen = 1f;   // per second, after StaminaDelay on the ground
+    const float StaminaDelay = 0.5f;
+    const float PerfectCooldown = 2f;
+    const float MouseSens = 2.2f;
+    const float CamDistance = 5.0f;
+    float ArmorDelay = 3f; // per class
+    const float ArmorTick = 0.8f;
+    static readonly Vector3 Shoulder = new Vector3(0.95f, 0.35f, 0f);
+
+    public int maxHp = 6, hp = 6;
+    public int maxArmor = 4, armor = 4;
+    public int maxEnergy = 200, energy = 200;
+    public int maxStamina = 3;
+    public float stamina = 3f;
+    public int perfectDodges;
+    public WeaponDef[] weapons = new WeaponDef[2];
+    public int slot;
+    public bool dead;
+    public bool controlEnabled = true;
+    public bool externalCamera;        // a scripted camera (grip sheets) owns the view
+    public Vector3? aimOverride;       // ... and then this is where the gun points
+    public float yaw;
+    public float pitch = 10f;
+    public Camera cam;
+    public Pickup nearbyWeapon;
+    public int damageTaken; // hp + armor lost, for the self-test
+    public bool shielded, stealthed;
+    public float poisoned;   // seconds of poison left
+    public float onIce;      // set each frame by an ice patch underfoot
+    float poisonTick;
+    public bool Stealthed => stealthed;
+    public PlayerSkill skill;
+    bool stealthStrike;
+    public System.Action Died;
+
+    CharacterController cc;
+    Transform model;
+    Transform weaponPivot;
+    GameObject weaponVisual;
+    Transform muzzle;
+    Renderer bodyRenderer;
+    CharacterAnim body;
+    float lastShot = -9f;
+    Vector3 faceDir = Vector3.forward;
+    Quaternion weaponRest = Quaternion.identity;
+    bool faceInit;
+    MaterialPropertyBlock mpb;
+    Vector3 velocity;
+    Vector3 dashDir;
+    float fireCd, dashT, dashCd, invuln, dashInvuln, sinceHit = 99f, armorTimer, swingT, noEnergyMsgCd;
+    float groundT, perfectCd, energyRegenAcc, hpRegenT;
+    ClassDef cls;
+    bool airJumped, nextCrit;
+    float camDist = CamDistance;
+    // special weapons
+    public bool testTrigger;      // the self-test holds the trigger with this
+    bool prevTrigger, boomerangOut;
+    float holdT;
+    Light chargeLight;
+    float charge, energyAcc, beamTick;
+    LineRenderer beam, beamGlow;
+    Light beamLight;
+    float beamSparkT;
+    public float Charge => charge;
+    public bool BoomerangOut => boomerangOut;
+
+    public WeaponDef Weapon => weapons[slot];
+    public bool Grounded => cc && cc.isGrounded;
+    public bool Dashing => dashT > 0f;
+    public float FeetHeight => transform.position.y;
+    public float VerticalSpeed => velocity.y;
+    public CollisionFlags LastFlags => cc.collisionFlags;
+
+    void Awake()
+    {
+        Current = this;
+        gameObject.layer = Layers.Player;
+        cc = GetComponent<CharacterController>();
+        cc.height = 1.7f;
+        cc.radius = 0.4f;
+        cc.center = new Vector3(0f, 0.85f, 0f);
+        cc.stepOffset = 0.35f;
+        cc.skinWidth = 0.04f;
+        cc.minMoveDistance = 0f; // at high frame rates per-frame moves are tiny; never drop them
+
+        model = new GameObject("model").transform;
+        model.SetParent(transform, false);
+        weaponPivot = new GameObject("weapon").transform;
+        weaponPivot.SetParent(model, false);
+        weaponPivot.localPosition = new Vector3(0.42f, 1.15f, 0.2f);
+        // The chosen class's Meshy model; the first-round knight if a model is missing.
+        string modelId = Classes.Get(RunState.classId).model;
+        if (!Resources.Load<GameObject>($"Models/Chars/{modelId}/rigged")) modelId = "hero";
+        body = CharacterAnim.Spawn(modelId, model, Layers.Player);
+        if (body)
+        {
+            cc.height = 1.5f;
+            cc.center = new Vector3(0f, 0.75f, 0f);
+            bodyRenderer = body.GetComponentInChildren<SkinnedMeshRenderer>();
+            var hand = body.Find("righthand");
+            if (hand)
+            {
+                weaponPivot.SetParent(hand, true);
+                weaponPivot.position = hand.position;
+                weaponPivot.rotation = model.rotation;
+                weaponRest = weaponPivot.localRotation;
+            }
+        }
+        else
+        {
+            bodyRenderer = Part(PrimitiveType.Capsule, new Vector3(0f, 0.85f, 0f), new Vector3(0.8f, 0.85f, 0.8f), "player_body");
+            Part(PrimitiveType.Cube, new Vector3(0f, 1.45f, 0.36f), new Vector3(0.5f, 0.16f, 0.1f), "player_visor");
+        }
+        muzzle = new GameObject("muzzle").transform;
+        muzzle.SetParent(weaponPivot, false);
+        mpb = new MaterialPropertyBlock();
+    }
+
+    void OnDestroy()
+    {
+        if (Current == this) Current = null;
+    }
+
+    Renderer Part(PrimitiveType type, Vector3 pos, Vector3 scale, string mat)
+    {
+        var go = GameObject.CreatePrimitive(type);
+        DestroyImmediate(go.GetComponent<Collider>());
+        go.layer = Layers.Player;
+        go.transform.SetParent(model, false);
+        go.transform.localPosition = pos;
+        go.transform.localScale = scale;
+        var r = go.GetComponent<Renderer>();
+        r.sharedMaterial = Palette.Get(mat);
+        return r;
+    }
+
+    /// Walking into a crate or barrel pushes it.
+    void OnControllerColliderHit(ControllerColliderHit hit)
+    {
+        if (hit.rigidbody && !hit.rigidbody.isKinematic)
+            hit.rigidbody.AddForceAtPosition(hit.moveDirection * 2f, hit.point, ForceMode.VelocityChange);
+    }
+
+    /// Load hp, weapons and the rest from the run.
+    public void LoadRun()
+    {
+        maxHp = RunState.maxHp;
+        hp = RunState.hp;
+        maxArmor = armor = RunState.maxArmor;
+        maxEnergy = RunState.maxEnergy;
+        energy = RunState.energy;
+        maxStamina = RunState.maxStamina;
+        stamina = maxStamina;
+        cls = Classes.Get(RunState.classId);
+        Speed = cls.speed;
+        ArmorDelay = cls.armorDelay;
+        weapons[0] = Weapons.Get(RunState.weapons[0]);
+        weapons[1] = RunState.weapons[1] != null ? Weapons.Get(RunState.weapons[1]) : null;
+        slot = weapons[RunState.slot] != null ? RunState.slot : 0;
+        EquipVisual();
+        // A mech you were piloting through the portal comes along.
+        if (RunState.mechId != null) Mount(Mechs.Get(RunState.mechId), RunState.mechHp);
+    }
+
+    void EquipVisual()
+    {
+        if (weaponVisual) Destroy(weaponVisual);
+        weaponVisual = Weapons.MakeVisual(Weapon, weaponPivot, Layers.Player);
+        // Muzzle at the front of whatever model is held (Meshy model or placeholder box).
+        var b = new Bounds();
+        bool any = false;
+        foreach (var r in weaponVisual.GetComponentsInChildren<Renderer>())
+        {
+            var lb = r.localBounds;
+            var m = weaponPivot.worldToLocalMatrix * r.transform.localToWorldMatrix;
+            var c = m.MultiplyPoint3x4(lb.center);
+            if (!any) { b = new Bounds(c, Vector3.zero); any = true; }
+            b.Encapsulate(m.MultiplyPoint3x4(lb.min));
+            b.Encapsulate(m.MultiplyPoint3x4(lb.max));
+        }
+        muzzle.localPosition = Weapon.melee ? new Vector3(0f, 0f, 0.4f) : new Vector3(0f, b.center.y, b.max.z);
+        SetupGrip();
+    }
+
+    public void Swap()
+    {
+        if (weapons[1 - slot] == null) return;
+        slot = 1 - slot;
+        fireCd = Mathf.Max(fireCd, 0.15f);
+        EquipVisual();
+    }
+
+    public void PickUp(Pickup p)
+    {
+        var old = Weapon;
+        int target = weapons[1 - slot] == null ? 1 - slot : slot;
+        if (target == slot)
+            Pickup.Spawn(PickupKind.Weapon, transform.position + model.forward * 1.2f, 0, old);
+        weapons[target] = p.weapon;
+        slot = target;
+        Destroy(p.gameObject);
+        nearbyWeapon = null;
+        EquipVisual();
+        Hud.I?.Show("获得 " + Weapon.name, 1.2f);
+    }
+
+    /// Jump: costs one stamina; a second jump in the air only with the double-jump buff.
+    public bool Jump()
+    {
+        if (dead || stamina < 1f) return false;
+        if (!Grounded)
+        {
+            if (!RunState.doubleJump || airJumped) return false;
+            airJumped = true;
+        }
+        stamina -= 1f;
+        groundT = 0f;
+        velocity.y = JumpVelocity;
+        Sfx.Play("slash", 0.3f, 0.1f);
+        return true;
+    }
+
+    /// Dash: costs one stamina, brief invulnerability to bullets (not to shockwaves).
+    public bool Dash(Vector3 direction)
+    {
+        if (dead || dashCd > 0f || stamina < 1f) return false;
+        stamina -= 1f;
+        groundT = 0f;
+        dashDir = direction;
+        dashT = DashTime;
+        dashCd = DashCooldown * RunState.dashCooldownMul;
+        dashInvuln = DashTime + 0.05f;
+        if (body) body.Trigger("dodge", body.Length("dodge") / 0.45f, 0.4f);
+        return true;
+    }
+
+    /// Something dangerous just missed while we were airborne or dashing: reward it.
+    public void NearMiss()
+    {
+        if (dead || (Grounded && !Dashing) || perfectCd > 0f) return;
+        perfectCd = PerfectCooldown;
+        perfectDodges++;
+        stamina = Mathf.Min(maxStamina, stamina + 1f);
+        AddEnergy(5);
+        nextCrit = true;
+        if (RunState.dodgeMaster) armor = Mathf.Min(maxArmor, armor + 1);
+        TimeControl.SlowMo(RunState.dodgeMaster ? 0.6f : 0.35f);
+        Hud.I?.PerfectDodge();
+        Sfx.Play("buff", 0.7f, 0f);
+        Debug.Log("PERFECT dodge");
+    }
+
+    public void Teleport(Vector3 pos)
+    {
+        cc.enabled = false;
+        transform.position = pos;
+        cc.enabled = true;
+        velocity = Vector3.zero;
+    }
+
+    public static void LockCursor(bool locked)
+    {
+        Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
+        Cursor.visible = !locked;
+    }
+
+    void Update()
+    {
+        if (Time.timeScale == 0f) return;
+        float dt = Time.deltaTime;
+        fireCd -= dt;
+        dashCd -= dt;
+        invuln -= dt;
+        dashInvuln -= dt;
+        perfectCd -= dt;
+        noEnergyMsgCd -= dt;
+        sinceHit += dt;
+        bool active = controlEnabled && !dead;
+
+        if (Grounded && dashT <= 0f)
+        {
+            groundT += dt;
+            airJumped = false;
+            if (groundT > StaminaDelay) stamina = Mathf.Min(maxStamina, stamina + StaminaRegen * dt);
+        }
+        else groundT = 0f;
+
+        onIce -= dt;
+        if (poisoned > 0f && !dead)
+        {
+            poisoned -= dt;
+            poisonTick -= dt;
+            if (poisonTick <= 0f)
+            {
+                poisonTick = 1.2f;
+                float saved = invuln;
+                invuln = 0f; // poison ticks through the hit invulnerability
+                TakeDamage(1);
+                invuln = Mathf.Max(invuln, saved);
+            }
+        }
+
+        // Class passives: the mage's energy trickle, the priest's slow heal.
+        if (!dead && cls != null)
+        {
+            if (cls.energyRegen > 0f && energy < maxEnergy)
+            {
+                energyRegenAcc += cls.energyRegen * dt;
+                while (energyRegenAcc >= 1f) { energyRegenAcc -= 1f; AddEnergy(1); }
+            }
+            if (cls.hpRegenEvery > 0f && hp < maxHp)
+            {
+                hpRegenT += dt;
+                if (hpRegenT >= cls.hpRegenEvery) { hpRegenT = 0f; Heal(1); }
+            }
+        }
+
+        if (!dead && armor < maxArmor && sinceHit > ArmorDelay)
+        {
+            armorTimer -= dt;
+            if (armorTimer <= 0f)
+            {
+                armor++;
+                armorTimer = ArmorTick;
+            }
+        }
+
+        if (active && Input.GetMouseButtonDown(0) && Cursor.lockState != CursorLockMode.Locked)
+        {
+            LockCursor(true);
+            fireCd = Mathf.Max(fireCd, 0.2f);
+        }
+        if (active && Cursor.lockState == CursorLockMode.Locked)
+        {
+            // Raw mouse, no smoothing (smoothing adds tens of ms of latency).
+            float s = MouseSens * GameSettings.sensitivity;
+            yaw += Input.GetAxisRaw("Mouse X") * s * (GameSettings.invertX ? -1f : 1f);
+            pitch = Mathf.Clamp(pitch - Input.GetAxisRaw("Mouse Y") * s * (GameSettings.invertY ? -1f : 1f), -40f, 60f);
+        }
+
+        Quaternion yawRot = Quaternion.Euler(0f, yaw, 0f);
+        Vector3 fwd = yawRot * Vector3.forward;
+        Vector3 right = yawRot * Vector3.right;
+        Vector2 input = Vector2.zero;
+        if (active)
+        {
+            input.x = (Input.GetKey(KeyCode.D) ? 1f : 0f) - (Input.GetKey(KeyCode.A) ? 1f : 0f);
+            input.y = (Input.GetKey(KeyCode.W) ? 1f : 0f) - (Input.GetKey(KeyCode.S) ? 1f : 0f);
+        }
+        Vector3 dir = Vector3.ClampMagnitude(right * input.x + fwd * input.y, 1f);
+
+        if (active && Input.GetKeyDown(KeyCode.LeftShift))
+        {
+            Vector3 dashTo = dir.sqrMagnitude > 0.01f ? dir.normalized : fwd;
+            if (InMech) MechDash(dashTo); else Dash(dashTo);
+        }
+
+        Vector3 h = new Vector3(velocity.x, 0f, velocity.z);
+        if (dashT > 0f)
+        {
+            dashT -= dt;
+            h = dashDir * (ramming ? 12f : DashSpeed);
+        }
+        else
+        {
+            // Committed jumps: little steering in the air.
+            float pace = charge > 0f ? 0.6f : 1f; // charging slows you down
+            float grip = Grounded ? (onIce > 0f && !HeavyMech ? 0.12f : 1f) : AirControl; // ice: you slide (the heavy mech grips)
+            h = Vector3.MoveTowards(h, dir * Speed * pace, Accel * grip * dt);
+        }
+        velocity.x = h.x;
+        velocity.z = h.z;
+
+        if (cc.isGrounded && velocity.y <= 0f) velocity.y = -2f;
+        else velocity.y -= Gravity * dt;
+        if (active && Input.GetKeyDown(KeyCode.Space)) { if (InMech) MechJump(); else Jump(); }
+        cc.Move(velocity * dt);
+
+        nearbyWeapon = null;
+        float best = 2.2f;
+        foreach (var p in Pickup.Live)
+        {
+            if (p.kind != PickupKind.Weapon) continue;
+            float d = Vector3.Distance(p.transform.position, transform.position);
+            if (d < best) { best = d; nearbyWeapon = p; }
+        }
+        nearbyMech = null;
+        float bestMech = 3.2f;
+        if (!InMech)
+            foreach (var m in ParkedMech.Live)
+            {
+                float d = Vector3.Distance(m.transform.position, transform.position);
+                if (m.landed && d < bestMech) { bestMech = d; nearbyMech = m; }
+            }
+
+        if (!dead)
+        {
+            bool aiming = Time.time - lastShot < 0.6f;
+            if (!faceInit) { faceDir = fwd; faceInit = true; model.rotation = Quaternion.LookRotation(fwd); }
+            if (aiming || !body) faceDir = fwd;
+            else if (h.sqrMagnitude > 0.5f) faceDir = h.normalized;
+            model.rotation = Quaternion.Slerp(model.rotation, Quaternion.LookRotation(faceDir), 1f - Mathf.Exp(-15f * dt));
+            if (body)
+            {
+                float speed01 = h.magnitude / Speed;
+                string moving = HeavyMech && body.Has("walk") ? "walk" : "run"; // the heavy mech stomps
+                if (speed01 < 0.15f) body.SetBase("idle");
+                else body.SetBase(aiming && (InMech || !Weapon.melee) && body.Has("shoot") ? "shoot" : moving, Mathf.Lerp(0.8f, 1.15f, speed01));
+            }
+            if (active && InMech)
+            {
+                // In a mech: right button is its melee arm, F its special, E climbs out.
+                if (Input.GetMouseButton(1)) MechMelee();
+                if (Input.GetKeyDown(KeyCode.F)) MechSpecial();
+                if (Input.GetKeyDown(KeyCode.E)) Dismount(false);
+            }
+            else if (active)
+            {
+                if (Input.GetKeyDown(KeyCode.Q)) Swap();
+                if ((Input.GetMouseButtonDown(1) || Input.GetKeyDown(KeyCode.F)) && skill) skill.TryUse();
+                if (Input.GetKeyDown(KeyCode.E))
+                {
+                    bool mechCloser = nearbyMech && (!nearbyWeapon || bestMech < best);
+                    if (mechCloser) Mount(nearbyMech.def, nearbyMech.hp, nearbyMech);
+                    else if (nearbyWeapon) PickUp(nearbyWeapon);
+                }
+            }
+            bool trigger = active && ((Input.GetMouseButton(0) && Cursor.lockState == CursorLockMode.Locked) || testTrigger);
+            if (InMech)
+            {
+                MechTick(dt);
+                MechFire(trigger);
+            }
+            else HandleWeapon(trigger, dt);
+            prevTrigger = trigger;
+            if (stealthStrike)
+            {
+                stealthStrike = false;
+                skill?.BreakStealth();
+            }
+        }
+        else
+        {
+            if (beam) beam.enabled = false;
+            if (beamGlow) beamGlow.enabled = beamLight.enabled = false;
+        }
+
+        // Melee swing: rotate the weapon across the body.
+        if (swingT > 0f)
+        {
+            swingT -= dt;
+            float k = 1f - swingT / 0.18f;
+            weaponPivot.localRotation = weaponRest * Quaternion.Euler(0f, Mathf.Lerp(-70f, 80f, k), 0f);
+        }
+        else weaponPivot.localRotation = weaponRest;
+
+        Color c = body ? Color.white : Palette.ColorOf("player_body");
+        if (invuln > 0f && !dead && ((int)(invuln * 20f)) % 2 == 0) c = new Color(1f, 0.4f, 0.4f);
+        mpb.SetColor("_Color", c);
+        mpb.SetColor("_BaseColor", c);
+        if (bodyRenderer && (body || !InMech)) bodyRenderer.SetPropertyBlock(mpb); // the blocky stand-in mech keeps its colours
+    }
+
+    void LateUpdate()
+    {
+        if (!cam) return;
+        // After animation: grips and hand IK (PlayerHold). Without a rig, point the gun at the crosshair.
+        if (handsOnWeapon) PoseWeapon(Time.deltaTime);
+        else if (body && !dead && !Weapon.melee)
+        {
+            Vector3 to = AimPoint() - weaponPivot.position;
+            if (to.sqrMagnitude > 0.25f) weaponPivot.rotation = Quaternion.LookRotation(to, Vector3.up);
+        }
+        if (externalCamera) return;
+        Quaternion rot = Quaternion.Euler(pitch, yaw, 0f);
+        // A mech is bigger: the camera rises and pulls back, smoothly (no jump cut when climbing in).
+        camScale = Mathf.MoveTowards(camScale, camScaleTarget, 0.8f * Time.unscaledDeltaTime);
+        Vector3 pivot = transform.position + Vector3.up * 1.5f * camScale;
+        Vector3 shoulder = pivot + rot * (Shoulder * camScale);
+        Vector3 back = rot * Vector3.back;
+        float dist = CamDistance * camScale;
+        if (Physics.SphereCast(pivot, 0.2f, (shoulder - pivot).normalized, out var sh, Shoulder.magnitude * camScale, Layers.WorldMask, QueryTriggerInteraction.Ignore))
+            shoulder = pivot + (shoulder - pivot).normalized * Mathf.Max(0f, sh.distance - 0.05f);
+        if (Physics.SphereCast(shoulder, 0.2f, back, out var hit, dist, Layers.WorldMask, QueryTriggerInteraction.Ignore))
+            dist = Mathf.Max(0.3f, hit.distance - 0.05f);
+        // Snap in so walls never cut the view, but ease back out: no one-frame jumps when the wall
+        // behind is passed (a sudden zoom is exactly the kind of visual jolt that causes nausea).
+        camDist = dist < camDist ? dist : Mathf.MoveTowards(camDist, dist, 6f * Time.unscaledDeltaTime);
+        cam.transform.SetPositionAndRotation(shoulder + back * camDist + rot * CameraShake.Offset(Time.unscaledDeltaTime), rot);
+    }
+
+    /// Where the crosshair points, ignoring anything between the camera and the player.
+    public Vector3 AimPoint()
+    {
+        if (aimOverride.HasValue) return aimOverride.Value;
+        Ray r = cam.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
+        float skip = Vector3.Distance(cam.transform.position, transform.position + Vector3.up * 1.5f * camScale);
+        Vector3 o = r.origin + r.direction * skip;
+        return Physics.Raycast(o, r.direction, out var hit, 200f, Layers.WorldMask | Layers.EnemyMask, QueryTriggerInteraction.Ignore)
+            ? hit.point
+            : o + r.direction * 200f;
+    }
+
+    /// Keep the firing pose up without shooting (grip inspection).
+    public void HoldAim() => lastShot = Time.time;
+
+    int RollDamage(int baseDamage, out bool crit)
+    {
+        crit = nextCrit || stealthed || Random.value < RunState.critChance;
+        int d = baseDamage + RunState.bonusDamage;
+        if (stealthed)
+        {
+            stealthStrike = true; // any damage dealt from stealth ends it (see Update)
+            return d * 3;
+        }
+        return crit ? d * 2 : d;
+    }
+
+    /// Trigger handling per weapon kind: tap/auto fire, charge-and-release, or a held beam.
+    void HandleWeapon(bool trigger, float dt)
+    {
+        var w = Weapon;
+        bool beaming = false;
+        switch (w.kind)
+        {
+            case WeaponKind.Charge:
+                if (trigger && fireCd <= 0f) charge = Mathf.Min(1f, charge + dt / 0.8f);
+                else if (!trigger && prevTrigger && charge > 0f) { FireCharged(w, charge); charge = 0f; }
+                break;
+            case WeaponKind.Beam:
+                if (trigger) beaming = BeamTick(w, dt);
+                break;
+            default:
+                if (w.chargeable)
+                {
+                    // Tap = normal attack on press; keep holding to charge; release for the heavy one.
+                    if (trigger && !prevTrigger) { if (fireCd <= 0f) Attack(); holdT = 0f; }
+                    else if (trigger)
+                    {
+                        holdT += dt;
+                        if (holdT > 0.35f)
+                        {
+                            float before = charge;
+                            charge = Mathf.Min(1f, charge + dt / 0.9f);
+                            if (before < 1f && charge >= 1f) Sfx.Play("pickup", 0.5f, 0f);
+                        }
+                    }
+                    else if (prevTrigger)
+                    {
+                        if (charge >= 0.25f) ChargedAttack(w, charge);
+                        charge = 0f;
+                        holdT = 0f;
+                    }
+                    break;
+                }
+                if (w.kind == WeaponKind.Flame && trigger) DrainEnergy(w, dt);
+                bool canFlame = w.kind != WeaponKind.Flame || energy > 0;
+                if (trigger && fireCd <= 0f && canFlame && !(w.kind == WeaponKind.Boomerang && boomerangOut))
+                    Attack();
+                break;
+        }
+        if (w.kind != WeaponKind.Charge && !w.chargeable) charge = 0f;
+        ChargeGlow(w);
+        if (beam) beam.enabled = beaming;
+        if (beamGlow) beamGlow.enabled = beamLight.enabled = beaming;
+    }
+
+    bool DrainEnergy(WeaponDef w, float dt)
+    {
+        energyAcc += w.energyPerSec * dt;
+        while (energyAcc >= 1f && energy > 0)
+        {
+            energyAcc -= 1f;
+            energy--;
+        }
+        if (energy > 0) return true;
+        if (noEnergyMsgCd <= 0f)
+        {
+            Hud.I?.Show("能量不足 — 换武器（Q）或捡能量球", 1f);
+            noEnergyMsgCd = 1.5f;
+        }
+        return false;
+    }
+
+    void ChargeGlow(WeaponDef w)
+    {
+        if (charge <= 0f)
+        {
+            if (chargeLight) chargeLight.enabled = false;
+            return;
+        }
+        if (!chargeLight)
+        {
+            chargeLight = new GameObject("charge_glow").AddComponent<Light>();
+            chargeLight.type = LightType.Point;
+            chargeLight.range = 3f;
+        }
+        chargeLight.enabled = true;
+        chargeLight.transform.position = muzzle.position;
+        chargeLight.color = charge >= 1f ? new Color(1f, 0.8f, 0.3f) : Weapons.RarityColors[w.rarity];
+        chargeLight.intensity = 1f + charge * 4f + (charge >= 1f ? Mathf.PingPong(Time.time * 12f, 2f) : 0f);
+    }
+
+    /// The heavy version of each chargeable weapon, scaled by how long it was charged (0.25..1).
+    void ChargedAttack(WeaponDef w, float c)
+    {
+        int cost = Mathf.Max(1, w.energy * 2);
+        if (energy < cost) return;
+        energy -= cost;
+        lastShot = Time.time;
+        fireCd = w.interval / RunState.fireRateMul;
+        Vector3 from = muzzle.position;
+        Vector3 aim = (AimPoint() - from).normalized;
+        Vector3 fwd = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
+        switch (w.id)
+        {
+            case "rifle":
+            {
+                var b = Bullet.Fire(from, aim * 120f, true, 0.12f, "bullet_laser", 2f, RollDamage(Mathf.RoundToInt(w.damage * (2f + 3f * c)), out bool cr), 0f, cr);
+                b.pierce = 5;
+                Fx.Lightning(from, from + aim * 3f);
+                break;
+            }
+            case "hammer":
+                Slam(Mathf.RoundToInt(RollDamage(w.damage, out _) * (2f + c) * RunState.meleeMul), 3.5f + 1.5f * c);
+                break;
+            case "spear":
+            {
+                // Lunge: dash along the view and skewer everything on the line.
+                Dash(fwd);
+                var heavy = w.Clone();
+                heavy.reach = 6f;
+                heavy.arc = 30f;
+                heavy.damage = Mathf.RoundToInt(w.damage * (2f + c));
+                Melee(heavy, true);
+                break;
+            }
+            default: // sword: a wide heavy slash
+            {
+                var heavy = w.Clone();
+                heavy.reach = w.reach + 1.2f;
+                heavy.arc = Mathf.Min(360f, w.arc + 60f);
+                heavy.damage = Mathf.RoundToInt(w.damage * (2f + c));
+                Melee(heavy, true);
+                break;
+            }
+        }
+        if (!w.melee) Vfx.MuzzleFlash(from, aim, Palette.ColorOf(w.mat));
+        CameraShake.Add(0.25f + 0.2f * c);
+        Sfx.Play(w.melee ? "slash" : "rocket", 0.9f, 0.05f);
+        nextCrit = false;
+        Debug.Log($"CHARGED {w.id} {c:F2}");
+    }
+
+    /// Hammer: everything around you takes the hit and is thrown back.
+    void Slam(int damage, float radius)
+    {
+        foreach (var col in Physics.OverlapSphere(transform.position, radius, Layers.EnemyMask, QueryTriggerInteraction.Ignore))
+        {
+            var e = col.GetComponentInParent<Enemy>();
+            if (!e || e.dead) continue;
+            Vector3 away = (e.transform.position - transform.position).normalized;
+            e.TakeDamage(damage, away, false, 6f);
+            e.Knock(away * 10f);
+        }
+        foreach (var col in Physics.OverlapSphere(transform.position, radius * 1.4f, ~0, QueryTriggerInteraction.Ignore))
+            if (col.attachedRigidbody && !col.attachedRigidbody.isKinematic && col.attachedRigidbody != null)
+                col.attachedRigidbody.AddExplosionForce(6f, transform.position, radius * 1.4f, 0.5f, ForceMode.VelocityChange);
+        Vfx.Ring(transform.position, radius, new Color(1f, 0.85f, 0.4f));
+        MeleeFx(Weapon, transform.position + Vector3.up, true);
+        if (body) body.Trigger("slash", 2f, 0.2f);
+    }
+
+    /// Bow: damage x1..x4 with the charge; a full charge also pierces three enemies.
+    void FireCharged(WeaponDef w, float c)
+    {
+        if (energy < w.energy) return;
+        energy -= w.energy;
+        fireCd = w.interval / RunState.fireRateMul;
+        lastShot = Time.time;
+        Vector3 from = muzzle.position;
+        Vector3 aim = (AimPoint() - from).normalized;
+        int dmg = RollDamage(Mathf.RoundToInt(w.damage * (1f + 3f * c)), out bool crit);
+        var b = Bullet.Fire(from, aim * w.speed * (1f + c), true, w.radius * (1f + c), w.mat, 3f, dmg, 0f, crit);
+        if (c >= 0.95f) b.pierce = 3;
+        nextCrit = false;
+        CameraShake.Add(0.05f + 0.15f * c);
+        Sfx.Play("laser", 0.4f + 0.4f * c, 0.05f);
+    }
+
+    /// Laser: a continuous ray to the crosshair, damage every interval while energy lasts.
+    bool BeamTick(WeaponDef w, float dt)
+    {
+        if (!DrainEnergy(w, dt)) return false;
+        lastShot = Time.time;
+        if (!beam)
+        {
+            beam = new GameObject("beam").AddComponent<LineRenderer>();
+            beam.sharedMaterial = Palette.Trail(w.mat);
+            beam.startColor = beam.endColor = Palette.ColorOf(w.mat) * 3f;
+            beam.widthMultiplier = 0.12f;
+            beam.positionCount = 2;
+            beam.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
+        Vector3 from = muzzle.position;
+        Vector3 dir = (AimPoint() - from).normalized;
+        Vector3 end = from + dir * 40f;
+        if (Physics.Raycast(from, dir, out var rh, 40f, Layers.WorldMask | Layers.EnemyMask, QueryTriggerInteraction.Ignore))
+        {
+            end = rh.point;
+            beamTick -= dt;
+            var e = rh.collider.GetComponentInParent<Enemy>();
+            if (e && beamTick <= 0f)
+            {
+                beamTick = w.interval / RunState.fireRateMul;
+                e.TakeDamage(RollDamage(w.damage, out bool crit), dir, crit);
+                nextCrit = false;
+            }
+        }
+        beam.SetPosition(0, from);
+        beam.SetPosition(1, end);
+        beam.startColor = beam.endColor = new Color(3f, 2.4f, 2.4f);
+        beam.widthMultiplier = 0.05f + Mathf.PingPong(Time.time * 2f, 0.03f);
+        // Outer red glow, sparks and a light where the beam lands.
+        if (!beamGlow)
+        {
+            beamGlow = new GameObject("beam_glow").AddComponent<LineRenderer>();
+            beamGlow.sharedMaterial = Palette.Trail(w.mat);
+            beamGlow.positionCount = 2;
+            beamGlow.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            beamLight = new GameObject("beam_light").AddComponent<Light>();
+            beamLight.type = LightType.Point;
+            beamLight.range = 4f;
+            beamLight.color = Palette.ColorOf(w.mat);
+        }
+        beamGlow.enabled = beamLight.enabled = true;
+        beamGlow.startColor = beamGlow.endColor = Palette.ColorOf(w.mat) * 2.5f * new Color(1f, 1f, 1f, 0.45f);
+        beamGlow.widthMultiplier = 0.22f + Mathf.PingPong(Time.time * 3f, 0.08f);
+        beamGlow.SetPosition(0, from);
+        beamGlow.SetPosition(1, end);
+        beamLight.transform.position = end - dir * 0.3f;
+        beamLight.intensity = 3f + Random.value;
+        beamSparkT -= dt;
+        if (beamSparkT <= 0f)
+        {
+            beamSparkT = 0.06f;
+            Vfx.Sparks(end, Palette.ColorOf(w.mat), 4, 4f);
+        }
+        return true;
+    }
+
+    /// Thunder: instant hit at the crosshair, then arcs to up to three more enemies nearby.
+    void ChainLightning(WeaponDef w)
+    {
+        Vector3 from = muzzle.position;
+        Vector3 dir = (AimPoint() - from).normalized;
+        Vector3 end = from + dir * 40f;
+        Enemy first = null;
+        if (Physics.Raycast(from, dir, out var rh, 40f, Layers.WorldMask | Layers.EnemyMask, QueryTriggerInteraction.Ignore))
+        {
+            end = rh.point;
+            first = rh.collider.GetComponentInParent<Enemy>();
+        }
+        Fx.Lightning(from, end);
+        Sfx.Play("laser", 0.7f, 0.2f);
+        if (!first) return;
+        var struck = new System.Collections.Generic.List<Enemy> { first };
+        first.TakeDamage(RollDamage(w.damage, out bool c0), dir, c0);
+        Enemy last = first;
+        for (int jump = 0; jump < 3; jump++)
+        {
+            Enemy next = null;
+            float best = 6f;
+            foreach (var e in FindObjectsByType<Enemy>(FindObjectsSortMode.None))
+            {
+                if (e.dead || struck.Contains(e)) continue;
+                float d = Vector3.Distance(e.transform.position, last.transform.position);
+                if (d < best) { best = d; next = e; }
+            }
+            if (!next) break;
+            Fx.Lightning(last.transform.position + Vector3.up, next.transform.position + Vector3.up);
+            next.TakeDamage(RollDamage(w.damage, out bool c1), (next.transform.position - last.transform.position).normalized, c1);
+            struck.Add(next);
+            last = next;
+        }
+    }
+
+    /// Attack with the current weapon: a melee swing or a shot. Also used by the self-test.
+    public void Attack()
+    {
+        var w = Weapon;
+        if (energy < w.energy)
+        {
+            fireCd = 0.2f;
+            if (noEnergyMsgCd <= 0f)
+            {
+                Hud.I?.Show("能量不足 — 换武器（Q）或捡能量球", 1f);
+                noEnergyMsgCd = 1.5f;
+            }
+            return;
+        }
+        energy -= w.energy;
+        fireCd = w.interval / RunState.fireRateMul;
+        lastShot = Time.time;
+        if (w.melee) Melee(w);
+        else Shoot(w);
+        nextCrit = false;
+        if (stealthed && skill) skill.BreakStealth();
+    }
+
+    void Shoot(WeaponDef w)
+    {
+        Vector3 from = muzzle.position;
+        Vector3 aim = (AimPoint() - from).normalized;
+        switch (w.kind)
+        {
+            case WeaponKind.Chain:
+                ChainLightning(w);
+                return;
+            case WeaponKind.Flame:
+                for (int i = 0; i < 2; i++)
+                {
+                    var sp = Quaternion.Euler(Random.Range(-w.spread, w.spread) * 0.5f, Random.Range(-w.spread, w.spread) * 0.5f, 0f);
+                    var f = Bullet.Fire(from, Quaternion.LookRotation(aim) * sp * Vector3.forward * w.speed * Random.Range(0.85f, 1.15f), true, w.radius, w.mat, 0.38f, RollDamage(w.damage, out _));
+                    f.burn = 2f;
+                }
+                if (Random.value < 0.3f) Sfx.Play("rocket", 0.25f, 0.3f);
+                return;
+            case WeaponKind.Grenade:
+            {
+                // Lob so the arc lands on the crosshair point, then bounce until the fuse runs out.
+                const float g0 = 18f;
+                Vector3 target = AimPoint();
+                Vector3 flat = new Vector3(target.x - from.x, 0f, target.z - from.z);
+                float flight = Mathf.Clamp(flat.magnitude / w.speed, 0.25f, 0.9f);
+                Vector3 v = flat / flight + Vector3.up * ((target.y - from.y + 0.5f * g0 * flight * flight) / flight);
+                int dmg = RollDamage(w.damage, out bool crit);
+                var g = Bullet.Fire(from, v, true, w.radius, w.mat, 4f, dmg, w.explode, crit);
+                g.gravity = g0;
+                g.bounces = 3;
+                g.fuse = 1.2f;
+                Sfx.Play("shotgun", 0.4f, 0.1f);
+                return;
+            }
+            case WeaponKind.Homing:
+                for (int i = 0; i < 2; i++)
+                {
+                    // Launch level and a little upward, then let homing bring them down onto targets.
+                    Vector3 flat = new Vector3(aim.x, 0f, aim.z).normalized;
+                    Vector3 side = Vector3.Cross(Vector3.up, flat).normalized * (i == 0 ? -0.35f : 0.35f);
+                    int dmg = RollDamage(w.damage, out bool crit);
+                    var m = Bullet.Fire(from + side, (flat + side + Vector3.up * 0.35f).normalized * w.speed, true, w.radius, w.mat, 4f, dmg, w.explode, crit);
+                    m.homing = 360f;
+                }
+                Sfx.Play("rocket", 0.6f);
+                CameraShake.Add(0.1f);
+                return;
+            case WeaponKind.Boomerang:
+            {
+                int dmg = RollDamage(w.damage, out bool crit);
+                var b = Bullet.Fire(from, aim * w.speed, true, w.radius, w.mat, 4f, dmg, 0f, crit);
+                b.returnTo = transform;
+                b.outDistance = 10f;
+                boomerangOut = true;
+                b.Returned = () => boomerangOut = false;
+                Invoke(nameof(ClearBoomerang), 4f);
+                Sfx.Play("slash", 0.6f);
+                return;
+            }
+        }
+        for (int i = 0; i < w.pellets; i++)
+        {
+            var spread = Quaternion.Euler(Random.Range(-w.spread, w.spread) * 0.5f, Random.Range(-w.spread, w.spread) * 0.5f, 0f);
+            int dmg = RollDamage(w.damage, out bool crit);
+            var b = Bullet.Fire(from, Quaternion.LookRotation(aim) * spread * Vector3.forward * w.speed, true, w.radius, w.mat, 3f, dmg, w.explode, crit);
+            if (w.kind == WeaponKind.Frost) b.slow = 0.5f;
+        }
+        CameraShake.Add(w.pellets > 1 || w.explode > 0f ? 0.18f : 0.04f);
+        Vfx.MuzzleFlash(from, aim, Palette.ColorOf(w.mat));
+        Sfx.Play(w.pellets > 1 ? "shotgun" : w.explode > 0f ? "rocket" : w.id == "rifle" ? "laser" : "shoot", 0.6f);
+    }
+
+    int swingIndex;
+
+    /// Each melee weapon draws its own swing: sword diagonal arcs (whirlwind when heavy),
+    /// hammer overhead smash with a ground impact, spear forward streak, daggers crossed X slashes.
+    void MeleeFx(WeaponDef w, Vector3 origin, bool heavy)
+    {
+        swingIndex++;
+        Vector3 fwd = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
+        switch (w.id)
+        {
+            case "hammer":
+            {
+                Vector3 impact = transform.position + fwd * Mathf.Min(w.reach * 0.6f, 2.2f);
+                // A thin overhead arc band (not a filled fan, which reads as a wall in front of the camera).
+                SlashFx.Spawn(transform.position + Vector3.up * 0.2f, yaw, w.reach * 0.75f, 100f, new Color(0.6f, 0.5f, 0.2f), 0f, 90f, 0.18f, w.reach * 0.75f * 0.65f);
+                Vfx.Ring(impact, heavy ? 2.5f : 1.6f, new Color(1f, 0.8f, 0.35f));
+                Vfx.Puff(impact, new Color(0.55f, 0.5f, 0.45f, 0.6f), heavy ? 1.2f : 0.8f, heavy ? 10 : 6);
+                Vfx.Sparks(impact + Vector3.up * 0.2f, new Color(1f, 0.9f, 0.4f), heavy ? 18 : 10, 6f);
+                for (int i = 0; i < (heavy ? 4 : 2); i++)
+                    Fx.Lightning(impact + Vector3.up * 0.1f, impact + Quaternion.Euler(0f, Random.Range(0f, 360f), 0f) * Vector3.forward * Random.Range(1f, 2f));
+                CameraShake.Add(heavy ? 0.4f : 0.18f);
+                Sfx.Play("door", 0.9f, 0.1f);
+                break;
+            }
+            case "spear":
+                SlashFx.Spawn(origin, yaw, w.reach + (heavy ? 1f : 0.3f), heavy ? 16f : 9f, new Color(1f, 0.9f, 0.6f), 0f, 0f, heavy ? 0.22f : 0.14f, 0.4f);
+                Vfx.Sparks(origin + fwd * w.reach, new Color(1f, 0.95f, 0.7f), 6, 3f);
+                Sfx.Play("slash", 0.7f, 0.05f);
+                break;
+            case "daggers":
+            {
+                var c = new Color(0.75f, 0.45f, 1f);
+                for (int i = 0; i < 2; i++)
+                {
+                    float tilt = (i % 2 == 0 ? 45f : -45f) + Random.Range(-15f, 15f);
+                    SlashFx.Spawn(origin + Random.insideUnitSphere * 0.08f, yaw + Random.Range(-15f, 15f), w.reach, 70f, c, tilt, 0f, 0.12f, 0.5f);
+                }
+                Sfx.Play("slash", 0.5f, 0.2f);
+                break;
+            }
+            default: // sword
+            {
+                var c = new Color(0.55f, 0.85f, 1f);
+                if (heavy)
+                {
+                    SlashFx.Spawn(origin, yaw, w.reach, 360f, c, 0f, 0f, 0.3f, 0.8f);
+                    SlashFx.Spawn(origin + Vector3.up * 0.3f, yaw + 180f, w.reach * 0.85f, 360f, c, 0f, 0f, 0.3f, 0.8f);
+                }
+                else
+                {
+                    // Alternate rising-left and rising-right diagonals.
+                    float tilt = swingIndex % 2 == 0 ? 28f : -28f;
+                    SlashFx.Spawn(origin, yaw, w.reach, w.arc, c, tilt, 0f, 0.18f, 0.7f);
+                }
+                Vfx.Sparks(origin + fwd * w.reach * 0.8f, c, 6, 4f);
+                Sfx.Play("slash", 0.8f);
+                break;
+            }
+        }
+    }
+
+    void Melee(WeaponDef w, bool heavy = false)
+    {
+        swingT = body ? 0f : 0.18f;
+        if (body)
+        {
+            model.rotation = Quaternion.LookRotation(Quaternion.Euler(0f, yaw, 0f) * Vector3.forward);
+            body.Trigger("slash", body.Length("slash") / Mathf.Max(0.25f, w.interval / RunState.fireRateMul), 0.2f);
+        }
+        Vector3 fwd = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
+        Vector3 origin = transform.position + Vector3.up * 1.0f;
+        var hit = new System.Collections.Generic.HashSet<Enemy>();
+        foreach (var c in Physics.OverlapSphere(origin, w.reach, Layers.EnemyMask, QueryTriggerInteraction.Ignore))
+        {
+            var e = c.GetComponentInParent<Enemy>();
+            if (!e || e.dead || !hit.Add(e)) continue;
+            Vector3 to = e.transform.position - transform.position;
+            to.y = 0f;
+            if (Vector3.Angle(fwd, to) > w.arc / 2f && to.magnitude > 1f) continue;
+            int dmg = Mathf.RoundToInt(RollDamage(w.damage, out bool crit) * RunState.meleeMul);
+            e.TakeDamage(dmg, to.normalized, crit);
+        }
+        if (RunState.meleeMul > 1f || w.id == "sword")
+        {
+            foreach (var b in Bullet.Live.ToArray())
+            {
+                if (b.HitsEnemies) continue;
+                Vector3 to = b.transform.position - origin;
+                if (to.magnitude <= w.reach + 0.5f && Vector3.Angle(fwd, new Vector3(to.x, 0f, to.z)) <= w.arc / 2f) b.Cancel();
+            }
+        }
+        MeleeFx(w, origin, heavy);
+        CameraShake.Add(hit.Count > 0 ? 0.15f : 0.05f);
+    }
+
+    void ClearBoomerang() => boomerangOut = false;
+
+    /// Put a weapon in the current slot (self-test).
+    public void Equip(WeaponDef w)
+    {
+        weapons[slot] = w;
+        charge = 0f;
+        EquipVisual();
+    }
+
+    public void AddEnergy(int amount) => energy = Mathf.Min(maxEnergy, energy + amount);
+
+    public void Poison(float seconds)
+    {
+        if (dead || shielded || InMech) return; // a mech cockpit is sealed
+        if (poisoned <= 0f) poisonTick = 0.6f;
+        poisoned = Mathf.Max(poisoned, seconds);
+    }
+
+    public void Heal(int amount)
+    {
+        if (dead) return;
+        if (InMech)
+        {
+            RepairMech(amount);
+            return;
+        }
+        hp = Mathf.Min(hp + amount, maxHp);
+    }
+
+    /// Ground shockwaves ignore dash i-frames; only jumping clears them.
+    public void TakeShockwave(int amount)
+    {
+        float saved = dashInvuln;
+        dashInvuln = 0f;
+        TakeDamage(amount);
+        dashInvuln = saved;
+    }
+
+    public void TakeDamage(int amount)
+    {
+        if (dead || shielded || invuln > 0f || dashInvuln > 0f) return;
+        if (InMech)
+        {
+            MechDamage(amount); // the mech's durability goes first
+            return;
+        }
+        sinceHit = 0f;
+        armorTimer = ArmorTick;
+        invuln = 0.6f;
+        damageTaken += amount;
+        int fromArmor = Mathf.Min(armor, amount);
+        armor -= fromArmor;
+        hp = Mathf.Max(hp - (amount - fromArmor), 0);
+        CameraShake.Add(0.35f);
+        Hud.I?.Hurt();
+        Sfx.Play("hurt");
+        if (body && hp > 0 && dashT <= 0f) body.Trigger("hit", 1.6f, 0.15f);
+        if (hp == 0)
+        {
+            dead = true;
+            if (body) body.Trigger("die");
+            else
+            {
+                model.localRotation = Quaternion.Euler(-90f, yaw, 0f);
+                model.localPosition = new Vector3(0f, 0.4f, 0f);
+            }
+            Died?.Invoke();
+        }
+    }
+}

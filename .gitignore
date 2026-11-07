@@ -1,0 +1,20 @@
+# Unity generated
+unity/Library/
+unity/Temp/
+unity/Obj/
+unity/obj/
+unity/Builds/
+unity/Logs/
+unity/UserSettings/
+unity/*.csproj
+unity/*.sln
+# Big binaries that the scripts regenerate (not in git, see NOTES.md "素材不进 git"):
+# raw Meshy downloads (assets/meshy) -> scripts/install_chars.py / prep_assets.py -> Resources/Models
+assets/meshy/
+unity/Assets/Resources/Models/
+unity/Assets/Resources/Models.meta
+# run output
+logs/
+.DS_Store
+__pycache__/
+*.blend1
