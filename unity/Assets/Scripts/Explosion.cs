@@ -33,6 +33,7 @@ public static class Explosion
             float push = c.gameObject.layer == Layers.Debris ? 3.5f : 6f;
             if (rb && !rb.isKinematic) rb.AddExplosionForce(push, at, radius * 1.6f, 0.6f, ForceMode.VelocityChange);
         }
+        Reactions.CheckClouds(at, radius * 0.6f); // a blast next to poison gas sets it off
         CameraShake.Add(0.3f);
         Sfx.Play("explode", 0.8f);
         Vfx.Explosion(at, radius);

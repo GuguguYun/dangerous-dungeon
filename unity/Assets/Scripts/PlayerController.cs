@@ -823,6 +823,7 @@ public partial class PlayerController : MonoBehaviour
         Sfx.Play("laser", 0.7f, 0.2f);
         if (!first) return;
         var struck = new System.Collections.Generic.List<Enemy> { first };
+        Reactions.Shock(first);
         first.TakeDamage(RollDamage(w.damage, out bool c0), dir, c0);
         Enemy last = first;
         for (int jump = 0; jump < 3; jump++)
@@ -837,6 +838,7 @@ public partial class PlayerController : MonoBehaviour
             }
             if (!next) break;
             Fx.Lightning(last.transform.position + Vector3.up, next.transform.position + Vector3.up);
+            Reactions.Shock(next);
             next.TakeDamage(RollDamage(w.damage, out bool c1), (next.transform.position - last.transform.position).normalized, c1);
             struck.Add(next);
             last = next;

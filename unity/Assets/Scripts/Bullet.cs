@@ -219,6 +219,7 @@ public class Bullet : MonoBehaviour
 
         Orient();
         if (spinSpeed != 0f) transform.Rotate(spinAxis, spinSpeed * dt, Space.World);
+        if (burn > 0f && hitsEnemies) Reactions.CheckClouds(transform.position, 0.3f); // flames reaching poison gas
         Vector3 step = velocity * dt;
         if (Physics.Raycast(transform.position, step.normalized, out var rh, step.magnitude, mask, QueryTriggerInteraction.Ignore))
         {

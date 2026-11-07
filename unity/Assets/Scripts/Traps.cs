@@ -82,6 +82,7 @@ public class FirePit : Trap
                     tick = 0.5f;
                     var p = PlayerController.Current;
                     if (p && !p.dead && Inside(p.transform.position, radius) && p.FeetHeight < 1.7f) p.TakeShockwave(1);
+                    Reactions.CheckClouds(transform.position, radius);
                     foreach (var e in EnemiesNear(transform.position + Vector3.up, radius))
                     {
                         e.TakeDamage(3, Vector3.up, false, 1f);
@@ -154,6 +155,7 @@ public class SpikeTrap : Trap
 
 public class PoisonCloud : Trap
 {
+    public bool ignited;
     float life = 5f, tick;
     Light light;
 

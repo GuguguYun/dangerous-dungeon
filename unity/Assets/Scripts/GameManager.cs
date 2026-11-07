@@ -395,6 +395,9 @@ public class GameManager : MonoBehaviour
         // The companion drone: follows, shoots, blocks, goes down, reboots; Sanctuary heals it.
         yield return PetTests();
 
+        // Elemental reactions and loot drops.
+        yield return ReactionTests();
+
         Check("run summary tracks the numbers", RunState.damageDealt > 0 && RunState.weaponsSeen.Count >= 2 && RunState.runTime > 1f && RunState.mechsPiloted >= 1,
             $"dealt={RunState.damageDealt} weapons={RunState.weaponsSeen.Count} time={RunState.runTime:F0} mechs={RunState.mechsPiloted}");
 
@@ -982,6 +985,54 @@ public class GameManager : MonoBehaviour
         player.hp = player.maxHp = RunState.maxHp;
         player.armor = player.maxArmor;
         yield return new WaitForSeconds(0.7f);
+    }
+
+    IEnumerator ReactionTests()
+    {
+        Vector3 fwdDir = Quaternion.Euler(0f, player.yaw, 0f) * Vector3.forward;
+        Vector3 side = Quaternion.Euler(0f, 90f, 0f) * fwdDir;
+        Vector3 home = dungeon.playerStart;
+        player.Teleport(home);
+        player.hp = player.maxHp = 40;
+
+        // 碎冰: a heavy hit on a frozen enemy deals double and breaks the ice.
+        var frozen = Dummy(home + fwdDir * 4f);
+        frozen.ApplySlow(0.5f, 3f);
+        int shatters = Reactions.Shatters;
+        frozen.TakeDamage(10, fwdDir);
+        Check("碎冰: a heavy hit on a frozen enemy deals double", frozen.hp == 80 && Reactions.Shatters == shatters + 1 && !frozen.Slowed, $"hp={frozen.hp}");
+        frozen.TakeDamage(10, fwdDir);
+        Check("碎冰 uses up the ice (next hit is normal)", frozen.hp == 70, $"hp={frozen.hp}");
+
+        // 超载: lightning on a burning enemy blasts it and its neighbours.
+        var burning = Dummy(home + fwdDir * 4f + side * 2f);
+        var neighbour = Dummy(home + fwdDir * 4f + side * 3.4f);
+        yield return new WaitForSeconds(0.4f);
+        burning.ApplyBurn(3f);
+        int overloads = Reactions.Overloads;
+        Reactions.Shock(burning);
+        Check("超载: lightning on a burning enemy hits its neighbours", Reactions.Overloads == overloads + 1 && neighbour.hp < 100 && !burning.Burning, $"neighbour={neighbour.hp}");
+
+        // 爆燃: a flame shot through a poison cloud blows it up.
+        var cloud = PoisonCloud.Create(home - side * 4f);
+        var inGas = Dummy(home - side * 4.6f);
+        yield return new WaitForSeconds(0.4f);
+        int combustions = Reactions.Combustions, hpBefore = inGas.hp;
+        var flame = Bullet.Fire(home - side * 4f + fwdDir * 3f + Vector3.up, -fwdDir * 12f, true, 0.2f, "bullet_fire", 2f, 1);
+        flame.burn = 2f;
+        yield return new WaitForSeconds(0.6f);
+        Check("爆燃: fire through poison gas explodes the cloud", Reactions.Combustions == combustions + 1 && cloud == null && inGas.hp <= hpBefore - 8,
+            $"combustions={Reactions.Combustions - combustions} hp {hpBefore} -> {inGas.hp}");
+        foreach (var e in new[] { frozen, burning, neighbour, inGas }) if (e) Destroy(e.gameObject);
+
+        // Loot: a dropped weapon has a light pillar; a forced rare drop respects the floor; pity resets.
+        RunState.weaponPity = 3;
+        var drop = Pickup.DropWeapon(home + fwdDir * 2f, 3);
+        Check("dropped weapons shine (a light pillar) and respect the minimum rarity", drop.weapon.rarity >= 3 && drop.transform.Find("loot_beam") && RunState.weaponPity == 0,
+            $"rarity={drop.weapon.rarity} pity={RunState.weaponPity}");
+        Destroy(drop.gameObject);
+        player.hp = player.maxHp = RunState.maxHp;
+        yield return new WaitForSeconds(0.5f);
     }
 
     IEnumerator PetTests()
@@ -1596,6 +1647,18 @@ public class GameManager : MonoBehaviour
             yield return new WaitForSeconds(0.8f);
             Destroy(bomber.gameObject);
             Destroy(archer.gameObject);
+        }
+
+        // Loot: three drops of rising rarity with their light pillars.
+        {
+            Vector3 lp = player.transform.position;
+            Vector3 lf = Quaternion.Euler(0f, player.yaw, 0f) * Vector3.forward, lr = Quaternion.Euler(0f, player.yaw + 90f, 0f) * Vector3.forward;
+            var drops = new System.Collections.Generic.List<Pickup>();
+            for (int i = 0; i < 3; i++) drops.Add(Pickup.DropWeapon(lp + lf * 4.5f + lr * (i - 1) * 2.2f, i == 0 ? 1 : i == 1 ? 3 : 4));
+            player.pitch = 12f;
+            yield return new WaitForSeconds(0.9f);
+            yield return Shot("23_loot.png");
+            foreach (var d in drops) if (d) Destroy(d.gameObject);
         }
 
         // The end-of-run summary card.

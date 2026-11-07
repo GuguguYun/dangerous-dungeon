@@ -174,10 +174,14 @@ public class Room : MonoBehaviour
     {
         float r = Random.value;
         var c = Center();
-        if (r < 0.25f && player)
-            Pickup.Spawn(PickupKind.Weapon, c, 0, Weapons.RandomExcept(player.weapons[0]?.id, player.weapons[1]?.id));
-        else if (r < 0.55f) Pickup.Spawn(PickupKind.Health, c, 2);
-        else Pickup.SpawnEnergy(c, 8);
+        // A weapon one room in four, and never more than three rooms in a row without one.
+        if (player && (r < 0.25f || RunState.weaponPity >= 3)) Pickup.DropWeapon(c);
+        else
+        {
+            RunState.weaponPity++;
+            if (r < 0.55f) Pickup.Spawn(PickupKind.Health, c, 2);
+            else Pickup.SpawnEnergy(c, 8);
+        }
         Pickup.SpawnGold(c, 4);
     }
 }

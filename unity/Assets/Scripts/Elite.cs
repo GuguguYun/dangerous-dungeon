@@ -164,6 +164,7 @@ public partial class Enemy
         if (shieldFx) Destroy(shieldFx);
         if (elite == EliteKind.None) return;
         Pickup.SpawnGold(transform.position, 6);
+        if (Random.value < 0.25f) Pickup.DropWeapon(transform.position + Vector3.right, 1); // elites: a good weapon now and then
         if (Random.value < 0.35f) Pickup.Spawn(PickupKind.Health, transform.position + Vector3.left, 2);
         if (elite == EliteKind.Splitting && Split != null)
         {

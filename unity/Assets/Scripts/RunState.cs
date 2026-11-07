@@ -27,6 +27,7 @@ public static class RunState
     public static float runTime;
     public static int damageDealt, damageTaken, perfectDodges, mechsPiloted, bossesKilled;
     public static int gold, shopBuys; // coins carry over between floors
+    public static int weaponPity;     // cleared rooms in a row without a weapon
     public static List<string> weaponsSeen = new List<string>();
 
     public static void SawWeapon(string id)
@@ -70,6 +71,7 @@ public static class RunState
         runTime = 0f;
         damageDealt = damageTaken = perfectDodges = mechsPiloted = bossesKilled = 0;
         gold = shopBuys = 0;
+        weaponPity = 0;
         weaponsSeen = new List<string>();
     }
 

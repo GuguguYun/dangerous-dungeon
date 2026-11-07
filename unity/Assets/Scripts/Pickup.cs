@@ -73,9 +73,51 @@ public class Pickup : MonoBehaviour
                 l.color = Weapons.RarityColors[weapon.rarity];
                 l.range = 3.5f;
                 l.intensity = 3f + weapon.rarity;
+                Beam(go.transform, Weapons.RarityColors[weapon.rarity], weapon.rarity);
                 break;
         }
         return p;
+    }
+
+    /// A light pillar in the rarity colour, taller for rarer weapons, so loot reads across a room.
+    static void Beam(Transform parent, Color c, int rarity)
+    {
+        float height = 1.6f + rarity * 0.9f;
+        var beam = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        DestroyImmediate(beam.GetComponent<Collider>());
+        beam.name = "loot_beam";
+        beam.transform.SetParent(parent, false);
+        beam.transform.localPosition = Vector3.up * height * 0.5f;
+        beam.transform.localScale = new Vector3(0.28f, height * 0.5f, 0.28f);
+        var r = beam.GetComponent<Renderer>();
+        r.sharedMaterial = Vfx.Fresnel(c * (0.8f + 0.3f * rarity), 1.4f, 0.04f, 0.2f);
+        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        var ring = new GameObject("loot_ring").AddComponent<LineRenderer>();
+        ring.transform.SetParent(parent, false);
+        ring.loop = true;
+        ring.useWorldSpace = false;
+        ring.positionCount = 32;
+        ring.widthMultiplier = 0.05f;
+        ring.sharedMaterial = Palette.Trail("shockwave");
+        ring.startColor = ring.endColor = c * 2.5f;
+        ring.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        for (int i = 0; i < 32; i++)
+        {
+            float a = i * Mathf.PI * 2f / 32f;
+            ring.SetPosition(i, new Vector3(Mathf.Cos(a) * 0.7f, 0.04f, Mathf.Sin(a) * 0.7f));
+        }
+    }
+
+    /// A weapon for a kill or a room: at least minRarity, rarer on deeper floors. Shines and chimes.
+    public static Pickup DropWeapon(Vector3 at, int minRarity = 0)
+    {
+        var p = PlayerController.Current;
+        var w = Weapons.RandomExcept(p ? p.weapons[0]?.id : null, p ? p.weapons[1]?.id : null);
+        for (int i = 0; i < 30 && w.rarity < minRarity; i++) w = Weapons.RandomExcept(p ? p.weapons[0]?.id : null, p ? p.weapons[1]?.id : null);
+        RunState.weaponPity = 0;
+        var drop = Spawn(PickupKind.Weapon, at, 0, w);
+        Sfx.Play(w.rarity >= 3 ? "gong" : "buff", w.rarity >= 3 ? 0.5f : 0.35f, 0f);
+        return drop;
     }
 
     static void Ball(Transform parent, float r, string mat)
@@ -114,7 +156,9 @@ public class Pickup : MonoBehaviour
     void Update()
     {
         age += Time.deltaTime;
-        visual.localPosition = body ? Vector3.zero : Vector3.up * (0.7f + Mathf.Sin(age * 3f) * 0.12f);
+        // Weapons pop up and bounce down when they drop, then hover.
+        float pop = kind == PickupKind.Weapon && age < 0.6f ? Mathf.Abs(Mathf.Cos(age * 9f)) * (0.6f - age) * 2.2f : 0f;
+        visual.localPosition = body ? Vector3.zero : Vector3.up * (0.7f + pop + Mathf.Sin(age * 3f) * 0.12f);
         visual.localRotation = Quaternion.Euler(0f, age * 90f, 0f);
 
         var player = PlayerController.Current;

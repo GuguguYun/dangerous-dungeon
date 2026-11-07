@@ -26,6 +26,7 @@ public class Hud : MonoBehaviour
         public string text;
         public bool crit;
         public float t;
+        public Color? color;
     }
 
     readonly List<Number> numbers = new List<Number>();
@@ -60,6 +61,10 @@ public class Hud : MonoBehaviour
 
     public void AddDamage(Vector3 pos, int amount, bool crit) =>
         numbers.Add(new Number { pos = pos + Random.insideUnitSphere * 0.3f, text = crit ? amount + "!" : amount.ToString(), crit = crit });
+
+    /// A word that floats up like a damage number (reaction names).
+    public void AddText(Vector3 pos, string text, Color c) =>
+        numbers.Add(new Number { pos = pos, text = text, crit = true, color = c });
 
     public void HitMarker() => hitMarker = 0.12f;
     public void Hurt() => hurt = 0.35f;
@@ -677,7 +682,8 @@ public class Hud : MonoBehaviour
             var sp = cam.WorldToScreenPoint(n.pos);
             if (sp.z < 0f) continue;
             var st = new GUIStyle(number) { fontSize = n.crit ? 34 : 26 };
-            st.normal.textColor = n.crit ? new Color(1f, 0.8f, 0.2f, 1f - n.t / 0.8f) : new Color(1f, 1f, 1f, 1f - n.t / 0.8f);
+            var baseCol = n.color ?? (n.crit ? new Color(1f, 0.8f, 0.2f) : Color.white);
+            st.normal.textColor = new Color(baseCol.r, baseCol.g, baseCol.b, 1f - n.t / 0.8f);
             Label(new Rect(sp.x - 60, UnityEngine.Screen.height - sp.y - 20, 120, 40), n.text, st);
         }
     }

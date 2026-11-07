@@ -378,6 +378,8 @@ public partial class Enemy : MonoBehaviour
 
     public bool Slowed => slowT > 0f;
     public bool Burning => burnT > 0f;
+    public void ClearSlow() { slowT = 0f; slowMul = 1f; }
+    public void ClearBurn() => burnT = 0f;
 
     void StatusEffects(float dt)
     {
@@ -390,6 +392,7 @@ public partial class Enemy : MonoBehaviour
             {
                 burnTick = 0.5f;
                 TakeDamage(1, Vector3.zero);
+                Reactions.CheckClouds(transform.position, 0f); // a burning goblin walking into gas sets it off
             }
         }
         // Flames while burning, cold mist while slowed.
@@ -429,6 +432,7 @@ public partial class Enemy : MonoBehaviour
         if (dead) return;
         if (kind == EnemyKind.Boss) amount = ModifyIncoming(amount);
         amount = AbsorbWithShield(amount);
+        amount = Reactions.Shatter(this, amount); // a heavy hit on a frozen enemy shatters the ice
         if (amount <= 0)
         {
             Hud.I?.HitMarker();
@@ -467,6 +471,7 @@ public partial class Enemy : MonoBehaviour
             Vfx.Detach(chillFx);
             Pickup.SpawnEnergy(transform.position, kind == EnemyKind.Boss ? 12 : Random.Range(1, 4));
             Pickup.SpawnGold(transform.position, kind == EnemyKind.Boss ? 20 : Random.Range(1, 4));
+            if (kind != EnemyKind.Boss && elite == EliteKind.None && !mini && Random.value < 0.03f) Pickup.DropWeapon(transform.position);
             if (Random.value < (kind == EnemyKind.Boss ? 1f : 0.06f))
                 Pickup.Spawn(PickupKind.Health, transform.position + Vector3.right, 2);
             RunState.kills++;
