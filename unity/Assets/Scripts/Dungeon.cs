@@ -359,9 +359,12 @@ public class Dungeon : MonoBehaviour
     /// Floor 1 meets gunners and chargers; spreaders join from floor 2.
     EnemyKind[] Wave(int count, int floor)
     {
+        // Floor 1 adds the odd bomber; skeleton archers join from floor 2.
         var pool = floor == 1
-            ? new[] { EnemyKind.Gunner, EnemyKind.Gunner, EnemyKind.Charger }
-            : new[] { EnemyKind.Gunner, EnemyKind.Charger, EnemyKind.Spreader };
+            ? new[] { EnemyKind.Gunner, EnemyKind.Gunner, EnemyKind.Charger, EnemyKind.Gunner, EnemyKind.Bomber }
+            : floor == 2
+                ? new[] { EnemyKind.Gunner, EnemyKind.Charger, EnemyKind.Spreader, EnemyKind.Bomber, EnemyKind.Archer }
+                : new[] { EnemyKind.Gunner, EnemyKind.Charger, EnemyKind.Spreader, EnemyKind.Bomber, EnemyKind.Archer, EnemyKind.Archer };
         var wave = new EnemyKind[count];
         for (int i = 0; i < count; i++) wave[i] = pool[rng.Next(pool.Length)];
         return wave;

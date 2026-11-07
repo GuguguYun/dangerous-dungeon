@@ -76,8 +76,9 @@ public partial class PlayerController
         camScaleTarget = d.camScale;
 
         Vfx.Ring(transform.position, 2f, d.color);
-        Sfx.Play("buff", 0.8f, 0f);
-        Hud.I?.Show($"搭乘 {d.name}", 1.2f);
+        Sfx.Play("clank", 0.8f, 0f, 0.8f);
+        Sfx.Play("buff", 0.5f, 0f);
+        Hud.I?.Show($"搭乘「{d.name}」", 1.2f);
         Debug.Log("MECH mount " + d.id);
     }
 
@@ -120,7 +121,7 @@ public partial class PlayerController
             CameraShake.Add(0.4f);
             Sfx.Play("explode", 0.9f);
             invuln = 1.5f;
-            Hud.I?.Show($"{d.name}被摧毁！", 1.6f);
+            Hud.I?.Show($"机甲「{d.name}」被摧毁！", 1.6f);
             Teleport(spot + Vector3.up * 0.1f);
             velocity = Vector3.up * 5f;
         }
@@ -128,7 +129,7 @@ public partial class PlayerController
         {
             ParkedMech.Create(d, mechHp, at, facing);
             Teleport(spot + Vector3.up * 0.1f);
-            Sfx.Play("door", 0.5f, 0.1f);
+            Sfx.Play("clank", 0.6f, 0.1f);
         }
         Debug.Log($"MECH dismount destroyed={destroyed}");
     }
@@ -143,7 +144,7 @@ public partial class PlayerController
         mechHp = Mathf.Max(0, mechHp - amount);
         CameraShake.Add(0.2f);
         Hud.I?.Hurt();
-        Sfx.Play("hit", 0.7f, 0.1f);
+        Sfx.Play("clank", 0.6f, 0.15f);
         Vfx.Sparks(transform.position + Vector3.up * mechDef.height * 0.6f, new Color(1f, 0.8f, 0.4f), 8, 5f);
         if (mechHp <= 0) Dismount(true);
     }
@@ -314,7 +315,7 @@ public partial class PlayerController
             Vfx.Puff(impact + Vector3.up * 0.5f, new Color(0.6f, 0.55f, 0.5f, 0.6f), 1f, 8);
             if (body) body.Trigger("swing", body.Length("swing") / 0.7f, 0.3f);
             CameraShake.Add(0.3f);
-            Sfx.Play("door", 0.9f, 0.1f);
+            Sfx.Play("smash", 1f, 0.1f, 0.8f);
         }
         else
         {
@@ -344,7 +345,7 @@ public partial class PlayerController
             heat = 0f;
             overheated = false;
             Vfx.Ring(transform.position, 2f, mechDef.color);
-            Hud.I?.Show("过载：4 秒双倍射速、不过热", 1.2f);
+            Hud.I?.Show("超频：4 秒双倍射速、不过热", 1.2f);
             Sfx.Play("buff", 0.8f, 0f);
         }
         else

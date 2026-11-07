@@ -22,17 +22,17 @@ public static class Mechs
 {
     public static readonly MechDef Light = new MechDef
     {
-        id = "light", name = "迅捷机甲", model = "light_mech", heavy = false, maxHp = 30, speed = 7.4f,
+        id = "light", name = "疾隼", model = "light_mech", heavy = false, maxHp = 30, speed = 7.4f,
         height = 2.1f, radius = 0.55f, boosts = 4, camScale = 1.25f, color = new Color(0.35f, 0.9f, 1f),
-        ranged = "双管速射炮", melee = "等离子光刃", special = "过载", dashName = "推进冲刺", jumpName = "喷射跳",
+        ranged = "蜂鸣双管", melee = "流光刃", special = "超频", dashName = "推进冲刺", jumpName = "喷射跳",
         specialCooldown = 14f, desc = "快、能冲刺闪避；速射炮会过热；光刃能劈掉子弹",
     };
 
     public static readonly MechDef Heavy = new MechDef
     {
-        id = "heavy", name = "重装机甲", model = "heavy_mech", heavy = true, maxHp = 60, speed = 4.6f,
+        id = "heavy", name = "磐石", model = "heavy_mech", heavy = true, maxHp = 60, speed = 4.6f,
         height = 2.5f, radius = 0.8f, boosts = 2, camScale = 1.45f, color = new Color(1f, 0.6f, 0.2f),
-        ranged = "重型加农炮", melee = "液压重拳", special = "导弹齐射", dashName = "冲撞", jumpName = "跳砸",
+        ranged = "破城炮", melee = "碎岩拳", special = "蜂巢齐射", dashName = "蛮牛冲撞", jumpName = "陨落踏",
         specialCooldown = 9f, desc = "耐打、不怕地刺和冰面；炮弹爆炸；跳起砸地震飞周围",
     };
 
@@ -155,7 +155,7 @@ public class ParkedMech : MonoBehaviour
     {
         Vector3 ground = transform.position;
         Vfx.Ring(ground, 2.2f, def.color);
-        Hud.I?.Show($"{def.name}空投！靠近按 E 搭乘", 2.5f);
+        Hud.I?.Show($"机甲「{def.name}」空投！靠近按 E 搭乘", 2.5f);
         Tips.Show("mech", "机甲：伤害先扣机甲耐久，被打爆你也不掉血；按 E 上下");
         transform.position = ground + Vector3.up * 16f;
         float v = 6f;

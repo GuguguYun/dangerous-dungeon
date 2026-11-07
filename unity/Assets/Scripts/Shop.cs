@@ -20,9 +20,9 @@ public class ShopItem : MonoBehaviour
 
     public string Title => kind switch
     {
-        Kind.Weapon => weapon.name,
-        Kind.Potion => "大血瓶",
-        Kind.Energy => "能量电池",
+        Kind.Weapon => $"{weapon.name}（{weapon.type}）",
+        Kind.Potion => "赤红药剂",
+        Kind.Energy => "蓝晶电池",
         _ => "增益：" + buff.name,
     };
 
@@ -124,7 +124,8 @@ public class ShopItem : MonoBehaviour
             default: Buffs.Take(buff, p); break;
         }
         Vfx.Sparks(transform.position + Vector3.up * 1.35f, Tint, 14, 4f);
-        Sfx.Play("buff", 0.7f, 0f);
+        Sfx.Play("coin", 0.9f, 0.05f);
+        Sfx.Play("buff", 0.4f, 0f);
         Hud.I?.Show($"买下了 {Title}", 1.2f);
         if (visual) Destroy(visual.gameObject);
         if (glow) Destroy(glow.gameObject);
@@ -196,7 +197,7 @@ public class Merchant : MonoBehaviour
         {
             greeted = true;
             anim.Trigger("taunt", 1f, 0.5f);
-            Hud.I?.Show("商人：欢迎光临！走到货架前按 E 购买", 2.5f);
+            Hud.I?.Show("商人金牙：欢迎光临！走到货架前按 E 购买", 2.5f);
         }
         if (RunState.shopBuys != buys)
         {

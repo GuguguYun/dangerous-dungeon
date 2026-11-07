@@ -45,7 +45,11 @@ public class Room : MonoBehaviour
 
     public void SetGates(bool closed)
     {
-        if (gates.Count > 0 && gates[0].activeSelf != closed && state != State.Idle) Sfx.Play("door", 0.8f, 0.02f);
+        if (gates.Count > 0 && gates[0].activeSelf != closed && state != State.Idle)
+        {
+            Sfx.Play(closed ? "gate_close" : "gate_open", 0.9f, 0.02f);
+            Sfx.Play("door", 0.5f, 0.02f);
+        }
         foreach (var g in gates) g.SetActive(closed);
     }
 
@@ -84,7 +88,7 @@ public class Room : MonoBehaviour
             Tips.Show("elite", "精英怪：头上写着它的词缀，更耐打，掉更多金币");
         }
         e.Split = (k, p) => StartCoroutine(SpawnAfterWarning(k, ClampInside(p), true));
-        if (kind == EnemyKind.Boss) hud.BossBanner(e.displayName, $"第 {floor} 层首领");
+        if (kind == EnemyKind.Boss) hud.BossBanner(e.displayName, $"第 {floor} 层首领 · {e.Epithet}");
         e.target = player;
         e.Died += OnEnemyDied;
         e.Summon = (k, p) => StartCoroutine(SpawnAfterWarning(k, ClampInside(p)));

@@ -49,7 +49,8 @@ public partial class Enemy
                     if (shootTimer <= 0f && sees)
                     {
                         ai = Ai.Aim;
-                        aiT = kind == EnemyKind.Spreader ? 0.5f : 0.35f;
+                        aiT = kind == EnemyKind.Spreader ? 0.5f : kind == EnemyKind.Archer ? 0.6f : kind == EnemyKind.Bomber ? 0.45f : 0.35f;
+                        if (kind == EnemyKind.Bomber) anim?.Trigger("throw", 1.3f, 0.5f); // wind up the throw
                         aims++;
                     }
                 }
@@ -63,7 +64,7 @@ public partial class Enemy
             case Ai.Aim:
                 smoothMove = Vector3.zero;
                 faceDir = toDir;
-                DrawSight(Muzzle(), TargetPoint());
+                if (kind != EnemyKind.Bomber) DrawSight(Muzzle(), TargetPoint()); // a lob needs no sight line
                 if (aiT <= 0f)
                 {
                     HideSight();
@@ -109,10 +110,41 @@ public partial class Enemy
     void Fire()
     {
         shots++;
-        if (kind == EnemyKind.Spreader) Fan(5, 50f, 9f, "bullet_low");
-        else Shoot(TargetDir(), 11f, "bullet_enemy", 0.16f);
-        anim?.Trigger(kind == EnemyKind.Spreader ? "cast" : "shoot", 1.4f, 0.3f);
-        shootTimer = (kind == EnemyKind.Spreader ? Random.Range(2.4f, 3.2f) : Random.Range(1.6f, 2.6f)) * fireMul;
+        switch (kind)
+        {
+            case EnemyKind.Spreader:
+                Fan(5, 50f, 9f, "bullet_low");
+                anim?.Trigger("cast", 1.4f, 0.3f);
+                break;
+            case EnemyKind.Archer:
+                // A fast arrow at chest height after a longer, visible aim.
+                Shoot(TargetDir(), 19f, "bullet_arrow", 0.1f);
+                anim?.Trigger("shoot", 1.4f, 0.3f);
+                break;
+            case EnemyKind.Bomber:
+            {
+                // Lob at where the player is heading, a little ahead.
+                Vector3 lead = target ? target.transform.position + Vector3.ProjectOnPlane(target.Velocity, Vector3.up) * 0.5f : TargetPos;
+                Vector3 hand = held ? held.position : transform.position + Vector3.up * 1.4f;
+                EnemyBomb.Throw(hand, lead, 1.0f, 2.2f);
+                if (held) { held.gameObject.SetActive(false); Invoke(nameof(ShowHeld), 0.9f); }
+                break;
+            }
+            default:
+                Shoot(TargetDir(), 11f, "bullet_enemy", 0.16f);
+                anim?.Trigger("shoot", 1.4f, 0.3f);
+                break;
+        }
+        float gap = kind == EnemyKind.Spreader ? Random.Range(2.4f, 3.2f)
+            : kind == EnemyKind.Bomber ? Random.Range(2.8f, 3.6f)
+            : kind == EnemyKind.Archer ? Random.Range(2.2f, 3.0f)
+            : Random.Range(1.6f, 2.6f);
+        shootTimer = gap * fireMul;
+    }
+
+    void ShowHeld()
+    {
+        if (held && !dead) held.gameObject.SetActive(true);
     }
 
     /// Separation from other enemies plus a sidestep around obstacles ahead.

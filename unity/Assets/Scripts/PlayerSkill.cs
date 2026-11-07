@@ -211,6 +211,13 @@ public class PlayerSkill : MonoBehaviour
                     Vfx.Puff(ally.transform.position + Vector3.up, new Color(1f, 0.9f, 0.5f, 0.6f), 0.5f, 6);
                 }
             }
+            // The companion drone counts as an ally too.
+            var pet = Pet.Current;
+            if (hpT <= 0f && pet && pet.isActiveAndEnabled && !pet.offline && Vector3.Distance(new Vector3(pet.transform.position.x, 0f, pet.transform.position.z), centre) <= radius)
+            {
+                pet.Heal(1);
+                Vfx.Puff(pet.transform.position, new Color(1f, 0.9f, 0.5f, 0.6f), 0.4f, 5);
+            }
             if (armorT <= 0f) armorT = 0.5f;
             if (hpT <= 0f) hpT = 1f;
             yield return null;

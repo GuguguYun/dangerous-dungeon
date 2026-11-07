@@ -1,18 +1,34 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-/// Short sound effects synthesised at startup (no audio files), played from a small source pool.
+/// Sound effects: recorded CC0 clips from Resources/Sfx (Kenney's RPG and UI packs, the "100 CC0 SFX"
+/// pack; variants name_1, name_2 ... are picked at random), else a short sound synthesised at startup.
 public static class Sfx
 {
     const int Rate = 44100;
     static readonly Dictionary<string, AudioClip> clips = new Dictionary<string, AudioClip>();
+    static readonly Dictionary<string, AudioClip[]> files = new Dictionary<string, AudioClip[]>();
+
+    static AudioClip[] Files(string name)
+    {
+        if (files.TryGetValue(name, out var found)) return found;
+        var list = new List<AudioClip>();
+        var one = Resources.Load<AudioClip>("Sfx/" + name);
+        if (one) list.Add(one);
+        for (int i = 1; i <= 8; i++)
+        {
+            var c = Resources.Load<AudioClip>($"Sfx/{name}_{i}");
+            if (c) list.Add(c);
+        }
+        return files[name] = list.ToArray();
+    }
     static AudioSource[] pool;
     static int next;
     static System.Random rng = new System.Random(7);
 
     public static void Init(GameObject host)
     {
-        pool = new AudioSource[10];
+        pool = new AudioSource[16];
         for (int i = 0; i < pool.Length; i++)
         {
             pool[i] = host.AddComponent<AudioSource>();
@@ -36,12 +52,15 @@ public static class Sfx
         Make("boss", 1.0f, t => (Sine(t, 55f) + Sine(t, 58f)) * Env(t, 1f, 2.5f) * 0.6f);
     }
 
-    public static void Play(string name, float volume = 1f, float pitchJitter = 0.08f)
+    public static void Play(string name, float volume = 1f, float pitchJitter = 0.08f, float pitch = 1f)
     {
-        if (pool == null || !clips.TryGetValue(name, out var clip)) return;
+        if (pool == null) return;
+        var recorded = Files(name);
+        AudioClip clip = recorded.Length > 0 ? recorded[Random.Range(0, recorded.Length)] : clips.TryGetValue(name, out var synth) ? synth : null;
+        if (!clip) return;
         var s = pool[next];
         next = (next + 1) % pool.Length;
-        s.pitch = 1f + Random.Range(-pitchJitter, pitchJitter);
+        s.pitch = pitch * (1f + Random.Range(-pitchJitter, pitchJitter));
         s.PlayOneShot(clip, volume);
     }
 

@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public enum EnemyKind { Gunner, Charger, Spreader, Boss }
+public enum EnemyKind { Gunner, Charger, Spreader, Boss, Bomber, Archer }
 
 /// Placeholder enemies. Gunner keeps mid range and fires orbs; Charger rushes and hits on contact;
 /// Spreader fires fans; Boss cycles ring / burst / charge attacks and summons help.
@@ -96,6 +96,12 @@ public partial class Enemy : MonoBehaviour
             case EnemyKind.Spreader:
                 maxHp = 8 + floor * 2; speed = 2.6f; bodyMat = "enemy_spreader"; shootTimer += 0.8f;
                 break;
+            case EnemyKind.Bomber:
+                maxHp = 8 + floor * 2; speed = 3.0f; bodyMat = "enemy_body"; shootTimer += 1.0f;
+                break;
+            case EnemyKind.Archer:
+                maxHp = 6 + floor * 2; speed = 3.0f; bodyMat = "enemy_charger"; shootTimer += 0.5f;
+                break;
             case EnemyKind.Boss:
                 bodyMat = "enemy_boss"; scale = 2.3f;
                 SetupBoss(floor);
@@ -127,6 +133,8 @@ public partial class Enemy : MonoBehaviour
             eye.localPosition = new Vector3(0f, h * 0.7f, cc.radius);
             if (kind == EnemyKind.Gunner) Hold("pistol");
             else if (kind == EnemyKind.Spreader) Hold("thunder");
+            else if (kind == EnemyKind.Archer) Hold("bow", "lefthand");
+            else if (kind == EnemyKind.Bomber) HoldBomb();
             return;
         }
         body = Part(PrimitiveType.Capsule, new Vector3(0f, 0.8f, 0f) * scale, new Vector3(0.9f, 0.8f, 0.9f) * scale, bodyMat);
@@ -249,8 +257,11 @@ public partial class Enemy : MonoBehaviour
             strafeTimer = Random.Range(1.5f, 3f);
         }
         if (dist < 0.01f) return Vector3.zero;
-        if (dist > 8f) return to / dist;
-        if (dist < 4.5f) return -to / dist;
+        // Archers and bombers hang back; gunners and shamans come closer.
+        float far = kind == EnemyKind.Archer ? 13f : kind == EnemyKind.Bomber ? 11f : 8f;
+        float near = kind == EnemyKind.Archer ? 7f : kind == EnemyKind.Bomber ? 6f : 4.5f;
+        if (dist > far) return to / dist;
+        if (dist < near) return -to / dist;
         return Vector3.Cross(Vector3.up, to).normalized * strafeSign;
     }
 
@@ -275,7 +286,7 @@ public partial class Enemy : MonoBehaviour
         if (height >= 0f) from.y = height;
         Bullet.Fire(from, dir * speed, false, radius, mat, 4f);
         Sfx.Play("enemy_shot", 0.25f);
-        if (mat == "bullet_enemy") Tips.Show("dodge", "胸口高的子弹：左右躲开，或按 Shift 冲刺穿过去");
+        if (mat == "bullet_enemy" || mat == "bullet_arrow") Tips.Show("dodge", "胸口高的子弹：左右躲开，或按 Shift 冲刺穿过去");
         if (held)
         {
             // The shot leaves at its readable fixed height; the flash shows where it came from.
@@ -286,9 +297,9 @@ public partial class Enemy : MonoBehaviour
     }
 
     /// Puts a weapon model in the right hand; LateUpdate keeps it pointing where the body faces.
-    void Hold(string weaponId)
+    void Hold(string weaponId, string bone = "righthand")
     {
-        var hand = anim.Find("righthand");
+        var hand = anim.Find(bone);
         var w = Weapons.Get(weaponId);
         if (!hand || w == null) return;
         held = new GameObject("held_" + weaponId).transform;
@@ -313,6 +324,23 @@ public partial class Enemy : MonoBehaviour
         held.rotation = kind == EnemyKind.Spreader
             ? Quaternion.LookRotation(Vector3.up, -model.forward)
             : Quaternion.LookRotation(model.forward, Vector3.up);
+    }
+
+    /// The bomber carries a lit bomb in its throwing hand (hidden while one is in the air).
+    void HoldBomb()
+    {
+        var hand = anim.Find("righthand");
+        if (!hand) return;
+        held = new GameObject("held_bomb").transform;
+        held.SetParent(hand, false);
+        held.localScale = Vector3.one * (transform.lossyScale.x / Mathf.Max(0.0001f, hand.lossyScale.x));
+        var bomb = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        DestroyImmediate(bomb.GetComponent<Collider>());
+        bomb.layer = Layers.Enemy;
+        bomb.transform.SetParent(held, false);
+        bomb.transform.localScale = Vector3.one * 0.3f;
+        bomb.GetComponent<Renderer>().sharedMaterial = Palette.Get("iron");
+        heldTip = Vector3.zero;
     }
 
     void Fan(int n, float arc, float speed, string mat, float height = -1f)

@@ -95,6 +95,7 @@ public class GameManager : MonoBehaviour
         player.skill = pgo.AddComponent<PlayerSkill>();
         player.skill.Setup(player, Classes.Get(RunState.classId));
         player.yaw = dungeon.startYaw;
+        Pet.Spawn(player, RunState.floor);
         hud.player = player;
         dungeon.SetPlayer(player);
         Vfx.Ambient(theme.particles, player.transform);
@@ -285,6 +286,7 @@ public class GameManager : MonoBehaviour
     {
         Debug.Log("AUTOTEST start");
         Enemy.ElitesEnabled = false; // random elites would make the room checks flaky; EliteTests covers them
+        if (Pet.Current) Pet.Current.gameObject.SetActive(false); // the drone would hit other tests' targets; PetTests covers it
         Vector3 floor = Kit.Size("floor_tile"), wall = Kit.Size("wall"), door = Kit.Size("wall_door");
         Check("kit has 11 pieces (with the trap parts)", Kit.Count == 11, $"count={Kit.Count}");
         Check("floor tile is 4x4 m", Mathf.Abs(floor.x - 4f) < 0.05f && Mathf.Abs(floor.z - 4f) < 0.05f, $"size={floor}");
@@ -385,6 +387,12 @@ public class GameManager : MonoBehaviour
         // Elites: shield, frenzy, splitting, volatile.
         yield return EliteTests();
 
+        // New enemy types: the goblin bomber's lobbed bombs, the skeleton archer.
+        yield return EnemyTypeTests();
+
+        // The companion drone: follows, shoots, blocks, goes down, reboots; Sanctuary heals it.
+        yield return PetTests();
+
         Check("run summary tracks the numbers", RunState.damageDealt > 0 && RunState.weaponsSeen.Count >= 2 && RunState.runTime > 1f && RunState.mechsPiloted >= 1,
             $"dealt={RunState.damageDealt} weapons={RunState.weaponsSeen.Count} time={RunState.runTime:F0} mechs={RunState.mechsPiloted}");
 
@@ -474,7 +482,7 @@ public class GameManager : MonoBehaviour
         king.target = player;
         int summons = 0;
         king.Summon = (k, p) => summons++;
-        Check("floor 1 boss is the goblin king", king.bossKind == BossKind.GoblinKing && king.displayName == "哥布林王", king.displayName);
+        Check("floor 1 boss is the goblin king", king.bossKind == BossKind.GoblinKing && king.displayName == "贪金王·葛巴", king.displayName);
         yield return new WaitForSeconds(4.5f);
         Check("goblin king leaps and slams", king.leaps >= 1 && king.slams >= 1, $"leaps={king.leaps} slams={king.slams}");
         king.TakeDamage(45, Vector3.forward);
@@ -974,6 +982,93 @@ public class GameManager : MonoBehaviour
         yield return new WaitForSeconds(0.7f);
     }
 
+    IEnumerator PetTests()
+    {
+        var pet = Pet.Current;
+        Check("a companion drone comes along", pet != null);
+        if (!pet) yield break;
+        Vector3 fwdDir = Quaternion.Euler(0f, player.yaw, 0f) * Vector3.forward;
+        Vector3 home = dungeon.playerStart;
+        player.Teleport(home);
+        pet.gameObject.SetActive(true);
+        pet.transform.position = home + Vector3.up;
+        yield return new WaitForSeconds(0.8f);
+        Vector3 off = pet.transform.position - player.transform.position;
+        Check("the drone hovers beside the player at chest height", off.magnitude < 2f && off.y > 0.8f && off.y < 1.6f, $"offset={off}");
+
+        var foe = Dummy(home + fwdDir * 5f);
+        int shots = pet.shots;
+        yield return new WaitForSeconds(2.5f);
+        Check("the drone shoots enemies it can see", pet.shots > shots && foe.hp < 100, $"shots={pet.shots - shots} hp={foe.hp}");
+        Destroy(foe.gameObject);
+
+        int hp0 = pet.hp;
+        var shot = Bullet.Fire(pet.transform.position + fwdDir * 2f, -fwdDir * 12f, false, 0.12f, "bullet_enemy", 3f, 2);
+        yield return new WaitForSeconds(0.4f);
+        Check("the drone blocks enemy shots and takes the damage", pet.hp == hp0 - 2, $"hp {hp0} -> {pet.hp}");
+
+        // Sanctuary (the priest's skill) heals allies inside it, the drone included.
+        var priest = Classes.Get("priest");
+        player.skill.Setup(player, priest);
+        player.skill.TryUse();
+        yield return new WaitForSeconds(1.3f);
+        Check("Sanctuary heals the drone", pet.hp > hp0 - 2, $"hp={pet.hp}");
+        player.skill.Setup(player, Classes.Get(RunState.classId));
+        yield return new WaitForSeconds(4f); // let the sanctuary end
+
+        pet.TakeDamage(999);
+        Check("at 0 HP the drone goes offline", pet.offline);
+        pet.gameObject.SetActive(false);
+        player.hp = player.maxHp;
+        yield return null;
+    }
+
+    IEnumerator EnemyTypeTests()
+    {
+        Vector3 fwdDir = Quaternion.Euler(0f, player.yaw, 0f) * Vector3.forward;
+        Vector3 side = Quaternion.Euler(0f, 90f, 0f) * fwdDir;
+        Vector3 home = dungeon.playerStart;
+        player.Teleport(home);
+        player.hp = player.maxHp = 40;
+        player.armor = player.maxArmor;
+        yield return new WaitForSeconds(0.7f);
+
+        // A bomb thrown at your feet: a circle marks the spot, then it blows (goblins inside get hurt too).
+        int blasts = EnemyBomb.Exploded, taken = player.damageTaken;
+        var bystander = Dummy(home + side * 1.2f);
+        EnemyBomb.Throw(home + fwdDir * 5f + Vector3.up * 1.4f, home, 1.0f, 2.2f);
+        yield return new WaitForSeconds(0.5f);
+        Check("a bomb marks where it will land first", FindAnyObjectByType<EnemyBomb>() != null && player.damageTaken == taken);
+        yield return new WaitForSeconds(0.8f);
+        Check("the bomb hurts whoever stays in the circle, goblins too", EnemyBomb.Exploded == blasts + 1 && player.damageTaken > taken && bystander.hp < 100,
+            $"blasts={EnemyBomb.Exploded - blasts} taken={player.damageTaken - taken} goblin={bystander.hp}");
+        Destroy(bystander.gameObject);
+        yield return new WaitForSeconds(0.8f);
+        taken = player.damageTaken;
+        EnemyBomb.Throw(home + fwdDir * 5f + Vector3.up * 1.4f, home, 1.0f, 2.2f);
+        player.Teleport(home + side * 4f);
+        yield return new WaitForSeconds(1.3f);
+        Check("stepping out of the circle avoids the bomb", player.damageTaken == taken, $"taken={player.damageTaken - taken}");
+        player.Teleport(home);
+
+        // The bomber and the archer act on their own.
+        var bomber = Dummy(home + fwdDir * 5f, EnemyKind.Bomber);
+        bomber.target = player;
+        for (float u = 0; u < 7f && bomber.shots == 0; u += Time.deltaTime) yield return null;
+        Check("a goblin bomber lobs bombs at the player", bomber.shots > 0, $"aims={bomber.aims} shots={bomber.shots}");
+        Destroy(bomber.gameObject);
+        var archer = Dummy(home + fwdDir * 5f - side * 2f, EnemyKind.Archer);
+        archer.target = player;
+        for (float u = 0; u < 7f && archer.shots == 0; u += Time.deltaTime) yield return null;
+        Check("a skeleton archer aims, then looses an arrow", archer.shots > 0 && archer.aims > 0, $"aims={archer.aims} shots={archer.shots}");
+        Destroy(archer.gameObject);
+        foreach (var b in FindObjectsByType<EnemyBomb>(FindObjectsSortMode.None)) Destroy(b.gameObject);
+
+        player.hp = player.maxHp = RunState.maxHp;
+        player.armor = player.maxArmor;
+        yield return new WaitForSeconds(1.0f);
+    }
+
     IEnumerator EliteTests()
     {
         Vector3 fwdDir = Quaternion.Euler(0f, player.yaw, 0f) * Vector3.forward;
@@ -1210,6 +1305,7 @@ public class GameManager : MonoBehaviour
 
     IEnumerator AutoTestNextFloor()
     {
+        if (Pet.Current) Pet.Current.gameObject.SetActive(false);
         yield return new WaitForSeconds(0.5f);
         Check("floor 2 built after the portal", RunState.floor == 2 && dungeon.rooms.Count == 8, $"floor={RunState.floor} rooms={dungeon.rooms.Count}");
         Check("hp, weapons and buffs carried over", player.hp == RunState.hp && player.weapons[0] != null && RunState.buffs.Count == 1, $"hp={player.hp} w0={player.weapons[0]?.id}");
@@ -1482,6 +1578,22 @@ public class GameManager : MonoBehaviour
             yield return new WaitForSeconds(0.6f);
             yield return Shot("21_elites.png");
             foreach (var e in shown) if (e) Destroy(e.gameObject);
+        }
+
+        // New enemies: a goblin bomber with a bomb in the air over its red landing circle, a skeleton archer.
+        {
+            Vector3 np = player.transform.position;
+            Vector3 nf = Quaternion.Euler(0f, player.yaw, 0f) * Vector3.forward, nr = Quaternion.Euler(0f, player.yaw + 90f, 0f) * Vector3.forward;
+            var bomber = Dummy(np + nf * 7f - nr * 1.6f, EnemyKind.Bomber);
+            var archer = Dummy(np + nf * 7f + nr * 1.6f, EnemyKind.Archer);
+            yield return new WaitForSeconds(0.5f);
+            EnemyBomb.Throw(bomber.transform.position + Vector3.up * 1.4f, np + nf * 2.5f, 1.2f, 2.2f);
+            player.pitch = 10f;
+            yield return new WaitForSeconds(0.6f);
+            yield return Shot("22_new_enemies.png");
+            yield return new WaitForSeconds(0.8f);
+            Destroy(bomber.gameObject);
+            Destroy(archer.gameObject);
         }
 
         // The end-of-run summary card.

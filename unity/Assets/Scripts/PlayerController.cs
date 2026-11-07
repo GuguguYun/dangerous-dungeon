@@ -89,6 +89,7 @@ public partial class PlayerController : MonoBehaviour
     public bool Dashing => dashT > 0f;
     public float FeetHeight => transform.position.y;
     public float VerticalSpeed => velocity.y;
+    public Vector3 Velocity => velocity;
     public CollisionFlags LastFlags => cc.collisionFlags;
 
     void Awake()
@@ -211,6 +212,7 @@ public partial class PlayerController : MonoBehaviour
         slot = 1 - slot;
         fireCd = Mathf.Max(fireCd, 0.15f);
         EquipVisual();
+        Sfx.Play(Weapon.melee ? "swap_melee" : "swap_gun", 0.7f, 0.05f);
     }
 
     public void PickUp(Pickup p)
@@ -225,7 +227,8 @@ public partial class PlayerController : MonoBehaviour
         Destroy(p.gameObject);
         nearbyWeapon = null;
         EquipVisual();
-        Hud.I?.Show("获得 " + Weapon.name, 1.2f);
+        Sfx.Play("pickup_weapon", 0.8f, 0.05f);
+        Hud.I?.Show($"获得 {Weapon.name}（{Weapon.type}）", 1.2f);
     }
 
     /// Jump: costs one stamina; a second jump in the air only with the double-jump buff.
@@ -241,7 +244,7 @@ public partial class PlayerController : MonoBehaviour
         stamina -= 1f;
         groundT = 0f;
         velocity.y = JumpVelocity;
-        Sfx.Play("slash", 0.3f, 0.1f);
+        Sfx.Play("step", 0.5f, 0.1f, 1.2f);
         return true;
     }
 
@@ -385,6 +388,7 @@ public partial class PlayerController : MonoBehaviour
         }
 
         Vector3 h = new Vector3(velocity.x, 0f, velocity.z);
+        Footsteps(dt);
         if (dashT > 0f)
         {
             dashT -= dt;
@@ -537,6 +541,22 @@ public partial class PlayerController : MonoBehaviour
         return Physics.Raycast(o, r.direction, out var hit, 200f, Layers.WorldMask | Layers.EnemyMask, QueryTriggerInteraction.Ignore)
             ? hit.point
             : o + r.direction * 200f;
+    }
+
+    float stepT;
+
+    /// Footfalls at the running cadence; a mech stomps (the heavy one with a deep metal clank).
+    void Footsteps(float dt)
+    {
+        float v = new Vector2(velocity.x, velocity.z).magnitude;
+        if (!Grounded || v < 1.5f || dead) { stepT = 0f; return; }
+        stepT += dt * v;
+        float stride = HeavyMech ? 2.6f : InMech ? 2.2f : 1.6f;
+        if (stepT < stride) return;
+        stepT = 0f;
+        if (HeavyMech) Sfx.Play("clank", 0.35f, 0.08f, 0.55f);
+        else if (InMech) Sfx.Play("step", 0.35f, 0.08f, 0.8f);
+        else Sfx.Play("step", 0.22f, 0.1f);
     }
 
     /// Keep the firing pose up without shooting (grip inspection).
@@ -939,7 +959,8 @@ public partial class PlayerController : MonoBehaviour
                 for (int i = 0; i < (heavy ? 4 : 2); i++)
                     Fx.Lightning(impact + Vector3.up * 0.1f, impact + Quaternion.Euler(0f, Random.Range(0f, 360f), 0f) * Vector3.forward * Random.Range(1f, 2f));
                 CameraShake.Add(heavy ? 0.4f : 0.18f);
-                Sfx.Play("door", 0.9f, 0.1f);
+                Sfx.Play("smash", 0.9f, 0.1f);
+                Sfx.Play("door", 0.6f, 0.1f);
                 break;
             }
             case "spear":

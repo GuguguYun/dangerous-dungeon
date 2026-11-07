@@ -238,6 +238,8 @@ public class Bullet : MonoBehaviour
         {
             var p = rh.collider.GetComponentInParent<PlayerController>();
             if (p) p.TakeDamage(damage);
+            var pet = rh.collider.GetComponentInParent<Pet>();
+            if (pet) pet.TakeDamage(damage); // the drone took it for you
             Impact(rh.point, radius * 3f);
             Destroy(gameObject);
             return true;

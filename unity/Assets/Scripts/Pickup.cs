@@ -137,7 +137,8 @@ public class Pickup : MonoBehaviour
                 Tips.Show("gold", "金币能在商店花掉（小地图上标「商」的房间）");
             }
             else player.Heal(amount);
-            Sfx.Play("pickup", kind == PickupKind.Health ? 0.6f : 0.25f, kind == PickupKind.Gold ? 0.35f : 0.15f);
+            if (kind == PickupKind.Gold) Sfx.Play("coin", 0.3f, 0.15f, 1.15f);
+            else Sfx.Play("pickup", kind == PickupKind.Health ? 0.6f : 0.25f, 0.15f);
             Destroy(gameObject);
         }
     }

@@ -134,7 +134,7 @@ public class SpikeTrap : Trap
                 raised = true;
                 fired++;
                 hitThisTime.Clear();
-                Sfx.Play("slash", 0.7f, 0.1f);
+                Sfx.Play("clank", 0.7f, 0.1f, 1.3f);
             }
         }
         if (upT > 0f)

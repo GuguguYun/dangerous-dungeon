@@ -20,8 +20,9 @@ public class Chest : MonoBehaviour
         for (int i = 0; i < 20 && w.rarity < minRarity; i++) w = Weapons.RandomExcept(player.weapons[0]?.id, player.weapons[1]?.id);
         Pickup.Spawn(PickupKind.Weapon, transform.position - d.normalized * 1.4f, 0, w);
         Pickup.SpawnEnergy(transform.position, 4);
-        dungeon.ShowMessage($"宝箱：{w.name}（按 E 拾取）", 2f);
+        dungeon.ShowMessage($"宝箱：{w.name}（{w.type}，按 E 拾取）", 2f);
         transform.localScale = new Vector3(1.1f, 0.8f, 1.1f);
-        Sfx.Play("buff", 0.6f, 0f);
+        Sfx.Play("chest", 0.9f, 0f);
+        Sfx.Play("buff", 0.4f, 0f);
     }
 }

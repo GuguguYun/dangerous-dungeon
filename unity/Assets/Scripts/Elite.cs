@@ -25,11 +25,22 @@ public partial class Enemy
 
     public string EliteName => elite switch
     {
-        EliteKind.Shielded => "精英 · 护盾",
-        EliteKind.Frenzied => "精英 · 狂暴",
-        EliteKind.Splitting => "精英 · 分裂",
-        EliteKind.Volatile => "精英 · 自爆",
+        EliteKind.Shielded => "精英 · 坚壁",
+        EliteKind.Frenzied => "精英 · 狂怒",
+        EliteKind.Splitting => "精英 · 裂生",
+        EliteKind.Volatile => "精英 · 殉爆",
         _ => "",
+    };
+
+    /// What the player calls this enemy (name tags, messages).
+    public string KindName => kind switch
+    {
+        EnemyKind.Gunner => "哥布林火枪手",
+        EnemyKind.Charger => "蛮猪冲锋兵",
+        EnemyKind.Spreader => "鬼火萨满",
+        EnemyKind.Bomber => "炸药哥布林",
+        EnemyKind.Archer => "骸骨弓手",
+        _ => displayName,
     };
 
     public Color EliteColor => elite switch
@@ -134,7 +145,7 @@ public partial class Enemy
         if (shield <= 0)
         {
             Vfx.Shatter(AimPoint);
-            Sfx.Play("hit", 0.7f, 0.2f);
+            Sfx.Play("shatter", 0.8f, 0.1f);
         }
         return amount - soaked;
     }

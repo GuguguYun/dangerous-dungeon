@@ -9,6 +9,14 @@ public partial class Enemy
 {
     public BossKind bossKind;
 
+    /// One line under the boss's name on its entrance banner.
+    public string Epithet => bossKind switch
+    {
+        BossKind.GoblinKing => "爱撒金币的胖国王 · 小心他跳起来砸地",
+        BossKind.BoarChief => "红线预警后直线冲锋 · 引他撞墙会晕",
+        _ => "地牢最深处的主人 · 半血后狂暴",
+    };
+
     /// Each boss throws its own thing: the Goblin King gold coins, the Boar Chief rocks, the Orc Warlord axes.
     string BossShot => bossKind switch
     {
@@ -46,9 +54,9 @@ public partial class Enemy
         bossKind = floor <= 1 ? BossKind.GoblinKing : floor == 2 ? BossKind.BoarChief : BossKind.OrcWarlord;
         switch (bossKind)
         {
-            case BossKind.GoblinKing: maxHp = 240; speed = 2.6f; displayName = "哥布林王"; break;
-            case BossKind.BoarChief: maxHp = 340; speed = 2.2f; displayName = "野猪酋长"; break;
-            default: maxHp = 420; speed = 2.4f; displayName = "兽人督军"; break;
+            case BossKind.GoblinKing: maxHp = 240; speed = 2.6f; displayName = "贪金王·葛巴"; break;
+            case BossKind.BoarChief: maxHp = 340; speed = 2.2f; displayName = "裂地酋长·獠牙"; break;
+            default: maxHp = 420; speed = 2.4f; displayName = "血斧督军·克鲁格"; break;
         }
         ActiveBoss = this;
         phaseTimer = 2f;
