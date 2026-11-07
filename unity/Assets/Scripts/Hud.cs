@@ -336,7 +336,7 @@ public class Hud : MonoBehaviour
             var view = IconStudio.I ? IconStudio.I.ClassView(c.id) : null;
             var vr = new Rect(r.x + 10, r.y + 10, r.width - 20, ch * 0.42f);
             UiKit.Fill(vr, new Color(cc.r * 0.18f, cc.g * 0.18f, cc.b * 0.22f, 0.9f));
-            if (view) GUI.DrawTexture(vr, view, ScaleMode.ScaleAndCrop, false);
+            if (view) GUI.DrawTexture(vr, view, ScaleMode.ScaleToFit, true);
             UiKit.Text(new Rect(r.x + 16, vr.y + 6, 60, 28), $"{i + 1}", new GUIStyle(left) { fontSize = 20 }, UiKit.Gold);
             float ty = vr.yMax + 8;
             UiKit.Text(new Rect(r.x, ty, r.width, 40), c.name, new GUIStyle(center) { fontSize = 30 }, cc);
@@ -381,7 +381,7 @@ public class Hud : MonoBehaviour
             }
         }
         if (IconStudio.I) IconStudio.I.hovered = hover;
-        UiKit.Text(new Rect(0, y + ch + 10, w, 30), "点击卡片或按 1 – 4 · 鼠标停在卡片上看看他们的招式", small);
+        UiKit.Text(new Rect(0, y + ch + 10, w, 30), "点击卡片或按 1 – 4 选择", small);
     }
 
     /// The "press E" card above the weapon panel: a weapon on the floor (compared with what you hold),

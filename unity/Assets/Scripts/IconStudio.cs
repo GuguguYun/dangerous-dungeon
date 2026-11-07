@@ -32,7 +32,9 @@ public class IconStudio : MonoBehaviour
     }
 
     public Texture2D Weapon(string id) => id != null && weaponIcons.TryGetValue(id, out var t) ? t : null;
-    public Texture ClassView(string id) => classViews.TryGetValue(id, out var t) ? t : null;
+    // Still portraits made exactly like the weapon icons (that path renders true colours).
+    readonly Dictionary<string, Texture2D> portraits = new Dictionary<string, Texture2D>();
+    public Texture ClassView(string id) => portraits.TryGetValue(id, out var p) ? p : classViews.TryGetValue(id, out var t) ? t : null;
 
     Camera MakeCamera(RenderTexture rt, Vector3 at, Vector3 look)
     {
@@ -98,8 +100,37 @@ public class IconStudio : MonoBehaviour
             Destroy(v);
             yield return null;
         }
+        // Hero portraits, the same way: orthographic, no post-processing, clear background.
+        var prt = new RenderTexture(360, 420, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+        cam.targetTexture = prt;
+        foreach (var cls in Classes.All)
+        {
+            var body = CharacterAnim.Spawn(cls.model, holder, Layer);
+            if (!body) continue;
+            holder.rotation = Quaternion.Euler(0f, 160f, 0f); // facing the camera, turned a little
+            yield return null; // let the idle pose apply
+            var b = new Bounds(spot, Vector3.zero);
+            bool any = false;
+            foreach (var r in body.GetComponentsInChildren<Renderer>())
+            {
+                if (!any) { b = r.bounds; any = true; } else b.Encapsulate(r.bounds);
+            }
+            body.transform.position += spot - b.center;
+            cam.orthographicSize = Mathf.Max(b.extents.y, b.extents.x * prt.height / prt.width) * 1.08f;
+            cam.enabled = true;
+            yield return new WaitForEndOfFrame();
+            var prev = RenderTexture.active;
+            RenderTexture.active = prt;
+            var tex = new Texture2D(prt.width, prt.height, TextureFormat.RGBA32, false);
+            tex.ReadPixels(new Rect(0, 0, prt.width, prt.height), 0, 0);
+            tex.Apply();
+            RenderTexture.active = prev;
+            portraits[cls.id] = tex;
+            Destroy(body.gameObject);
+            yield return null;
+        }
         cam.enabled = false;
-        Debug.Log($"ICONS {weaponIcons.Count}");
+        Debug.Log($"ICONS {weaponIcons.Count} portraits {portraits.Count}");
     }
 
     IEnumerator CopyViews()
@@ -119,6 +150,7 @@ public class IconStudio : MonoBehaviour
     /// Turntables for the class cards (built on first use).
     public void ShowClassPreviews(bool on)
     {
+        if (portraits.Count > 0) on = false; // portraits replace the live turntables
         if (on && turntables.Count == 0) BuildClassPreviews();
         previewsOn = on;
         foreach (var c in classCams) if (c) c.enabled = on;
