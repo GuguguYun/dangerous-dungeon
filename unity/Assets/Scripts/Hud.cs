@@ -246,6 +246,7 @@ public class Hud : MonoBehaviour
         DrawCrosshair(w, h);
         DrawEliteTags();
         DrawLootTags();
+        DrawCombo(w, h);
         DrawNumbers();
         DrawBoss(w);
         DrawMinimap(w);
@@ -312,6 +313,13 @@ public class Hud : MonoBehaviour
         var cs = new GUIStyle(left) { fontSize = 16, wordWrap = true, alignment = TextAnchor.UpperLeft };
         UiKit.Text(new Rect(cr.x + 22, cr.y + 12, 400, 90), "<color=#F7CC75>操作</color>\nWASD 移动 · 鼠标瞄准 · 左键攻击\nQ 换武器 · E 拾取/购买/搭乘 · 右键或 F 技能", cs);
         UiKit.Text(new Rect(cr.x + 440, cr.y + 12, 400, 90), "<color=#F7CC75>闪避</color>\n空格跳：时机对了子弹从脚下穿过\nShift 冲刺躲子弹 · 贴身躲开触发「完美闪避」", cs);
+        if (PlayerPrefs.HasKey("best_floor"))
+        {
+            int bt = PlayerPrefs.GetInt("best_time");
+            string result = PlayerPrefs.GetInt("best_won") == 1 ? "通关" : $"到达第 {PlayerPrefs.GetInt("best_floor")} 层";
+            UiKit.Text(new Rect(0, by + 216, w, 28), $"<color=#F7CC75>最佳纪录</color>  {PlayerPrefs.GetString("best_class")} · {result} · 用时 {bt / 60}:{bt % 60:00} · 击杀 {PlayerPrefs.GetInt("best_kills")}",
+                new GUIStyle(small) { fontSize = 18 });
+        }
         UiKit.Text(new Rect(0, h - 40, w, 30), "角色、敌人、武器、道具：Meshy 生成 · 场景：Blender · 音效：Kenney 等（CC0）· 音乐：OpenGameArt（CC0）", small);
     }
 
@@ -661,6 +669,16 @@ public class Hud : MonoBehaviour
         }
     }
 
+    /// The hit streak on the right: count and damage bonus, fading as the 2 s window runs out.
+    void DrawCombo(float w, float h)
+    {
+        if (screen != Screen.None || Combo.count < 3 || !Combo.Alive) return;
+        float a = Mathf.Clamp01((2f - (Time.time - Combo.lastHit)) * 1.5f);
+        var big = new GUIStyle(left) { fontSize = 34, alignment = TextAnchor.MiddleRight };
+        UiKit.Text(new Rect(w - 360, h * 0.42f, 320, 44), $"连击 ×{Combo.count}", big, new Color(1f, 0.82f, 0.3f, a));
+        UiKit.Text(new Rect(w - 360, h * 0.42f + 40, 320, 26), $"伤害 +{Combo.Bonus * 100f:0}%", new GUIStyle(left) { fontSize = 18, alignment = TextAnchor.MiddleRight }, new Color(1f, 1f, 1f, 0.85f * a));
+    }
+
     /// Names over weapons lying on the floor nearby, in their rarity colour.
     void DrawLootTags()
     {
@@ -791,7 +809,7 @@ public class Hud : MonoBehaviour
         var big = new GUIStyle(left) { fontSize = 20, richText = true };
         float x = panel.x + 24, lh = 32;
         Label(new Rect(x, y + 14, 620, lh), $"{cls.name} · 用时 {secs / 60}:{secs % 60:00} · 到达第 {RunState.floor} 层 · 击杀 {RunState.kills}（首领 {RunState.bossesKilled}）", big);
-        Label(new Rect(x, y + 14 + lh, 620, lh), $"造成伤害 {RunState.damageDealt} · 受到伤害 {RunState.damageTaken} · 完美闪避 {RunState.perfectDodges} · 驾驶机甲 {RunState.mechsPiloted} 次", big);
+        Label(new Rect(x, y + 14 + lh, 640, lh), $"造成伤害 {RunState.damageDealt} · 受到伤害 {RunState.damageTaken} · 最高连击 {RunState.bestCombo} · 完美闪避 {RunState.perfectDodges} · 机甲 {RunState.mechsPiloted} 次", big);
         var names = new List<string>();
         foreach (var id in RunState.weaponsSeen)
         {

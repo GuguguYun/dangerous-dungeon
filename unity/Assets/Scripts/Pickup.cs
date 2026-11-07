@@ -112,8 +112,7 @@ public class Pickup : MonoBehaviour
     public static Pickup DropWeapon(Vector3 at, int minRarity = 0)
     {
         var p = PlayerController.Current;
-        var w = Weapons.RandomExcept(p ? p.weapons[0]?.id : null, p ? p.weapons[1]?.id : null);
-        for (int i = 0; i < 30 && w.rarity < minRarity; i++) w = Weapons.RandomExcept(p ? p.weapons[0]?.id : null, p ? p.weapons[1]?.id : null);
+        var w = Weapons.RandomAtLeast(minRarity, p ? p.weapons[0]?.id : null, p ? p.weapons[1]?.id : null);
         RunState.weaponPity = 0;
         var drop = Spawn(PickupKind.Weapon, at, 0, w);
         Sfx.Play(w.rarity >= 3 ? "gong" : "buff", w.rarity >= 3 ? 0.5f : 0.35f, 0f);

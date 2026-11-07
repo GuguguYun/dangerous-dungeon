@@ -439,6 +439,7 @@ public partial class Enemy : MonoBehaviour
             return;
         }
         RunState.damageDealt += Mathf.Clamp(amount, 0, Mathf.Max(0, hp));
+        if (hitDir != Vector3.zero) Combo.Hit(); // direct hits keep the streak going (burn/poison ticks do not)
         hp -= amount;
         flash = 0.08f;
         if (body)

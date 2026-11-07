@@ -105,6 +105,7 @@ public class GameManager : MonoBehaviour
         {
             hud.screen = Hud.Screen.Dead;
             PlayerController.LockCursor(false);
+            RecordRun(false);
         };
         dungeon.PortalEntered += OnPortal;
 
@@ -145,6 +146,23 @@ public class GameManager : MonoBehaviour
         });
     }
 
+    /// Keep the best run on this machine (deeper floor wins; a clear beats everything; ties go to the faster).
+    void RecordRun(bool won)
+    {
+        if (Scripted) return;
+        int floor = RunState.floor, time = Mathf.FloorToInt(RunState.runTime);
+        bool better = !PlayerPrefs.HasKey("best_floor")
+            || (won ? 1 : 0) > PlayerPrefs.GetInt("best_won")
+            || ((won ? 1 : 0) == PlayerPrefs.GetInt("best_won") && (floor > PlayerPrefs.GetInt("best_floor") || (floor == PlayerPrefs.GetInt("best_floor") && time < PlayerPrefs.GetInt("best_time"))));
+        if (!better) return;
+        PlayerPrefs.SetInt("best_floor", floor);
+        PlayerPrefs.SetInt("best_won", won ? 1 : 0);
+        PlayerPrefs.SetInt("best_time", time);
+        PlayerPrefs.SetInt("best_kills", RunState.kills);
+        PlayerPrefs.SetString("best_class", Classes.Get(RunState.classId).name);
+        PlayerPrefs.Save();
+    }
+
     void SetPaused(bool paused)
     {
         if (player.dead || RunState.won) return;
@@ -166,6 +184,7 @@ public class GameManager : MonoBehaviour
             RunState.won = true;
             player.controlEnabled = false;
             hud.screen = Hud.Screen.Won;
+            RecordRun(true);
             PlayerController.LockCursor(false);
             return;
         }
@@ -431,6 +450,17 @@ public class GameManager : MonoBehaviour
             yield return new WaitForSeconds(0.8f);
         }
 
+        // Hit streak: hits within 2 s build it up (+2% each, max +30%), getting hurt breaks it.
+        Combo.Break();
+        var streakDummy = Dummy(dungeon.playerStart + Vector3.forward * 30f);
+        for (int i = 0; i < 20; i++) streakDummy.TakeDamage(1, Vector3.forward);
+        Check("the hit streak counts hits and caps the bonus at +30%", Combo.count == 20 && Mathf.Approximately(Combo.Bonus, 0.3f), $"count={Combo.count} bonus={Combo.Bonus}");
+        yield return new WaitForSeconds(0.7f); // past any hit invulnerability
+        Combo.Hit();
+        player.TakeDamage(1);
+        Check("getting hurt breaks the streak", Combo.count == 0);
+        Destroy(streakDummy.gameObject);
+        player.hp = player.maxHp;
         Check("music tracks load", Resources.Load<AudioClip>("Music/explore") && Resources.Load<AudioClip>("Music/battle"));
         Check("run summary tracks the numbers", RunState.damageDealt > 0 && RunState.weaponsSeen.Count >= 2 && RunState.runTime > 1f && RunState.mechsPiloted >= 1,
             $"dealt={RunState.damageDealt} weapons={RunState.weaponsSeen.Count} time={RunState.runTime:F0} mechs={RunState.mechsPiloted}");
@@ -1799,6 +1829,12 @@ public class GameManager : MonoBehaviour
             foreach (var b in Bullet.Live.ToArray()) if (b && !b.HitsEnemies) Destroy(b.gameObject);
             yield return new WaitForSeconds(0.3f);
         }
+
+        // The pause menu with the build panel.
+        hud.screen = Hud.Screen.Pause;
+        yield return new WaitForSeconds(0.2f);
+        yield return Shot("27_pause.png");
+        hud.screen = Hud.Screen.None;
 
         // The end-of-run summary card.
         hud.screen = Hud.Screen.Dead;

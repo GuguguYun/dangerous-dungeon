@@ -99,10 +99,13 @@ public static class Weapons
     }
 
     /// A weapon the player doesn't hold; deeper floors lean towards rarer ones.
-    public static WeaponDef RandomExcept(params string[] owned)
+    public static WeaponDef RandomExcept(params string[] owned) => RandomAtLeast(0, owned);
+
+    /// A weapon of at least minRarity that the player doesn't hold (weighted towards the floor's level).
+    public static WeaponDef RandomAtLeast(int minRarity, params string[] owned)
     {
-        var pool = All.FindAll(w => w.id != "pistol" && System.Array.IndexOf(owned, w.id) < 0);
-        if (pool.Count == 0) return All[1];
+        var pool = All.FindAll(w => w.id != "pistol" && w.rarity >= minRarity && System.Array.IndexOf(owned, w.id) < 0);
+        if (pool.Count == 0) return minRarity > 0 ? RandomAtLeast(0, owned) : All[1];
         float total = 0f;
         foreach (var w in pool) total += Weight(w);
         float r = Random.value * total;

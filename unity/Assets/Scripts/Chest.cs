@@ -16,8 +16,7 @@ public class Chest : MonoBehaviour
         d.y = 0f;
         if (d.magnitude > 2.2f) return;
         opened = true;
-        var w = Weapons.RandomExcept(player.weapons[0]?.id, player.weapons[1]?.id);
-        for (int i = 0; i < 20 && w.rarity < minRarity; i++) w = Weapons.RandomExcept(player.weapons[0]?.id, player.weapons[1]?.id);
+        var w = Weapons.RandomAtLeast(minRarity, player.weapons[0]?.id, player.weapons[1]?.id);
         Pickup.Spawn(PickupKind.Weapon, transform.position - d.normalized * 1.4f, 0, w);
         Pickup.SpawnEnergy(transform.position, 4);
         dungeon.ShowMessage($"宝箱：{w.name}（{w.type}，按 E 拾取）", 2f);

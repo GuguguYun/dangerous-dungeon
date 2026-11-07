@@ -575,7 +575,7 @@ public partial class PlayerController : MonoBehaviour
     int RollDamage(int baseDamage, out bool crit)
     {
         crit = nextCrit || stealthed || Random.value < RunState.critChance;
-        int d = baseDamage + RunState.bonusDamage;
+        int d = Mathf.RoundToInt((baseDamage + RunState.bonusDamage) * (1f + Combo.Bonus)); // the hit streak adds up to +30%
         if (stealthed)
         {
             stealthStrike = true; // any damage dealt from stealth ends it (see Update)
@@ -1106,6 +1106,7 @@ public partial class PlayerController : MonoBehaviour
         invuln = 0.6f;
         damageTaken += amount;
         RunState.damageTaken += amount;
+        Combo.Break();
         int fromArmor = Mathf.Min(armor, amount);
         armor -= fromArmor;
         hp = Mathf.Max(hp - (amount - fromArmor), 0);
