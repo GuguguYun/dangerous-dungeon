@@ -15,6 +15,7 @@ public partial class PlayerController
     public int mechShots, mechSlams;
 
     public bool InMech => mechDef != null;
+    public Vector3 MechGunPoint => InMech ? MechMuzzle(mechDef.gunBone, 0.6f) : transform.position; // self-test
     public bool HeavyMech => mechDef != null && mechDef.heavy;
 
     CharacterAnim pilotBody;
@@ -35,6 +36,7 @@ public partial class PlayerController
         if (dead || InMech || d == null) return;
         if (parked)
         {
+            RunState.mechsPiloted++;
             yaw = parked.transform.eulerAngles.y;
             Teleport(new Vector3(parked.transform.position.x, transform.position.y, parked.transform.position.z));
             Destroy(parked.gameObject);
@@ -137,6 +139,7 @@ public partial class PlayerController
         sinceHit = 0f;
         invuln = 0.25f;
         damageTaken += amount;
+        RunState.damageTaken += amount;
         mechHp = Mathf.Max(0, mechHp - amount);
         CameraShake.Add(0.2f);
         Hud.I?.Hurt();
@@ -239,7 +242,7 @@ public partial class PlayerController
             bool od = overdriveT > 0f;
             mechFireCd = od ? 0.04f : 0.07f;
             barrel = 1 - barrel;
-            Vector3 from = MechMuzzle("righthand", 0.6f) + model.right * (barrel == 0 ? -0.08f : 0.08f);
+            Vector3 from = MechMuzzle(mechDef.gunBone, 0.6f) + model.right * (barrel == 0 ? -0.08f : 0.08f);
             Vector3 aim = (aimAt - from).normalized;
             var spread = Quaternion.Euler(Random.Range(-1.2f, 1.2f), Random.Range(-1.2f, 1.2f), 0f);
             int dmg = RollDamage(2, out bool crit);
@@ -264,7 +267,7 @@ public partial class PlayerController
         else
         {
             mechFireCd = 0.7f;
-            Vector3 from = MechMuzzle("righthand", 0.7f);
+            Vector3 from = MechMuzzle(mechDef.gunBone, 0.7f);
             Vector3 aim = (aimAt - from).normalized;
             int dmg = RollDamage(9, out bool crit);
             Bullet.Fire(from, aim * 34f, true, 0.2f, "bullet_rocket", 3f, dmg, 2.5f, crit);

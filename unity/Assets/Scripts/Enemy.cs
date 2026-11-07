@@ -214,6 +214,7 @@ public partial class Enemy : MonoBehaviour
         }
         knock = Vector3.MoveTowards(knock, Vector3.zero, 20f * dt);
         StatusEffects(dt);
+        EliteTick(dt);
         if (dead) return;
         cc.Move((move * speed * (slowT > 0f ? slowMul : 1f) + knock + Vector3.up * vy) * dt);
         LastMove = move;
@@ -274,6 +275,7 @@ public partial class Enemy : MonoBehaviour
         if (height >= 0f) from.y = height;
         Bullet.Fire(from, dir * speed, false, radius, mat, 4f);
         Sfx.Play("enemy_shot", 0.25f);
+        if (mat == "bullet_enemy") Tips.Show("dodge", "胸口高的子弹：左右躲开，或按 Shift 冲刺穿过去");
         if (held)
         {
             // The shot leaves at its readable fixed height; the flash shows where it came from.
@@ -291,8 +293,9 @@ public partial class Enemy : MonoBehaviour
         if (!hand || w == null) return;
         held = new GameObject("held_" + weaponId).transform;
         held.SetParent(hand, false);
-        // World-size the pivot (the rig is scaled); goblins are a bit smaller than the hero.
-        held.localScale = Vector3.one * (0.85f / Mathf.Max(0.0001f, hand.lossyScale.x));
+        // World-size the pivot (the rig is scaled); goblins are a bit smaller than the hero. The enemy is
+        // still at its spawn-pop scale here, so size against the root, not the absolute scale.
+        held.localScale = Vector3.one * (0.85f * transform.lossyScale.x / Mathf.Max(0.0001f, hand.lossyScale.x));
         var vis = Weapons.MakeVisual(w, held, Layers.Enemy);
         float front = 0.3f;
         foreach (var r in vis.GetComponentsInChildren<Renderer>())
@@ -314,6 +317,7 @@ public partial class Enemy : MonoBehaviour
 
     void Fan(int n, float arc, float speed, string mat, float height = -1f)
     {
+        if (mat == "bullet_low") Tips.Show("low", "绿色贴地弹：按空格跳过去（时机对了还能触发完美闪避）");
         Vector3 dir = TargetDir();
         for (int i = 0; i < n; i++)
         {
@@ -396,6 +400,13 @@ public partial class Enemy : MonoBehaviour
     {
         if (dead) return;
         if (kind == EnemyKind.Boss) amount = ModifyIncoming(amount);
+        amount = AbsorbWithShield(amount);
+        if (amount <= 0)
+        {
+            Hud.I?.HitMarker();
+            return;
+        }
+        RunState.damageDealt += Mathf.Clamp(amount, 0, Mathf.Max(0, hp));
         hp -= amount;
         flash = 0.08f;
         if (body)
@@ -427,9 +438,12 @@ public partial class Enemy : MonoBehaviour
             Vfx.Detach(burnFx);
             Vfx.Detach(chillFx);
             Pickup.SpawnEnergy(transform.position, kind == EnemyKind.Boss ? 12 : Random.Range(1, 4));
+            Pickup.SpawnGold(transform.position, kind == EnemyKind.Boss ? 20 : Random.Range(1, 4));
             if (Random.value < (kind == EnemyKind.Boss ? 1f : 0.06f))
                 Pickup.Spawn(PickupKind.Health, transform.position + Vector3.right, 2);
             RunState.kills++;
+            if (kind == EnemyKind.Boss) RunState.bossesKilled++;
+            EliteDeath();
             Sfx.Play(kind == EnemyKind.Boss ? "explode" : "die", 0.6f);
             if (target) target.AddEnergy(RunState.energyOnKill);
             if (kind == EnemyKind.Boss) CameraShake.Add(0.8f);

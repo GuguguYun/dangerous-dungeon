@@ -12,7 +12,7 @@ public class Dungeon : MonoBehaviour
     const int CellSpan = 11; // tiles between neighbouring room centres
     const int Corridor = -1;
 
-    public enum Kind { Start, Combat, Chest, End, Boss }
+    public enum Kind { Start, Combat, Chest, End, Boss, Shop }
 
     public class RoomInfo
     {
@@ -57,6 +57,7 @@ public class Dungeon : MonoBehaviour
     }
     readonly List<WallSlot> wallSlots = new List<WallSlot>();
     RoomInfo endRoom;
+    public RoomInfo shopRoom;
 
     static Vector3 Center(Vector2Int t) => new Vector3(t.x * T, 0f, t.y * T);
 
@@ -126,6 +127,16 @@ public class Dungeon : MonoBehaviour
             var host = branchFrom[rng.Next(branchFrom.Count)];
             var chestOptions = FreeNeighbours(host, used);
             var chest = chestOptions[rng.Next(chestOptions.Count)];
+            used.Add(chest);
+
+            // A shop on another branch (retry the layout until there is room for one).
+            var shopFrom = new List<Vector2Int>();
+            for (int i = 1; i < path.Count - 1; i++)
+                if (FreeNeighbours(path[i], used).Count > 0) shopFrom.Add(path[i]);
+            if (shopFrom.Count == 0) continue;
+            var shopHost = shopFrom[rng.Next(shopFrom.Count)];
+            var shopOptions = FreeNeighbours(shopHost, used);
+            var shop = shopOptions[rng.Next(shopOptions.Count)];
 
             rooms.Clear();
             links.Clear();
@@ -138,6 +149,8 @@ public class Dungeon : MonoBehaviour
             }
             AddRoom(Kind.Chest, chest, 1);
             links.Add((host, chest));
+            AddRoom(Kind.Shop, shop, 1);
+            links.Add((shopHost, shop));
             return;
         }
         Debug.LogError("DUNGEON layout failed");
@@ -266,6 +279,13 @@ public class Dungeon : MonoBehaviour
                     var chest = Props.Spawn("chest", info.Center, face, transform);
                     chest.AddComponent<Chest>().dungeon = this;
                     break;
+                case Kind.Shop:
+                {
+                    var from = RoomAt(links.Find(l => l.b == info.cell).a);
+                    Shop.Build(info.Center, from.Center, transform);
+                    shopRoom = info;
+                    break;
+                }
                 case Kind.End:
                     endRoom = info;
                     SpawnPortal(info.Center);

@@ -33,6 +33,16 @@ public class Hud : MonoBehaviour
     System.Action<BuffDef> onPick;
     string message;
     float messageUntil;
+    string tip;
+    float tipUntil;
+
+    /// A beginner hint on its own line (lower middle), so it doesn't fight with room messages.
+    public void Tip(string text)
+    {
+        tip = text;
+        tipUntil = Time.unscaledTime + 5f;
+        Debug.Log("TIP " + text);
+    }
     float hitMarker, hurt, perfect, bannerT;
     string bannerName, bannerSub;
     Font font;
@@ -200,10 +210,11 @@ public class Hud : MonoBehaviour
                 DrawSkill(w, h);
             }
         }
-        Label(new Rect(22, 112 + Off, 460, 30), $"第 {RunState.floor} / {RunState.Floors} 层 · {themeName}    击杀 {RunState.kills}", left);
+        Label(new Rect(22, 112 + Off, 560, 30), $"第 {RunState.floor} / {RunState.Floors} 层 · {themeName}    击杀 {RunState.kills}    <color=#FFD45A>金币 {RunState.gold}</color>", new GUIStyle(left) { richText = true });
         if (enemiesLeft >= 0) Label(new Rect(22, 142 + Off, 400, 30), $"剩余敌人 {enemiesLeft}", left);
 
         DrawCrosshair(w, h);
+        DrawEliteTags();
         DrawNumbers();
         DrawBoss(w);
         DrawMinimap(w);
@@ -214,6 +225,14 @@ public class Hud : MonoBehaviour
             var ps = new GUIStyle(center) { fontSize = 26, richText = true };
             Label(new Rect(0, h * 0.62f, w, 40), $"按 E 拾取 <color=#{ColorUtility.ToHtmlStringRGB(Weapons.RarityColors[pw.rarity])}>{pw.name}</color>（{Weapons.RarityNames[pw.rarity]}）", ps);
             Label(new Rect(0, h * 0.62f + 36, w, 30), pw.desc, new GUIStyle(small) { fontSize = 18 });
+        }
+        else if (player && player.nearbyWare && screen == Screen.None)
+        {
+            var it = player.nearbyWare;
+            bool afford = RunState.gold >= it.price;
+            var ps = new GUIStyle(center) { fontSize = 26, richText = true };
+            Label(new Rect(0, h * 0.62f, w, 40), $"按 E 购买 <color=#{ColorUtility.ToHtmlStringRGB(it.Tint)}>{it.Title}</color>  <color={(afford ? "#FFD45A" : "#FF6A5A")}>{it.price} 金币</color>", ps);
+            Label(new Rect(0, h * 0.62f + 36, w, 30), it.Desc, new GUIStyle(small) { fontSize = 18 });
         }
         else if (player && player.nearbyMech && screen == Screen.None)
         {
@@ -235,6 +254,14 @@ public class Hud : MonoBehaviour
         }
         if (message != null && Time.unscaledTime < messageUntil && screen == Screen.None)
             Label(new Rect(0, h * 0.2f, w, 60), message, center);
+        if (tip != null && Time.unscaledTime < tipUntil && screen == Screen.None)
+        {
+            float a = Mathf.Clamp01((tipUntil - Time.unscaledTime) * 2f);
+            var ts = new GUIStyle(center) { fontSize = 21 };
+            ts.normal.textColor = new Color(1f, 0.92f, 0.6f, a);
+            Box(new Rect(w / 2 - 380, h * 0.74f, 760, 40), new Color(0f, 0f, 0f, 0.5f * a));
+            Label(new Rect(w / 2 - 380, h * 0.74f + 4, 760, 32), "提示：" + tip, ts);
+        }
         if (screen == Screen.None && player && player.InMech)
         {
             var d = player.mechDef;
@@ -455,6 +482,27 @@ public class Hud : MonoBehaviour
         }
     }
 
+    /// Name tags (and the shield gauge) over elite enemies that are on screen.
+    void DrawEliteTags()
+    {
+        var cam = Camera.main;
+        if (!cam) return;
+        var tag = new GUIStyle(center) { fontSize = 17, richText = true };
+        foreach (var e in Enemy.Elites)
+        {
+            if (!e || e.dead) continue;
+            Vector3 head = e.transform.position + Vector3.up * (e.AimPoint.y - e.transform.position.y) * 2.1f;
+            Vector3 sp = cam.WorldToScreenPoint(head);
+            if (sp.z < 0.5f || sp.z > 40f) continue;
+            float x = sp.x, y = UnityEngine.Screen.height - sp.y;
+            Label(new Rect(x - 90, y - 34, 180, 24), $"<color=#{ColorUtility.ToHtmlStringRGB(e.EliteColor)}>{e.EliteName}</color>", tag);
+            Box(new Rect(x - 40, y - 8, 80, 5), new Color(0f, 0f, 0f, 0.5f));
+            Box(new Rect(x - 40, y - 8, 80f * e.hp / Mathf.Max(1, e.maxHp), 5), new Color(0.9f, 0.25f, 0.25f));
+            if (e.maxShield > 0 && e.shield > 0)
+                Box(new Rect(x - 40, y - 2, 80f * e.shield / e.maxShield, 4), new Color(0.45f, 0.85f, 1f));
+        }
+    }
+
     void DrawNumbers()
     {
         var cam = player ? player.cam : null;
@@ -497,12 +545,44 @@ public class Hud : MonoBehaviour
     void DrawMenu(float w, float h, string heading, string primary, System.Action primaryAction)
     {
         Box(new Rect(0, 0, w, h), new Color(0f, 0f, 0f, 0.6f));
-        Label(new Rect(0, h * 0.25f, w, 80), heading, title);
-        Label(new Rect(0, h * 0.25f + 80, w, 30), $"到达第 {RunState.floor} 层 · 击杀 {RunState.kills}", small);
-        if (GUI.Button(new Rect(w / 2 - 140, h * 0.48f, 280, 56), primary, button)) primaryAction?.Invoke();
-        if (screen == Screen.Pause && GUI.Button(new Rect(w / 2 - 140, h * 0.48f + 70, 280, 56), "重新开始", button)) Restart?.Invoke();
-        if (screen == Screen.Pause && GUI.Button(new Rect(w / 2 - 140, h * 0.48f + 140, 280, 56), "设置 · 防晕 3D", button)) OpenSettings();
-        if (GUI.Button(new Rect(w / 2 - 140, h * 0.48f + (screen == Screen.Pause ? 210 : 70), 280, 56), "退出游戏", button)) Quit?.Invoke();
+        bool over = screen == Screen.Dead || screen == Screen.Won;
+        float top = over ? h * 0.12f : h * 0.25f;
+        Label(new Rect(0, top, w, 80), heading, title);
+        float y = h * 0.48f;
+        if (over) y = DrawSummary(w, top + 90f) + 20f;
+        else Label(new Rect(0, top + 80, w, 30), $"到达第 {RunState.floor} 层 · 击杀 {RunState.kills}", small);
+        if (GUI.Button(new Rect(w / 2 - 140, y, 280, 56), primary, button)) primaryAction?.Invoke();
+        if (screen == Screen.Pause && GUI.Button(new Rect(w / 2 - 140, y + 70, 280, 56), "重新开始", button)) Restart?.Invoke();
+        if (screen == Screen.Pause && GUI.Button(new Rect(w / 2 - 140, y + 140, 280, 56), "设置 · 防晕 3D", button)) OpenSettings();
+        if (GUI.Button(new Rect(w / 2 - 140, y + (screen == Screen.Pause ? 210 : 70), 280, 56), "退出游戏", button)) Quit?.Invoke();
+    }
+
+    /// End-of-run card: time, progress, combat numbers, the weapons you carried and the buffs you chose.
+    float DrawSummary(float w, float y)
+    {
+        var panel = new Rect(w / 2 - 330, y, 660, 250);
+        Box(panel, new Color(0.08f, 0.08f, 0.12f, 0.85f));
+        int secs = Mathf.FloorToInt(RunState.runTime);
+        var cls = Classes.Get(RunState.classId);
+        var big = new GUIStyle(left) { fontSize = 20, richText = true };
+        float x = panel.x + 24, lh = 32;
+        Label(new Rect(x, y + 14, 620, lh), $"{cls.name} · 用时 {secs / 60}:{secs % 60:00} · 到达第 {RunState.floor} 层 · 击杀 {RunState.kills}（首领 {RunState.bossesKilled}）", big);
+        Label(new Rect(x, y + 14 + lh, 620, lh), $"造成伤害 {RunState.damageDealt} · 受到伤害 {RunState.damageTaken} · 完美闪避 {RunState.perfectDodges} · 驾驶机甲 {RunState.mechsPiloted} 次", big);
+        var names = new List<string>();
+        foreach (var id in RunState.weaponsSeen)
+        {
+            var wd = Weapons.Get(id);
+            if (wd != null) names.Add($"<color=#{ColorUtility.ToHtmlStringRGB(Weapons.RarityColors[wd.rarity])}>{wd.name}</color>");
+        }
+        Label(new Rect(x, y + 24 + lh * 2, 620, lh * 2), "用过的武器：" + (names.Count > 0 ? string.Join("、", names) : "—"), new GUIStyle(big) { wordWrap = true });
+        var buffNames = new List<string>();
+        foreach (var id in RunState.buffs)
+        {
+            var b = Buffs.All.Find(d => d.id == id);
+            buffNames.Add(b != null ? b.name : id);
+        }
+        Label(new Rect(x, y + 34 + lh * 4, 620, lh * 2), "选过的增益：" + (buffNames.Count > 0 ? string.Join("、", buffNames) : "—"), new GUIStyle(big) { wordWrap = true });
+        return panel.yMax;
     }
 
     /// Visited rooms in full, their neighbours dimmed, the player as a dot (Soul Knight style).
@@ -547,6 +627,7 @@ public class Hud : MonoBehaviour
             {
                 Dungeon.Kind.Start => new Color(0.5f, 0.8f, 0.5f),
                 Dungeon.Kind.Chest => new Color(0.95f, 0.8f, 0.3f),
+                Dungeon.Kind.Shop => new Color(0.35f, 0.9f, 0.75f),
                 Dungeon.Kind.End => new Color(0.7f, 0.5f, 1f),
                 Dungeon.Kind.Boss => new Color(1f, 0.35f, 0.3f),
                 _ => new Color(0.75f, 0.75f, 0.85f),
@@ -554,6 +635,26 @@ public class Hud : MonoBehaviour
             if (!room.visited) col.a = 0.35f;
             if (room == dungeon.current) col = Color.Lerp(col, Color.white, 0.4f);
             Box(r, col);
+            // An icon on the rooms that matter: boss, chest, shop.
+            string icon = room.kind switch
+            {
+                Dungeon.Kind.Boss => "<color=#FF5A4A>首</color>",
+                Dungeon.Kind.Chest => "<color=#7A5A10>宝</color>",
+                Dungeon.Kind.Shop => "<color=#0E5A48>商</color>",
+                _ => null,
+            };
+            if (icon != null) Label(new Rect(r.center.x - 15, r.center.y - 14, 30, 28), icon, new GUIStyle(center) { fontSize = 18, richText = true });
+        }
+        // The portal once it is open, and parked mechs.
+        if (dungeon.portal)
+        {
+            var pr = ToMap(dungeon.portal.transform.position - Vector3.one * 2.5f, dungeon.portal.transform.position + Vector3.one * 2.5f);
+            if (pr.width > 0 && pr.height > 0) Label(new Rect(pr.center.x - 15, pr.center.y - 14, 30, 28), "<color=#C08CFF>◎</color>", new GUIStyle(center) { fontSize = 20, richText = true });
+        }
+        foreach (var m in ParkedMech.Live)
+        {
+            var mr = ToMap(m.transform.position - Vector3.one * 2f, m.transform.position + Vector3.one * 2f);
+            if (mr.width > 0 && mr.height > 0) Label(new Rect(mr.center.x - 15, mr.center.y - 13, 30, 26), $"<color=#{ColorUtility.ToHtmlStringRGB(m.def.color)}>机</color>", new GUIStyle(center) { fontSize = 15, richText = true });
         }
         Box(new Rect(panel.center.x - 4, panel.center.y - 4, 8, 8), new Color(0.3f, 0.8f, 1f));
     }

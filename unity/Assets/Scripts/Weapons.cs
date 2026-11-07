@@ -36,7 +36,7 @@ public class WeaponDef
     public WeaponGrip grip => id switch
     {
         "pistol" or "boomerang" => WeaponGrip.OneHand,
-        "launcher" or "missile" => WeaponGrip.Shoulder,
+        "launcher" => WeaponGrip.Shoulder, // a slim tube rides the shoulder; the bulky missile box is carried at the hip
         "thunder" or "frost" => WeaponGrip.Staff,
         "bow" => WeaponGrip.Bow,
         "daggers" => WeaponGrip.Dual,

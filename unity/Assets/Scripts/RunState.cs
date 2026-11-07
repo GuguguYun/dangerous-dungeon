@@ -23,6 +23,16 @@ public static class RunState
     public static string mechId; // the mech being piloted, carried through the portal
     public static int mechHp;
     public static float mechPity; // raises the mech drop chance after each room without one
+    // Run summary (shown on the death / victory screen).
+    public static float runTime;
+    public static int damageDealt, damageTaken, perfectDodges, mechsPiloted, bossesKilled;
+    public static int gold, shopBuys; // coins carry over between floors
+    public static List<string> weaponsSeen = new List<string>();
+
+    public static void SawWeapon(string id)
+    {
+        if (id != null && !weaponsSeen.Contains(id)) weaponsSeen.Add(id);
+    }
 
     // Self-test bookkeeping that must survive the floor change.
     public static int testPass, testFail;
@@ -57,6 +67,10 @@ public static class RunState
         mechId = null;
         mechHp = 0;
         mechPity = 0f;
+        runTime = 0f;
+        damageDealt = damageTaken = perfectDodges = mechsPiloted = bossesKilled = 0;
+        gold = shopBuys = 0;
+        weaponsSeen = new List<string>();
     }
 
     public static void ChooseClass(string id)

@@ -63,6 +63,7 @@ public static class Palette
         { "ice", new Entry(0.72f, 0.88f, 1.00f, 0.15f) },
         { "pickup_energy", new Entry(0.30f, 0.60f, 1.00f, 2.5f) },
         { "pickup_health", new Entry(1.00f, 0.30f, 0.35f, 1.5f) },
+        { "pickup_gold", new Entry(1.00f, 0.80f, 0.25f, 1.6f) },
         { "slash", new Entry(0.70f, 0.95f, 1.00f) },
     };
 

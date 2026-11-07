@@ -31,6 +31,7 @@ public static class BuildScript
         ConfigureKitImport();
         LogAxisProbe();
         ConfigureCharacters();
+        WriteHandFrames();
         LogModels();
         CreatePaletteAssets();
         CreateVfxAssets();
@@ -227,6 +228,72 @@ public static class BuildScript
                 Debug.Log($"SETUP char {id}: bounds={b.size} renderers={model.GetComponentsInChildren<Renderer>().Length} bones={model.GetComponentsInChildren<Transform>().Length} textured={textured}");
             }
         }
+    }
+
+    /// Measure each rig's hands from the skinned mesh so held weapons land in the fist (Meshy rigs have
+    /// no finger bones). Writes Chars/<id>/hand.txt, per side, in the hand bone's own space:
+    /// fist centre, finger direction, palm direction (towards the body in the A-pose), half thickness.
+    static void WriteHandFrames()
+    {
+        const string root = "Assets/Resources/Models/Chars";
+        if (!Directory.Exists(root)) return;
+        foreach (var dir in Directory.GetDirectories(root))
+        {
+            var model = AssetDatabase.LoadAssetAtPath<GameObject>($"{dir}/rigged.fbx");
+            var smr = model ? model.GetComponentInChildren<SkinnedMeshRenderer>() : null;
+            if (!smr || !smr.sharedMesh) continue;
+            var mesh = smr.sharedMesh;
+            var verts = mesh.vertices;
+            var weights = mesh.boneWeights;
+            var bp = mesh.bindposes;
+            int Index(string bone) => System.Array.FindIndex(smr.bones, b => b && b.name == bone);
+            int hips = Index("Hips"), head = Index("Head");
+            if (hips < 0 || head < 0 || weights.Length != verts.Length) continue;
+            var lines = new System.Collections.Generic.List<string>();
+            foreach (var side in new[] { "Right", "Left" })
+            {
+                int hi = Index(side + "Hand"), fi = Index(side + "ForeArm");
+                if (hi < 0 || fi < 0) continue;
+                var pts = new System.Collections.Generic.List<Vector3>();
+                for (int i = 0; i < verts.Length; i++)
+                {
+                    var w = weights[i];
+                    float wt = w.boneIndex0 == hi ? w.weight0 : w.boneIndex1 == hi ? w.weight1 : w.boneIndex2 == hi ? w.weight2 : w.boneIndex3 == hi ? w.weight3 : 0f;
+                    if (wt > 0.5f) pts.Add(bp[hi].MultiplyPoint3x4(verts[i]));
+                }
+                if (pts.Count < 20) continue;
+                Vector3 c = Vector3.zero;
+                foreach (var q in pts) c += q;
+                c /= pts.Count;
+                Vector3 InHand(int bone) => bp[hi].MultiplyPoint3x4(bp[bone].inverse.GetColumn(3));
+                Vector3 finger = (-InHand(fi)).normalized; // forearm -> hand, continued
+                Vector3 up = (InHand(head) - InHand(hips)).normalized;
+                // The hand's thin axis (least spread across the finger direction) is the palm normal.
+                Vector3 u = Vector3.Cross(finger, up).normalized, v = Vector3.Cross(finger, u).normalized;
+                float suu = 0f, svv = 0f, suv = 0f;
+                foreach (var q in pts)
+                {
+                    var d = q - c;
+                    float a = Vector3.Dot(d, u), b = Vector3.Dot(d, v);
+                    suu += a * a; svv += b * b; suv += a * b;
+                }
+                float ang = 0.5f * Mathf.Atan2(2f * suv, suu - svv); // major axis angle
+                Vector3 major = Mathf.Cos(ang) * u + Mathf.Sin(ang) * v;
+                Vector3 palm = Vector3.Cross(finger, major).normalized;
+                // Sign: in the A-pose the palm faces the body (horizontal direction to the hips).
+                Vector3 inward = Vector3.ProjectOnPlane(InHand(hips) - c, up);
+                if (Vector3.Dot(palm, inward) < 0f) palm = -palm;
+                var spread = new System.Collections.Generic.List<float>();
+                foreach (var q in pts) spread.Add(Mathf.Abs(Vector3.Dot(q - c, palm)));
+                spread.Sort();
+                float half = spread[(int)(spread.Count * 0.9f)];
+                string F(Vector3 x) => $"{x.x:R} {x.y:R} {x.z:R}";
+                lines.Add($"{side} {F(c)} {F(finger)} {F(palm)} {half:R}");
+            }
+            File.WriteAllLines($"{dir}/hand.txt", lines);
+            Debug.Log($"SETUP hands {Path.GetFileName(dir)}: {string.Join(" | ", lines)}");
+        }
+        AssetDatabase.Refresh();
     }
 
     /// Size and texture check for the Blender-prepared Meshy weapons and props.

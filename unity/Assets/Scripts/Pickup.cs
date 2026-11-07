@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum PickupKind { Energy, Health, Weapon }
+public enum PickupKind { Energy, Health, Weapon, Gold }
 
 /// Things on the floor: energy orbs fly to the player, health potions heal on touch,
 /// weapons wait for the player to press E.
@@ -50,6 +50,19 @@ public class Pickup : MonoBehaviour
             case PickupKind.Health:
                 Ball(holder, 0.4f, "pickup_health");
                 break;
+            case PickupKind.Gold:
+            {
+                // A spinning gold coin.
+                var coin = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                DestroyImmediate(coin.GetComponent<Collider>());
+                coin.transform.SetParent(holder, false);
+                coin.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                coin.transform.localScale = new Vector3(0.32f, 0.03f, 0.32f);
+                var mr = coin.GetComponent<Renderer>();
+                mr.sharedMaterial = Palette.Get("pickup_gold");
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                break;
+            }
             case PickupKind.Weapon:
                 var v = Weapons.MakeVisual(weapon, holder, 0);
                 v.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
@@ -76,6 +89,16 @@ public class Pickup : MonoBehaviour
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
     }
 
+    /// Coins worth one gold each; they bounce out and get pulled in like energy.
+    public static void SpawnGold(Vector3 at, int coins)
+    {
+        for (int i = 0; i < coins; i++)
+        {
+            var off = Random.insideUnitCircle * 1.2f;
+            Spawn(PickupKind.Gold, at + new Vector3(off.x, 0f, off.y), 1);
+        }
+    }
+
     public static void SpawnEnergy(Vector3 at, int orbs)
     {
         for (int i = 0; i < orbs; i++)
@@ -99,7 +122,7 @@ public class Pickup : MonoBehaviour
         Vector3 to = player.transform.position - transform.position;
         to.y = 0f;
         float dist = to.magnitude;
-        if (kind == PickupKind.Energy && dist < 6f && age > 0.6f)
+        if ((kind == PickupKind.Energy || kind == PickupKind.Gold) && dist < 6f && age > 0.6f)
         {
             if (body && !body.isKinematic) body.isKinematic = true; // physics hands over to the magnet
             Vector3 aim = player.transform.position + Vector3.up * 0.6f - transform.position;
@@ -108,8 +131,13 @@ public class Pickup : MonoBehaviour
         if (dist < 1.0f)
         {
             if (kind == PickupKind.Energy) player.AddEnergy(amount);
+            else if (kind == PickupKind.Gold)
+            {
+                RunState.gold += amount;
+                Tips.Show("gold", "金币能在商店花掉（小地图上标「商」的房间）");
+            }
             else player.Heal(amount);
-            Sfx.Play("pickup", kind == PickupKind.Energy ? 0.25f : 0.6f, 0.15f);
+            Sfx.Play("pickup", kind == PickupKind.Health ? 0.6f : 0.25f, kind == PickupKind.Gold ? 0.35f : 0.15f);
             Destroy(gameObject);
         }
     }

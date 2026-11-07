@@ -105,6 +105,7 @@ public class GameManager : MonoBehaviour
         };
         dungeon.PortalEntered += OnPortal;
 
+        Tips.Enabled = !Scripted; // test and screenshot runs must not use up the player's first-time hints
         Debug.Log("GAME ready");
         if (autotest) StartCoroutine(RunState.floor == 1 ? AutoTest() : AutoTestNextFloor());
         else if (shotDir != null) StartCoroutine(Shots());
@@ -283,12 +284,13 @@ public class GameManager : MonoBehaviour
     IEnumerator AutoTest()
     {
         Debug.Log("AUTOTEST start");
+        Enemy.ElitesEnabled = false; // random elites would make the room checks flaky; EliteTests covers them
         Vector3 floor = Kit.Size("floor_tile"), wall = Kit.Size("wall"), door = Kit.Size("wall_door");
         Check("kit has 11 pieces (with the trap parts)", Kit.Count == 11, $"count={Kit.Count}");
         Check("floor tile is 4x4 m", Mathf.Abs(floor.x - 4f) < 0.05f && Mathf.Abs(floor.z - 4f) < 0.05f, $"size={floor}");
         Check("wall runs along X, 4.3 m tall", wall.x > 3.95f && wall.z < 1f && Mathf.Abs(wall.y - 4.3f) < 0.05f, $"size={wall}");
         Check("door wall matches wall", Mathf.Abs(door.x - 4f) < 0.05f, $"size={door}");
-        Check("floor 1 layout: start, 3 combat, chest, boss", dungeon.rooms.Count == 6 && dungeon.combatRooms.Count == 4 && dungeon.rooms.Exists(r => r.kind == Dungeon.Kind.Boss), $"rooms={dungeon.rooms.Count} combat={dungeon.combatRooms.Count}");
+        Check("floor 1 layout: start, 3 combat, chest, shop, boss", dungeon.rooms.Count == 7 && dungeon.combatRooms.Count == 4 && dungeon.rooms.Exists(r => r.kind == Dungeon.Kind.Boss), $"rooms={dungeon.rooms.Count} combat={dungeon.combatRooms.Count}");
         Check("every tile reachable from the start", dungeon.AllRoomsConnected());
 
         // Buff pick (the test takes the first card).
@@ -377,6 +379,14 @@ public class GameManager : MonoBehaviour
 
         // Mechs: drop, board, durability first, weapons, heavy moves, eject.
         yield return MechTests();
+        // Shop: coins, the merchant's four wares, paying for them.
+        yield return ShopTests();
+
+        // Elites: shield, frenzy, splitting, volatile.
+        yield return EliteTests();
+
+        Check("run summary tracks the numbers", RunState.damageDealt > 0 && RunState.weaponsSeen.Count >= 2 && RunState.runTime > 1f && RunState.mechsPiloted >= 1,
+            $"dealt={RunState.damageDealt} weapons={RunState.weaponsSeen.Count} time={RunState.runTime:F0} mechs={RunState.mechsPiloted}");
 
         // Evasion: stamina limits, jumping over chest-height orbs, shockwaves need a jump.
         yield return new WaitForSeconds(1.5f);
@@ -964,6 +974,100 @@ public class GameManager : MonoBehaviour
         yield return new WaitForSeconds(0.7f);
     }
 
+    IEnumerator EliteTests()
+    {
+        Vector3 fwdDir = Quaternion.Euler(0f, player.yaw, 0f) * Vector3.forward;
+        Vector3 side = Quaternion.Euler(0f, 90f, 0f) * fwdDir;
+        Vector3 home = dungeon.playerStart;
+        player.Teleport(home);
+        player.hp = player.maxHp;
+        player.armor = player.maxArmor;
+
+        var shielded = Dummy(home + fwdDir * 4f + side * 2f);
+        shielded.MakeElite(EliteKind.Shielded);
+        Check("elites are tougher and tagged", shielded.maxHp == 220 && shielded.hp == 220 && Enemy.Elites.Contains(shielded) && shielded.EliteName.Length > 0,
+            $"hp={shielded.hp}/{shielded.maxHp} listed={Enemy.Elites.Contains(shielded)}");
+        shielded.TakeDamage(30, fwdDir);
+        Check("a shield soaks damage before health", shielded.hp == 220 && shielded.shield == 80, $"hp={shielded.hp} shield={shielded.shield}");
+        shielded.TakeDamage(100, fwdDir);
+        Check("damage past the shield reaches health", shielded.shield == 0 && shielded.hp == 200, $"hp={shielded.hp} shield={shielded.shield}");
+
+        var frenzied = Dummy(home + fwdDir * 4f - side * 2f);
+        float pace = frenzied.speed;
+        frenzied.MakeElite(EliteKind.Frenzied);
+        Check("frenzied elites are faster and shoot more", frenzied.speed > pace * 1.4f && frenzied.fireMul < 1f, $"speed {pace:F1} -> {frenzied.speed:F1}");
+
+        var splitter = Dummy(home + fwdDir * 6f);
+        splitter.MakeElite(EliteKind.Splitting);
+        int halves = 0;
+        splitter.Split = (k, p) => halves++;
+        int gold0 = Pickup.Live.FindAll(p => p.kind == PickupKind.Gold).Count;
+        splitter.TakeDamage(9999, fwdDir);
+        Check("a splitting elite dies into two", halves == 2, $"halves={halves}");
+        Check("elites drop extra gold", Pickup.Live.FindAll(p => p.kind == PickupKind.Gold).Count >= gold0 + 7);
+
+        yield return new WaitForSeconds(0.7f); // past any hit invulnerability
+        var bomber = Dummy(home + fwdDir * 1.6f);
+        bomber.MakeElite(EliteKind.Volatile);
+        yield return new WaitForSeconds(0.4f);
+        int taken = player.damageTaken;
+        bomber.TakeDamage(9999, fwdDir);
+        yield return null;
+        Check("a volatile elite warns before it blows", FindAnyObjectByType<DelayedBlast>() != null && player.damageTaken == taken);
+        yield return new WaitForSeconds(1.3f);
+        Check("then the blast hurts whoever stayed", player.damageTaken > taken, $"taken={player.damageTaken - taken}");
+
+        foreach (var e in new[] { shielded, frenzied }) if (e) Destroy(e.gameObject);
+        player.hp = player.maxHp;
+        player.armor = player.maxArmor;
+        yield return new WaitForSeconds(0.8f);
+    }
+
+    IEnumerator ShopTests()
+    {
+        var shop = dungeon.shopRoom;
+        Check("every floor has a shop room", shop != null);
+        if (shop == null) yield break;
+        var wares = new System.Collections.Generic.List<ShopItem>(ShopItem.Live);
+        var keeper = GameObject.Find("merchant");
+        Check("the shop has a merchant and four wares", keeper && wares.Count == 4, $"merchant={(bool)keeper} wares={wares.Count}");
+        if (!keeper || wares.Count == 0) yield break;
+        Vector3 toDoor = shop.Center - keeper.transform.position;
+        toDoor.y = 0f;
+        toDoor.Normalize();
+
+        // Coins bounce out and get pulled in.
+        player.Teleport(shop.Center + toDoor * 3.5f);
+        yield return null;
+        int g0 = RunState.gold;
+        Pickup.SpawnGold(player.transform.position + toDoor * 1.5f, 3);
+        yield return new WaitForSeconds(2.2f);
+        Check("coins are picked up", RunState.gold >= g0 + 3, $"gold {g0} -> {RunState.gold}");
+
+        var potion = wares.Find(w => w.kind == ShopItem.Kind.Potion);
+        player.Teleport(potion.transform.position + toDoor * 1.2f);
+        yield return null;
+        yield return null;
+        Check("standing at a pedestal offers the ware", player.nearbyWare == potion, $"near={(player.nearbyWare ? player.nearbyWare.Title : "none")}");
+        RunState.gold = 0;
+        Check("no gold, no sale", !potion.Buy(player) && !potion.sold);
+        RunState.gold = 100;
+        player.hp = 1;
+        Check("buying a potion pays and heals", potion.Buy(player) && potion.sold && RunState.gold == 100 - potion.price && player.hp >= 4,
+            $"gold={RunState.gold} hp={player.hp}");
+        var gun = wares.Find(w => w.kind == ShopItem.Kind.Weapon);
+        int before = Pickup.Live.FindAll(p => p.kind == PickupKind.Weapon).Count;
+        int gold1 = RunState.gold;
+        bool bought = gun.Buy(player);
+        Check("buying a weapon puts it on the floor", bought && Pickup.Live.FindAll(p => p.kind == PickupKind.Weapon).Count == before + 1 && RunState.gold == gold1 - gun.price,
+            $"bought={bought} price={gun.price} gold={RunState.gold}");
+        foreach (var p in Pickup.Live.ToArray()) if (p.kind == PickupKind.Weapon && p.weapon == gun.weapon) Destroy(p.gameObject);
+        RunState.gold = g0;
+        player.hp = player.maxHp;
+        player.Teleport(dungeon.playerStart);
+        yield return new WaitForSeconds(0.3f);
+    }
+
     IEnumerator MechTests()
     {
         player.hp = player.maxHp;
@@ -1000,15 +1104,20 @@ public class GameManager : MonoBehaviour
         // (The mech camera sits higher, so look down a bit more to keep the target inside the room.)
         player.pitch = 22f;
         yield return new WaitForSeconds(0.8f); // let the camera settle at mech height
-        Ray r = player.cam.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
-        float t = (r.origin.y - 0.9f) / -r.direction.y;
-        var target = Dummy(r.origin + r.direction * t);
-        yield return new WaitForSeconds(0.3f);
+        // Clear the start room's crates out of the line of fire and aim at the target itself
+        // (from the higher mech camera the crosshair ray can clip a crate top first).
+        foreach (var prop in PhysicsProp.Live.ToArray())
+            if (prop && Vector3.Distance(prop.transform.position, home) < 9f) Destroy(prop.gameObject);
+        var target = Dummy(home + fwdDir * 4.5f);
+        yield return new WaitForSeconds(0.45f);
+        player.aimOverride = target.AimPoint;
         player.testTrigger = true;
         yield return new WaitForSeconds(0.5f);
         player.testTrigger = false;
+        player.aimOverride = null;
         yield return new WaitForSeconds(0.2f);
-        Check("light mech cannon hits the crosshair target", target.hp < 100 && player.mechShots > 3, $"hp={target.hp} shots={player.mechShots}");
+        Check("light mech cannon hits the crosshair target", target.hp < 100 && player.mechShots > 3,
+            $"hp={target.hp} shots={player.mechShots} gun={player.MechGunPoint} aim={player.AimPoint()} target={target.transform.position} scale={target.transform.localScale.x:F2} player={player.transform.position}");
         Check("the cannon heats up", player.heat > 0.1f, $"heat={player.heat:F2}");
         Destroy(target.gameObject);
         player.testTrigger = true;
@@ -1102,7 +1211,7 @@ public class GameManager : MonoBehaviour
     IEnumerator AutoTestNextFloor()
     {
         yield return new WaitForSeconds(0.5f);
-        Check("floor 2 built after the portal", RunState.floor == 2 && dungeon.rooms.Count == 7, $"floor={RunState.floor} rooms={dungeon.rooms.Count}");
+        Check("floor 2 built after the portal", RunState.floor == 2 && dungeon.rooms.Count == 8, $"floor={RunState.floor} rooms={dungeon.rooms.Count}");
         Check("hp, weapons and buffs carried over", player.hp == RunState.hp && player.weapons[0] != null && RunState.buffs.Count == 1, $"hp={player.hp} w0={player.weapons[0]?.id}");
         Check("floor 2 connected", dungeon.AllRoomsConnected());
         Check("new floor offers a buff again", !RunState.buffTaken);
@@ -1153,7 +1262,8 @@ public class GameManager : MonoBehaviour
                     if (!w.melee) player.HoldAim();
                     yield return null;
                     Vector3 chest = pos + Vector3.up * 1.0f;
-                    Vector3 eye = view == 0 ? chest - fwd * 2.4f + right * 0.6f + Vector3.up * 0.5f
+                    // View 0 matches the game camera's angle (behind, 0.95 m to the right), just closer.
+                    Vector3 eye = view == 0 ? chest - fwd * 3.0f + right * 0.95f + Vector3.up * 0.85f
                         : view == 1 || swing ? chest + fwd * 2.2f + right * 1.4f + Vector3.up * 0.3f
                         : chest - right * 2.6f + Vector3.up * 0.2f;
                     cam.transform.SetPositionAndRotation(eye, Quaternion.LookRotation(chest - eye));
@@ -1339,6 +1449,46 @@ public class GameManager : MonoBehaviour
         player.Dismount(false);
         foreach (var m in ParkedMech.Live.ToArray()) Destroy(m.gameObject);
         foreach (var f in foes) if (f) Destroy(f.gameObject);
+
+        // The shop: the merchant behind his four pedestals.
+        if (dungeon.shopRoom != null)
+        {
+            var keeper = GameObject.Find("merchant");
+            Vector3 toDoor = dungeon.shopRoom.Center - (keeper ? keeper.transform.position : dungeon.shopRoom.Center - Vector3.forward);
+            toDoor.y = 0f;
+            toDoor.Normalize();
+            player.Teleport(dungeon.shopRoom.Center + toDoor * 4.5f);
+            player.yaw = Mathf.Atan2(-toDoor.x, -toDoor.z) * Mathf.Rad2Deg;
+            player.pitch = 14f;
+            RunState.gold = 57;
+            yield return new WaitForSeconds(1.2f);
+            yield return Shot("20_shop.png");
+            player.Teleport(dungeon.playerStart);
+            yield return new WaitForSeconds(0.3f);
+        }
+
+        // Elites: one of each affix lined up in front.
+        {
+            Vector3 ep = player.transform.position;
+            Vector3 ef = Quaternion.Euler(0f, player.yaw, 0f) * Vector3.forward, er = Quaternion.Euler(0f, player.yaw + 90f, 0f) * Vector3.forward;
+            var shown = new System.Collections.Generic.List<Enemy>();
+            for (int i = 0; i < 4; i++)
+            {
+                var e = Dummy(ep + ef * 6.5f + er * (i - 1.5f) * 2.4f, i % 2 == 0 ? EnemyKind.Gunner : EnemyKind.Spreader);
+                e.MakeElite((EliteKind)(i + 1)); // dummies have no target, so they hold still for the picture
+                shown.Add(e);
+            }
+            player.pitch = 10f;
+            yield return new WaitForSeconds(0.6f);
+            yield return Shot("21_elites.png");
+            foreach (var e in shown) if (e) Destroy(e.gameObject);
+        }
+
+        // The end-of-run summary card.
+        hud.screen = Hud.Screen.Dead;
+        yield return new WaitForSeconds(0.2f);
+        yield return Shot("19_summary.png");
+        hud.screen = Hud.Screen.None;
 
         // Skills in action.
         player.skill.Setup(player, Classes.Get("knight"));

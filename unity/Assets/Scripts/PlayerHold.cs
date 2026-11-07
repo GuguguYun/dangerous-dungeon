@@ -16,12 +16,29 @@ public partial class PlayerController
     public string ikDebugLeft = "none"; // self-test diagnostics for the left arm
     // Hand frames in each hand bone's own space, read from the bind pose: Meshy rigs have no finger
     // bones, so the hand is one bone whose fingers continue the forearm and whose palm faces the body.
-    readonly Dictionary<string, (Vector3 finger, Vector3 palm, float len)> handAxes = new Dictionary<string, (Vector3, Vector3, float)>();
+    // grip: where a handle sits in the fist (centre of the hand mesh, nudged towards the palm).
+    readonly Dictionary<string, (Vector3 finger, Vector3 palm, float len, Vector3 grip)> handAxes = new Dictionary<string, (Vector3, Vector3, float, Vector3)>();
 
-    (Vector3 finger, Vector3 palm, float len) HandAxes(string side)
+    (Vector3 finger, Vector3 palm, float len, Vector3 grip) HandAxes(string side)
     {
         if (handAxes.TryGetValue(side, out var cached)) return cached;
-        var result = (finger: Vector3.forward, palm: Vector3.up, len: 0.08f);
+        // Measured at build time from the skinned mesh (BuildScript.WriteHandFrames).
+        var file = Resources.Load<TextAsset>($"Models/Chars/{bodyId}/hand");
+        if (file)
+            foreach (var line in file.text.Split('\n'))
+            {
+                var f = line.Trim().Split(' ');
+                if (f.Length != 11 || f[0] != side) continue;
+                float N(int i) => float.Parse(f[i], System.Globalization.CultureInfo.InvariantCulture);
+                Vector3 centre = new Vector3(N(1), N(2), N(3)), finger = new Vector3(N(4), N(5), N(6)), palm = new Vector3(N(7), N(8), N(9));
+                float half = N(10);
+                var handBone = Bone(side + "Hand");
+                float s = handBone ? handBone.lossyScale.x : 1f;
+                var measured = (finger, palm, centre.magnitude * s * 2f, centre + palm * half * 0.3f);
+                handAxes[side] = measured;
+                return measured;
+            }
+        var result = (finger: Vector3.forward, palm: Vector3.up, len: 0.08f, grip: Vector3.zero);
         var smr = body ? body.GetComponentInChildren<SkinnedMeshRenderer>() : null;
         Transform hand = Bone(side + "Hand"), fore = Bone(side + "ForeArm"), hips = Bone("Hips"), head = Bone("Head");
         if (smr && hand && fore && hips && head)
@@ -41,20 +58,27 @@ public partial class PlayerController
                 Quaternion rot = Quaternion.LookRotation(h.GetColumn(2), h.GetColumn(1));
                 // Hand length: about half the forearm on these chibi rigs, measured in world units.
                 float worldFore = Vector3.Distance(hand.position, fore.position);
-                result = (Quaternion.Inverse(rot) * finger, Quaternion.Inverse(rot) * palm, worldFore * 0.45f);
+                Vector3 fl = Quaternion.Inverse(rot) * finger, pl = Quaternion.Inverse(rot) * palm;
+                float s = Mathf.Max(1e-5f, hand.lossyScale.x);
+                result = (fl, pl, worldFore * 0.45f, (fl * worldFore * 0.25f + pl * 0.03f) / s);
             }
         }
         handAxes[side] = result;
         return result;
     }
 
+    /// The hand rotation that points its fingers and palm the given world directions.
+    Quaternion HandRotation(string side, Vector3 finger, Vector3 palm)
+    {
+        var ax = HandAxes(side);
+        return Quaternion.LookRotation(finger, palm) * Quaternion.Inverse(Quaternion.LookRotation(ax.finger, ax.palm));
+    }
+
     /// Turn a hand so its fingers and palm point the given world directions.
     void OrientHand(string side, Vector3 finger, Vector3 palm)
     {
         var c = Bone(side + "Hand");
-        if (!c) return;
-        var ax = HandAxes(side);
-        c.rotation = Quaternion.LookRotation(finger, palm) * Quaternion.Inverse(Quaternion.LookRotation(ax.finger, ax.palm));
+        if (c) c.rotation = HandRotation(side, finger, palm);
     }
 
     /// The thumb side of a hand, in hand space: a held blade or staff points this way.
@@ -65,9 +89,13 @@ public partial class PlayerController
         return side == "Right" ? t : -t;
     }
 
-    /// Wrist position that puts the middle of the palm on a grip point.
-    Vector3 WristFor(string side, Vector3 grip, Vector3 finger, Vector3 palm) =>
-        grip - finger * HandAxes(side).len * 0.5f - palm * 0.02f;
+    /// Wrist position that puts the fist's grip point on a handle, once the hand is turned that way.
+    Vector3 WristFor(string side, Vector3 grip, Vector3 finger, Vector3 palm)
+    {
+        var c = Bone(side + "Hand");
+        if (!c) return grip;
+        return grip - HandRotation(side, finger, palm) * Vector3.Scale(HandAxes(side).grip, c.lossyScale);
+    }
 
     /// Put a melee weapon in a hand's palm, blade out of the thumb side (pose independent).
     void SeatInHand(Transform pivot, string side)
@@ -76,7 +104,7 @@ public partial class PlayerController
         var ax = HandAxes(side);
         float s = Mathf.Max(1e-5f, hand.lossyScale.x);
         pivot.SetParent(hand, false);
-        pivot.localPosition = (ax.finger * ax.len * 0.5f + ax.palm * 0.02f) / s;
+        pivot.localPosition = ax.grip; // in the fist, not on the back of the hand
         pivot.localRotation = Quaternion.LookRotation(ThumbLocal(side), ax.finger);
         pivot.localScale = Vector3.one / s;
     }
@@ -181,16 +209,17 @@ public partial class PlayerController
             }
             case WeaponGrip.Staff:
             {
-                // Upright at the right side, leaning towards the target when casting; the head stays clear of the face.
-                Vector3 dir = Vector3.Slerp((fwd * 0.25f + up + right * 0.12f).normalized, (aimDir * 0.5f + up * 0.8f + right * 0.15f).normalized, aimBlend);
-                Vector3 grip = rs.position + right * 0.1f + fwd * ArmLength("Right") * (0.45f + 0.2f * aimBlend) - up * 0.15f;
+                // A staff stands upright at the right side like a walking staff. Casting lifts it a little and
+                // tips the head forward, but it never levels out like a gun.
+                Vector3 dir = Vector3.Slerp((up + fwd * 0.1f).normalized, (up + fwd * 0.35f).normalized, aimBlend);
+                Vector3 grip = rs.position + right * 0.16f + fwd * (0.12f + 0.1f * aimBlend) - up * (0.3f - 0.12f * aimBlend);
                 weaponPivot.position = grip;
                 weaponPivot.rotation = Quaternion.LookRotation(dir, -fwd);
-                // Fist round the shaft: fingers across it towards the body, palm against it.
-                Vector3 across = Vector3.ProjectOnPlane(-right, dir).normalized;
-                Vector3 palmTo = Vector3.Cross(dir, across);
-                Reach("Right", WristFor("Right", grip, across, palmTo), rs.position + right * 0.4f - up * 0.4f - fwd * 0.4f);
-                OrientHand("Right", across, palmTo);
+                // Fist round the shaft: fingers forward around it, palm facing in, thumb up along the shaft.
+                Vector3 wrapF = Vector3.ProjectOnPlane(fwd, dir).normalized;
+                Vector3 wrapP = Vector3.ProjectOnPlane(-right, dir).normalized;
+                Reach("Right", WristFor("Right", grip, wrapF, wrapP), rs.position + right * 0.4f - up * 0.4f - fwd * 0.4f);
+                OrientHand("Right", wrapF, wrapP);
                 return;
             }
             default:
@@ -207,6 +236,7 @@ public partial class PlayerController
                 Vector3 anchor = oneHand ? rs.position + dir * arm * 0.9f
                     : shoulder ? rs.position + up * 0.06f + right * 0.1f
                     : rs.position + flatAim * arm * 0.5f - up * 0.1f - right * 0.04f;
+                if (w.id == "missile") anchor += -up * 0.25f + right * 0.05f; // the bulky box sits at the hip, below the line of sight
                 weaponPivot.position = anchor;
                 weaponPivot.rotation = Quaternion.LookRotation(dir, up);
                 Vector3 wf = weaponPivot.forward, wu = weaponPivot.up, wr = weaponPivot.right;

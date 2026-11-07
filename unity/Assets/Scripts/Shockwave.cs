@@ -14,6 +14,7 @@ public class Shockwave : MonoBehaviour
 
     public static Shockwave Spawn(Vector3 center, float speed = 9f, float maxRadius = 18f, int damage = 1)
     {
+        Tips.Show("shock", "地面冲击波：冲刺躲不掉，只能跳过去");
         var go = new GameObject("shockwave");
         go.transform.position = new Vector3(center.x, 0.12f, center.z);
         var s = go.AddComponent<Shockwave>();

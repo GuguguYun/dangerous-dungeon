@@ -41,6 +41,7 @@ public partial class PlayerController : MonoBehaviour
     public float pitch = 10f;
     public Camera cam;
     public Pickup nearbyWeapon;
+    public ShopItem nearbyWare;
     public int damageTaken; // hp + armor lost, for the self-test
     public bool shielded, stealthed;
     public float poisoned;   // seconds of poison left
@@ -58,6 +59,7 @@ public partial class PlayerController : MonoBehaviour
     Transform muzzle;
     Renderer bodyRenderer;
     CharacterAnim body;
+    string bodyId; // the pilot model's folder under Resources/Models/Chars (hand measurements live there)
     float lastShot = -9f;
     Vector3 faceDir = Vector3.forward;
     Quaternion weaponRest = Quaternion.identity;
@@ -109,6 +111,7 @@ public partial class PlayerController : MonoBehaviour
         // The chosen class's Meshy model; the first-round knight if a model is missing.
         string modelId = Classes.Get(RunState.classId).model;
         if (!Resources.Load<GameObject>($"Models/Chars/{modelId}/rigged")) modelId = "hero";
+        bodyId = modelId;
         body = CharacterAnim.Spawn(modelId, model, Layers.Player);
         if (body)
         {
@@ -175,6 +178,8 @@ public partial class PlayerController : MonoBehaviour
         weapons[0] = Weapons.Get(RunState.weapons[0]);
         weapons[1] = RunState.weapons[1] != null ? Weapons.Get(RunState.weapons[1]) : null;
         slot = weapons[RunState.slot] != null ? RunState.slot : 0;
+        RunState.SawWeapon(weapons[0]?.id);
+        RunState.SawWeapon(weapons[1]?.id);
         EquipVisual();
         // A mech you were piloting through the portal comes along.
         if (RunState.mechId != null) Mount(Mechs.Get(RunState.mechId), RunState.mechHp);
@@ -216,6 +221,7 @@ public partial class PlayerController : MonoBehaviour
             Pickup.Spawn(PickupKind.Weapon, transform.position + model.forward * 1.2f, 0, old);
         weapons[target] = p.weapon;
         slot = target;
+        RunState.SawWeapon(p.weapon.id);
         Destroy(p.gameObject);
         nearbyWeapon = null;
         EquipVisual();
@@ -225,7 +231,8 @@ public partial class PlayerController : MonoBehaviour
     /// Jump: costs one stamina; a second jump in the air only with the double-jump buff.
     public bool Jump()
     {
-        if (dead || stamina < 1f) return false;
+        if (dead) return false;
+        if (stamina < 1f) { Tips.Show("stamina", "体力用完了：落地 0.5 秒后开始恢复（准星下方的小格子）"); return false; }
         if (!Grounded)
         {
             if (!RunState.doubleJump || airJumped) return false;
@@ -241,7 +248,8 @@ public partial class PlayerController : MonoBehaviour
     /// Dash: costs one stamina, brief invulnerability to bullets (not to shockwaves).
     public bool Dash(Vector3 direction)
     {
-        if (dead || dashCd > 0f || stamina < 1f) return false;
+        if (dead || dashCd > 0f) return false;
+        if (stamina < 1f) { Tips.Show("stamina", "体力用完了：落地 0.5 秒后开始恢复（准星下方的小格子）"); return false; }
         stamina -= 1f;
         groundT = 0f;
         dashDir = direction;
@@ -258,12 +266,14 @@ public partial class PlayerController : MonoBehaviour
         if (dead || (Grounded && !Dashing) || perfectCd > 0f) return;
         perfectCd = PerfectCooldown;
         perfectDodges++;
+        RunState.perfectDodges++;
         stamina = Mathf.Min(maxStamina, stamina + 1f);
         AddEnergy(5);
         nextCrit = true;
         if (RunState.dodgeMaster) armor = Mathf.Min(maxArmor, armor + 1);
         TimeControl.SlowMo(RunState.dodgeMaster ? 0.6f : 0.35f);
         Hud.I?.PerfectDodge();
+        Tips.Show("perfect", "完美闪避！擦身躲开攻击：子弹时间、退回体力、下一击必暴击");
         Sfx.Play("buff", 0.7f, 0f);
         Debug.Log("PERFECT dodge");
     }
@@ -294,6 +304,7 @@ public partial class PlayerController : MonoBehaviour
         noEnergyMsgCd -= dt;
         sinceHit += dt;
         bool active = controlEnabled && !dead;
+        if (active) RunState.runTime += dt;
 
         if (Grounded && dashT <= 0f)
         {
@@ -402,6 +413,14 @@ public partial class PlayerController : MonoBehaviour
             float d = Vector3.Distance(p.transform.position, transform.position);
             if (d < best) { best = d; nearbyWeapon = p; }
         }
+        nearbyWare = null;
+        float bestWare = 1.9f;
+        if (!InMech)
+            foreach (var it in ShopItem.Live)
+            {
+                float d = Vector3.Distance(new Vector3(it.transform.position.x, 0f, it.transform.position.z), new Vector3(transform.position.x, 0f, transform.position.z));
+                if (!it.sold && d < bestWare) { bestWare = d; nearbyWare = it; }
+            }
         nearbyMech = null;
         float bestMech = 3.2f;
         if (!InMech)
@@ -439,7 +458,8 @@ public partial class PlayerController : MonoBehaviour
                 if (Input.GetKeyDown(KeyCode.E))
                 {
                     bool mechCloser = nearbyMech && (!nearbyWeapon || bestMech < best);
-                    if (mechCloser) Mount(nearbyMech.def, nearbyMech.hp, nearbyMech);
+                    if (nearbyWare && !nearbyWeapon) nearbyWare.Buy(this);
+                    else if (mechCloser) Mount(nearbyMech.def, nearbyMech.hp, nearbyMech);
                     else if (nearbyWeapon) PickUp(nearbyWeapon);
                 }
             }
@@ -1044,6 +1064,7 @@ public partial class PlayerController : MonoBehaviour
         armorTimer = ArmorTick;
         invuln = 0.6f;
         damageTaken += amount;
+        RunState.damageTaken += amount;
         int fromArmor = Mathf.Min(armor, amount);
         armor -= fromArmor;
         hp = Mathf.Max(hp - (amount - fromArmor), 0);

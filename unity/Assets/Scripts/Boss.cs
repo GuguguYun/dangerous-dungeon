@@ -341,5 +341,6 @@ public partial class Enemy
         if (telegraph) Destroy(telegraph.gameObject);
         if (sight) Destroy(sight.gameObject);
         if (ActiveBoss == this) ActiveBoss = null;
+        Elites.Remove(this);
     }
 }

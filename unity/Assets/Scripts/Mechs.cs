@@ -14,6 +14,7 @@ public class MechDef
     public float camScale;      // the camera pulls back for the bigger body
     public Color color;
     public string ranged, melee, special, dashName, jumpName, desc;
+    public string gunBone = "lefthand"; // the Meshy models carry their gun on the left forearm
     public float specialCooldown;
 }
 
@@ -155,6 +156,7 @@ public class ParkedMech : MonoBehaviour
         Vector3 ground = transform.position;
         Vfx.Ring(ground, 2.2f, def.color);
         Hud.I?.Show($"{def.name}空投！靠近按 E 搭乘", 2.5f);
+        Tips.Show("mech", "机甲：伤害先扣机甲耐久，被打爆你也不掉血；按 E 上下");
         transform.position = ground + Vector3.up * 16f;
         float v = 6f;
         while (transform.position.y > ground.y)

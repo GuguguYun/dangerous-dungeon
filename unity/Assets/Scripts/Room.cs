@@ -35,6 +35,7 @@ public class Room : MonoBehaviour
     {
         state = State.Fighting;
         SetGates(true);
+        Tips.Show("lock", "战斗房会锁门：清光所有敌人，门才会打开");
         if (!boss) hud.Show("房间已锁定！清空所有敌人", 2f);
         if (boss) Sfx.Play("boss", 1f, 0f);
         Invoke(nameof(SpawnWave), boss ? 1.2f : 0.8f);
@@ -58,23 +59,31 @@ public class Room : MonoBehaviour
     }
 
     /// Mark the spot first so nothing pops up unannounced next to the player.
-    System.Collections.IEnumerator SpawnAfterWarning(EnemyKind kind, Vector3 at)
+    System.Collections.IEnumerator SpawnAfterWarning(EnemyKind kind, Vector3 at, bool mini = false)
     {
         alive++;
         hud.enemiesLeft = alive;
         var marker = SpawnMarker.Create(at);
         yield return new WaitForSeconds(0.7f);
         Destroy(marker.gameObject);
-        Spawn(kind, at, counted: true);
+        Spawn(kind, at, counted: true, mini);
     }
 
-    void Spawn(EnemyKind kind, Vector3 at, bool counted = false)
+    void Spawn(EnemyKind kind, Vector3 at, bool counted = false, bool mini = false)
     {
         var go = new GameObject("enemy_" + kind);
         go.transform.SetParent(transform, false);
         go.transform.position = at;
         var e = go.AddComponent<Enemy>();
         e.Setup(kind, floor);
+        // Some minions come as elites with an affix; a splitting elite's halves come out small.
+        if (mini) e.MakeMini();
+        else if (kind != EnemyKind.Boss && Enemy.ElitesEnabled && Random.value < Enemy.EliteChance(floor))
+        {
+            e.MakeElite((EliteKind)Random.Range(1, 5));
+            Tips.Show("elite", "精英怪：头上写着它的词缀，更耐打，掉更多金币");
+        }
+        e.Split = (k, p) => StartCoroutine(SpawnAfterWarning(k, ClampInside(p), true));
         if (kind == EnemyKind.Boss) hud.BossBanner(e.displayName, $"第 {floor} 层首领");
         e.target = player;
         e.Died += OnEnemyDied;
@@ -165,5 +174,6 @@ public class Room : MonoBehaviour
             Pickup.Spawn(PickupKind.Weapon, c, 0, Weapons.RandomExcept(player.weapons[0]?.id, player.weapons[1]?.id));
         else if (r < 0.55f) Pickup.Spawn(PickupKind.Health, c, 2);
         else Pickup.SpawnEnergy(c, 8);
+        Pickup.SpawnGold(c, 4);
     }
 }

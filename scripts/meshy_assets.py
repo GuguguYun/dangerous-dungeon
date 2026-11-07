@@ -151,6 +151,23 @@ ASSETS = {
         "bulky chunky build, dark gunmetal armor with orange hazard stripes, boxy enclosed cockpit head with a "
         "glowing orange visor, huge shoulders with a missile pod on each shoulder, big hydraulic fists, thick "
         "stompy legs, the right forearm has a short heavy cannon barrel. ")),
+    # round 7: the shopkeeper
+    "merchant": dict(kind="char", height=1.3, polycount=30000, texture="4k", pbr=True, prompt=(
+        "A friendly goblin merchant shopkeeper for a 3D action game, about 3 heads tall, green skin, big ears, "
+        "round spectacles, wide grin with a gold tooth, brown hooded travelling coat with many pouches, "
+        "a big leather backpack stuffed with scrolls and potions, no weapon. ")),
+    # round 8: new enemies and a companion
+    "bomber": dict(kind="char", height=1.3, polycount=30000, texture="4k", pbr=True, prompt=(
+        "A goblin bomber enemy for a 3D action game, about 3 heads tall, green skin, wild toothy grin, leather "
+        "aviator cap with round goggles, a bandolier of round black bombs with fuses across the chest, a big sack "
+        "of bombs on the back, patched brown trousers, no weapon. ")),
+    "archer": dict(kind="char", height=1.5, polycount=30000, texture="4k", pbr=True, prompt=(
+        "A skeleton archer enemy for a 3D action game, cute chibi proportions, about 3 heads tall, bleached bones, "
+        "glowing blue eye sockets, tattered dark blue hood and short cape, a quiver of arrows on the back, one "
+        "rusty iron shoulder pad, no weapon. ")),
+    "pet_drone": dict(kind="prop", size=0.6, polycount=6000, texture="4k", pbr=True, prompt=(
+        "A small cute round flying robot drone companion, one big glowing cyan eye lens, white and cyan shell, "
+        "two tiny propeller rotors on the sides, a small antenna, toy-like. ")),
     # tileable textures for the Blender dungeon kit (image only)
     "tex_floor": dict(kind="texture", prompt=(
         "Seamless tileable texture of square stone floor flagstones, 2 by 2 large slabs with dark grout, "
@@ -168,6 +185,9 @@ TEXTURE = ("Top-down orthographic view filling the whole square image edge to ed
 
 # Library action ids (looked up with `meshy animation-catalog list`); order = clip order in the file.
 ANIMS = {
+    "merchant": {"idle": 89, "taunt": 88, "cast": 125},
+    "bomber": {"idle": 89, "throw": 421, "hit": 178, "die": 8},
+    "archer": {"idle": 89, "shoot": 224, "hit": 178, "die": 8},
     "light_mech": {"idle": 89, "shoot": 98, "slash": 97, "hit": 178},
     "heavy_mech": {"idle": 89, "shoot": 98, "swing": 128, "stomp": 86, "hit": 178},
     "gunner_hq": {"idle": 89, "shoot": 104, "hit": 178, "die": 8},

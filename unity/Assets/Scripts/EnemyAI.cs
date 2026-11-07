@@ -112,7 +112,7 @@ public partial class Enemy
         if (kind == EnemyKind.Spreader) Fan(5, 50f, 9f, "bullet_low");
         else Shoot(TargetDir(), 11f, "bullet_enemy", 0.16f);
         anim?.Trigger(kind == EnemyKind.Spreader ? "cast" : "shoot", 1.4f, 0.3f);
-        shootTimer = kind == EnemyKind.Spreader ? Random.Range(2.4f, 3.2f) : Random.Range(1.6f, 2.6f);
+        shootTimer = (kind == EnemyKind.Spreader ? Random.Range(2.4f, 3.2f) : Random.Range(1.6f, 2.6f)) * fireMul;
     }
 
     /// Separation from other enemies plus a sidestep around obstacles ahead.
