@@ -18,6 +18,7 @@ public static class GameSettings
     public static bool smaa;
     public static bool bloom = true, vignette = true;
     public static bool showFps;
+    public static float music = 0.45f;
     public static int window = 1; // index into Windows
 
     public static readonly int[] FpsCaps = { 0, 60, 90, 120, 144, -1 };
@@ -46,6 +47,7 @@ public static class GameSettings
         vignette = PlayerPrefs.GetInt("vignette", 1) == 1;
         showFps = PlayerPrefs.GetInt("fps", 0) == 1;
         window = PlayerPrefs.GetInt("window", window);
+        music = PlayerPrefs.GetFloat("music", music);
     }
 
     public static void Save()
@@ -64,6 +66,7 @@ public static class GameSettings
         PlayerPrefs.SetInt("vignette", vignette ? 1 : 0);
         PlayerPrefs.SetInt("fps", showFps ? 1 : 0);
         PlayerPrefs.SetInt("window", window);
+        PlayerPrefs.SetFloat("music", music);
         PlayerPrefs.Save();
     }
 

@@ -311,7 +311,7 @@ public class Hud : MonoBehaviour
         var cs = new GUIStyle(left) { fontSize = 16, wordWrap = true, alignment = TextAnchor.UpperLeft };
         UiKit.Text(new Rect(cr.x + 22, cr.y + 12, 400, 90), "<color=#F7CC75>操作</color>\nWASD 移动 · 鼠标瞄准 · 左键攻击\nQ 换武器 · E 拾取/购买/搭乘 · 右键或 F 技能", cs);
         UiKit.Text(new Rect(cr.x + 440, cr.y + 12, 400, 90), "<color=#F7CC75>闪避</color>\n空格跳：时机对了子弹从脚下穿过\nShift 冲刺躲子弹 · 贴身躲开触发「完美闪避」", cs);
-        UiKit.Text(new Rect(0, h - 40, w, 30), "角色、敌人、武器、道具：Meshy 生成 · 场景：Blender · 音效：Kenney（CC0）", small);
+        UiKit.Text(new Rect(0, h - 40, w, 30), "角色、敌人、武器、道具：Meshy 生成 · 场景：Blender · 音效：Kenney 等（CC0）· 音乐：OpenGameArt（CC0）", small);
     }
 
     void DrawClassSelect(float w, float h)
@@ -542,6 +542,7 @@ public class Hud : MonoBehaviour
         GameSettings.bloom = ToggleRow(y, x, "泛光", GameSettings.bloom); y += row;
         GameSettings.vignette = ToggleRow(y, x, "暗角", GameSettings.vignette); y += row;
         GameSettings.showFps = ToggleRow(y, x, "显示帧率（目标 ≥ 80）", GameSettings.showFps); y += row;
+        GameSettings.music = SliderRow(y, x, "音乐音量", GameSettings.music, 0f, 1f, $"{GameSettings.music * 100f:0}%"); y += row;
         int win = ChoiceRow(y, x, "窗口大小", GameSettings.window, GameSettings.WindowNames);
         if (win != GameSettings.window) { GameSettings.window = win; GameSettings.ApplyWindow(); }
         y += row + 8;
@@ -689,10 +690,11 @@ public class Hud : MonoBehaviour
         {
             var sp = cam.WorldToScreenPoint(n.pos);
             if (sp.z < 0f) continue;
-            var st = new GUIStyle(number) { fontSize = n.crit ? 34 : 26 };
-            var baseCol = n.color ?? (n.crit ? new Color(1f, 0.8f, 0.2f) : Color.white);
-            st.normal.textColor = new Color(baseCol.r, baseCol.g, baseCol.b, 1f - n.t / 0.8f);
-            Label(new Rect(sp.x - 60, UnityEngine.Screen.height - sp.y - 20, 120, 40), n.text, st);
+            // Crits pop in big and settle; everything fades out as it rises.
+            float pop = n.crit ? 1f + 0.5f * Mathf.Clamp01(1f - n.t / 0.15f) : 1f;
+            var st = new GUIStyle(number) { fontSize = Mathf.RoundToInt((n.crit ? 36 : 26) * pop) };
+            var baseCol = n.color ?? (n.crit ? new Color(1f, 0.82f, 0.25f) : Color.white);
+            UiKit.Text(new Rect(sp.x - 90, UnityEngine.Screen.height - sp.y - 24, 180, 48), n.text, st, new Color(baseCol.r, baseCol.g, baseCol.b, 1f - n.t / 0.8f));
         }
     }
 

@@ -53,6 +53,7 @@ public class GameManager : MonoBehaviour
         Physics.IgnoreLayerCollision(Layers.Debris, Layers.Enemy, true);
         CameraShake.Reset();
         Sfx.Init(gameObject);
+        Music.Init(gameObject);
         var theme = ThemeDef.ForFloor(RunState.floor);
         SetupWorld(theme);
         Props.FireColor = theme.fire;
@@ -108,6 +109,7 @@ public class GameManager : MonoBehaviour
         dungeon.PortalEntered += OnPortal;
 
         Tips.Enabled = !Scripted; // test and screenshot runs must not use up the player's first-time hints
+        TimeControl.Scripted = Scripted;
         Debug.Log("GAME ready");
         if (autotest) StartCoroutine(RunState.floor == 1 ? AutoTest() : AutoTestNextFloor());
         else if (shotDir != null) StartCoroutine(Shots());
@@ -174,6 +176,12 @@ public class GameManager : MonoBehaviour
     void Update()
     {
         TimeControl.Apply();
+        // Battle theme while any room is locked, the dungeon ambience otherwise.
+        if (Music.I && dungeon)
+        {
+            bool fighting = dungeon.combatRooms.Exists(r => r.state == Room.State.Fighting) || dungeon.trialRooms.Exists(r => r.state == Room.State.Fighting);
+            Music.I.Play(fighting ? "battle" : "explore");
+        }
         if (Scripted || !hud) return;
         if (hud.screen == Hud.Screen.Title || hud.screen == Hud.Screen.ClassSelect)
         {
@@ -423,6 +431,7 @@ public class GameManager : MonoBehaviour
             yield return new WaitForSeconds(0.8f);
         }
 
+        Check("music tracks load", Resources.Load<AudioClip>("Music/explore") && Resources.Load<AudioClip>("Music/battle"));
         Check("run summary tracks the numbers", RunState.damageDealt > 0 && RunState.weaponsSeen.Count >= 2 && RunState.runTime > 1f && RunState.mechsPiloted >= 1,
             $"dealt={RunState.damageDealt} weapons={RunState.weaponsSeen.Count} time={RunState.runTime:F0} mechs={RunState.mechsPiloted}");
 
