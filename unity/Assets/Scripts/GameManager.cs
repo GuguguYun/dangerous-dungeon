@@ -534,7 +534,8 @@ public class GameManager : MonoBehaviour
         Check("room locks on entry", room.state == Room.State.Fighting && room.GatesClosed(), $"state={room.state}");
         Check("wave 1 spawned", room.alive == room.waves[0].Length, $"alive={room.alive}");
         int taken0 = player.damageTaken;
-        yield return new WaitForSeconds(4f);
+        // Up to 8 s: with pillars or low walls in the room, enemies may first have to move to see you.
+        for (float u = 0; u < 8f && player.damageTaken == taken0; u += 0.25f) yield return new WaitForSeconds(0.25f);
         Check("enemies damage the player (armor or hp)", player.damageTaken > taken0, $"taken={player.damageTaken - taken0} hp={player.hp} armor={player.armor}");
         foreach (var e in FindObjectsByType<Enemy>(FindObjectsSortMode.None))
             Debug.Log($"AUTOTEST diag {e.kind} dist={Vector3.Distance(e.transform.position, player.transform.position):F1} pos={e.transform.position} scale={e.transform.localScale.x:F2}");

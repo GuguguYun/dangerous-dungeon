@@ -37,7 +37,8 @@ public partial class Enemy : MonoBehaviour
         if (decoyT <= 0f)
         {
             decoyT = Random.Range(0.8f, 1.6f);
-            var off = Random.insideUnitCircle * 5f;
+            // 2.5-5 m from where it last saw you: never right on top of you, or stealth would not help.
+            var off = Random.insideUnitCircle.normalized * Random.Range(2.5f, 5f);
             decoy = lastSeen + new Vector3(off.x, 0f, off.y);
         }
     }
