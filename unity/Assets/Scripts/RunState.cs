@@ -3,7 +3,7 @@ using System.Collections.Generic;
 /// What carries over between floors of one run (scene reloads reset everything else).
 public static class RunState
 {
-    public const int Floors = 3;
+    public const int Floors = 4;
 
     public static int floor = 1;
     public static string classId = "knight";

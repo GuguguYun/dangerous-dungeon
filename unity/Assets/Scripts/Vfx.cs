@@ -469,6 +469,16 @@ public static class Vfx
                 sh.radius = 0.1f;
                 Fade(ps, new Color(0.6f, 0.52f, 0.42f), new Color(0.4f, 0.36f, 0.3f));
                 break;
+            case "arcane":
+                // Violet motes behind the lich's skulls.
+                m.startLifetime = new ParticleSystem.MinMaxCurve(0.3f, 0.6f);
+                m.startSpeed = new ParticleSystem.MinMaxCurve(0.1f, 0.6f);
+                m.startSize = new ParticleSystem.MinMaxCurve(0.08f, 0.2f);
+                m.startColor = Grad(new Color(0.85f, 0.6f, 1f), new Color(0.55f, 0.3f, 1f));
+                em.rateOverDistance = 12f;
+                sh.radius = 0.12f;
+                Fade(ps, new Color(0.9f, 0.7f, 1f), new Color(0.4f, 0.2f, 0.8f));
+                break;
             case "glitter":
                 // Gold coin sparkle.
                 m.startLifetime = new ParticleSystem.MinMaxCurve(0.2f, 0.4f);

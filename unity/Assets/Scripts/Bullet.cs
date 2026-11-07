@@ -141,6 +141,11 @@ public class Bullet : MonoBehaviour
                 tr.enabled = false;
                 trailFx = Vfx.Trail(go.transform, "dust");
                 break;
+            case "bullet_hex":
+                // The lich's skulls: a violet core in a trail of arcane motes.
+                go.transform.localScale = Vector3.one * radius * 1.5f;
+                trailFx = Vfx.Trail(go.transform, "arcane");
+                break;
             case "bullet_axe":
                 // Orc Warlord: whirling red axe blades.
                 go.GetComponent<MeshFilter>().sharedMesh = Disc();
@@ -291,6 +296,16 @@ public class Bullet : MonoBehaviour
 
     void Steer(float dt)
     {
+        // Enemy shots that home (the lich's skulls) turn towards the player's chest.
+        if (!hitsEnemies)
+        {
+            var p = PlayerController.Current;
+            if (!p || p.dead) return;
+            Vector3 aim = p.transform.position + Vector3.up * 1f - transform.position;
+            aim.y = 0f; // stay at their readable height
+            velocity = Vector3.RotateTowards(velocity, aim.normalized * velocity.magnitude, homing * Mathf.Deg2Rad * dt, 0f);
+            return;
+        }
         Enemy best = null;
         float bestD = 30f;
         foreach (var e in FindObjectsByType<Enemy>(FindObjectsSortMode.None))

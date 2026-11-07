@@ -101,7 +101,7 @@ public class Dungeon : MonoBehaviour
 
     void GenerateLayout(int floor)
     {
-        int combatOnPath = 2 + floor; // 3, 4, 5
+        int combatOnPath = Mathf.Min(2 + floor, 5); // 3, 4, 5, 5
         for (int attempt = 0; attempt < 200; attempt++)
         {
             var path = new List<Vector2Int> { Vector2Int.zero };
@@ -474,7 +474,8 @@ public class Dungeon : MonoBehaviour
         {
             1 => new[] { "spikes", "spikes", "gas" },
             2 => new[] { "fire", "lava", "gas", "fire" },
-            _ => new[] { "spikes", "ice", "fire", "gas" },
+            3 => new[] { "spikes", "ice", "fire", "gas" },
+            _ => new[] { "fire", "lava", "spikes", "gas", "fire" }, // the throne: fire and lava again
         };
         foreach (var info in rooms)
         {

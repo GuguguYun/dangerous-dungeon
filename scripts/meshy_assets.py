@@ -168,6 +168,11 @@ ASSETS = {
     "pet_drone": dict(kind="prop", size=0.6, polycount=6000, texture="4k", pbr=True, prompt=(
         "A small cute round flying robot drone companion, one big glowing cyan eye lens, white and cyan shell, "
         "two tiny propeller rotors on the sides, a small antenna, toy-like. ")),
+    # round 9: the floor-3 boss
+    "lich": dict(kind="char", height=2.6, polycount=30000, texture="4k", pbr=True, prompt=(
+        "A skeleton lich king boss for a 3D action game, chunky stylized proportions, tall and gaunt, bleached "
+        "skull with glowing icy blue eyes, jagged ice crown, tattered dark purple and frost-blue royal robes with "
+        "silver trim, bony hands, floating icy shards around the shoulders, no weapon, no staff. ")),
     # tileable textures for the Blender dungeon kit (image only)
     "tex_floor": dict(kind="texture", prompt=(
         "Seamless tileable texture of square stone floor flagstones, 2 by 2 large slabs with dark grout, "
@@ -187,6 +192,7 @@ TEXTURE = ("Top-down orthographic view filling the whole square image edge to ed
 ANIMS = {
     "merchant": {"idle": 89, "taunt": 88, "cast": 125},
     "bomber": {"idle": 89, "throw": 421, "hit": 178, "die": 8},
+    "lich": {"idle": 89, "cast": 129, "slam": 127, "hit": 178, "die": 8, "taunt": 88},
     "archer": {"idle": 89, "shoot": 224, "hit": 178, "die": 8},
     "light_mech": {"idle": 89, "shoot": 98, "slash": 97, "hit": 178},
     "heavy_mech": {"idle": 89, "shoot": 98, "swing": 128, "stomp": 86, "hit": 178},

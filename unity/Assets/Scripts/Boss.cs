@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public enum BossKind { GoblinKing, BoarChief, OrcWarlord }
+public enum BossKind { GoblinKing, BoarChief, OrcWarlord, Lich }
 
 /// The three floor bosses, one per floor. Each cycles its own attacks and enrages below half
 /// health (faster, denser patterns). Slams send floor shockwaves that only a jump clears;
@@ -14,6 +14,7 @@ public partial class Enemy
     {
         BossKind.GoblinKing => "爱撒金币的胖国王 · 小心他跳起来砸地",
         BossKind.BoarChief => "红线预警后直线冲锋 · 引他撞墙会晕",
+        BossKind.Lich => "会瞬移的冰霜巫妖 · 紫色骷髅会追着你飞",
         _ => "地牢最深处的主人 · 半血后狂暴",
     };
 
@@ -22,10 +23,27 @@ public partial class Enemy
     {
         BossKind.GoblinKing => "bullet_gold",
         BossKind.BoarChief => "bullet_rock",
+        BossKind.Lich => "bullet_frost",
         _ => "bullet_axe",
     };
     public string displayName = "";
-    public int leaps, charges, stuns, slams; // counters for the self-test
+    public int leaps, charges, stuns, slams, blinks, skullVolleys; // counters for the self-test
+
+    /// Run one of the boss's attacks now (self-test and screenshots).
+    public void ForceAttack(int which)
+    {
+        phase = which;
+        Vector3 to = TargetPos - transform.position;
+        to.y = 0f;
+        float dist = to.magnitude;
+        switch (bossKind)
+        {
+            case BossKind.GoblinKing: GoblinAttack(to, dist); break;
+            case BossKind.BoarChief: BoarAttack(to, dist); break;
+            case BossKind.Lich: LichAttack(to, dist); break;
+            default: OrcAttack(to, dist); break;
+        }
+    }
 
     int phase;
     float phaseTimer;
@@ -46,17 +64,19 @@ public partial class Enemy
     {
         BossKind.GoblinKing => "goblin_king",
         BossKind.BoarChief => "boar_chief",
+        BossKind.Lich when Resources.Load<GameObject>("Models/Chars/lich/rigged") => "lich",
         _ => Resources.Load<GameObject>("Models/Chars/boss_hq/rigged") ? "boss_hq" : "boss",
     };
 
     void SetupBoss(int floor)
     {
-        bossKind = floor <= 1 ? BossKind.GoblinKing : floor == 2 ? BossKind.BoarChief : BossKind.OrcWarlord;
+        bossKind = floor <= 1 ? BossKind.GoblinKing : floor == 2 ? BossKind.BoarChief : floor == 3 ? BossKind.Lich : BossKind.OrcWarlord;
         switch (bossKind)
         {
             case BossKind.GoblinKing: maxHp = 240; speed = 2.6f; displayName = "贪金王·葛巴"; break;
             case BossKind.BoarChief: maxHp = 340; speed = 2.2f; displayName = "裂地酋长·獠牙"; break;
-            default: maxHp = 420; speed = 2.4f; displayName = "血斧督军·克鲁格"; break;
+            case BossKind.Lich: maxHp = 380; speed = 2.0f; displayName = "骸骨巫妖·霜冠"; break;
+            default: maxHp = 480; speed = 2.4f; displayName = "血斧督军·克鲁格"; break;
         }
         ActiveBoss = this;
         phaseTimer = 2f;
@@ -121,10 +141,70 @@ public partial class Enemy
             {
                 case BossKind.GoblinKing: GoblinAttack(to, dist); break;
                 case BossKind.BoarChief: BoarAttack(to, dist); break;
+                case BossKind.Lich: LichAttack(to, dist); break;
                 default: OrcAttack(to, dist); break;
             }
         }
+        // The lich keeps its distance; the others close in.
+        if (bossKind == BossKind.Lich) return dist < 7f ? -to / dist * 0.8f : dist > 11f ? to / dist : Vector3.zero;
         return dist > 6f ? to / dist : Vector3.zero;
+    }
+
+    // ---------- lich: homing skulls, ice rings, blink ----------
+
+    void LichAttack(Vector3 to, float dist)
+    {
+        switch (phase)
+        {
+            case 0:
+            {
+                // Slow purple skulls that turn after you: keep moving.
+                anim?.Trigger("cast", 1.2f, 0.5f);
+                skullVolleys++;
+                int n = enraged ? 5 : 3;
+                Vector3 dir = TargetDir();
+                for (int i = 0; i < n; i++)
+                {
+                    var d = Quaternion.Euler(0f, -30f + 60f * i / Mathf.Max(1, n - 1), 0f) * dir;
+                    var b = Bullet.Fire(Muzzle(), d * 7f, false, 0.22f, "bullet_hex", 6f);
+                    b.homing = enraged ? 70f : 50f;
+                }
+                Sfx.Play("enemy_shot", 0.5f, 0f);
+                break;
+            }
+            case 1:
+                anim?.Trigger("slam", 1.2f, 0.6f);
+                Ring(enraged ? 20 : 14, 7.5f);
+                if (enraged) Invoke(nameof(RingLate), 0.6f);
+                break;
+            default:
+                Blink();
+                break;
+        }
+    }
+
+    /// Vanish in a purple puff and reappear somewhere else in the arena, away from the player.
+    void Blink()
+    {
+        blinks++;
+        Vector3 from = transform.position;
+        Vector3 best = from;
+        float bestD = 0f;
+        for (int i = 0; i < 12; i++)
+        {
+            var p = from + Quaternion.Euler(0f, Random.Range(0f, 360f), 0f) * Vector3.forward * Random.Range(5f, 9f);
+            if (Physics.CheckCapsule(p + Vector3.up * 0.8f, p + Vector3.up * 2f, 0.8f, Layers.WorldMask, QueryTriggerInteraction.Ignore)) continue;
+            float d = Vector3.Distance(p, TargetPos);
+            if (d > bestD) { bestD = d; best = p; }
+        }
+        Vfx.Puff(from + Vector3.up, new Color(0.55f, 0.3f, 0.9f, 0.7f), 1.6f, 16);
+        cc.enabled = false;
+        transform.position = new Vector3(best.x, from.y, best.z);
+        cc.enabled = true;
+        Vfx.Puff(transform.position + Vector3.up, new Color(0.55f, 0.3f, 0.9f, 0.7f), 1.6f, 16);
+        Vfx.Ring(transform.position, 2.5f, new Color(0.6f, 0.4f, 1f));
+        Sfx.Play("shatter", 0.6f, 0.1f);
+        if (enraged) Slam();
     }
 
     // ---------- goblin king: leap slam, low-orb fans ----------
@@ -293,6 +373,7 @@ public partial class Enemy
         {
             BossKind.GoblinKing => new[] { EnemyKind.Gunner, EnemyKind.Spreader },
             BossKind.BoarChief => new[] { EnemyKind.Charger, EnemyKind.Charger },
+            BossKind.Lich => new[] { EnemyKind.Archer, EnemyKind.Archer },
             _ => new[] { EnemyKind.Gunner, EnemyKind.Charger },
         };
         for (int i = 0; i < 2; i++)

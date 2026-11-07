@@ -49,6 +49,7 @@ public static class Palette
         { "bullet_gold", new Entry(1.00f, 0.78f, 0.25f, 2.5f) },
         { "bullet_rock", new Entry(0.50f, 0.38f, 0.28f, 0.3f) },
         { "bullet_axe", new Entry(1.00f, 0.22f, 0.15f, 2.5f) },
+        { "bullet_hex", new Entry(0.65f, 0.25f, 1.00f, 1.6f) }, // dimmer core: bloom would turn it white
         { "bullet_arrow", new Entry(1.00f, 0.95f, 0.70f, 3f) },
         { "bullet_frost", new Entry(0.60f, 0.90f, 1.00f, 3f) },
         { "bullet_fire", new Entry(1.00f, 0.50f, 0.10f, 4f) },
@@ -69,7 +70,7 @@ public static class Palette
 
     public static readonly string[] TrailNames =
         { "bullet_player", "bullet_heavy", "bullet_laser", "bullet_rocket", "bullet_enemy", "bullet_boss", "bullet_low", "bullet_arrow", "bullet_frost", "bullet_fire",
-          "bullet_missile", "bullet_grenade", "beam", "lightning", "slash", "shockwave", "bullet_gold", "bullet_rock", "bullet_axe" };
+          "bullet_missile", "bullet_grenade", "beam", "lightning", "slash", "shockwave", "bullet_gold", "bullet_rock", "bullet_axe", "bullet_hex" };
 
     static readonly Dictionary<string, Material> cache = new Dictionary<string, Material>();
 

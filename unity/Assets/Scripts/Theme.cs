@@ -26,6 +26,14 @@ public class ThemeDef
             fog = new Color(0.12f, 0.17f, 0.24f), fogDensity = 0.015f, ambient = new Color(0.58f, 0.65f, 0.78f),
             sun = new Color(0.8f, 0.9f, 1.1f), fire = new Color(0.45f, 0.8f, 1f), sky = new Color(0.25f, 0.4f, 0.6f), particles = "snow",
         },
+        4 => new ThemeDef
+        {
+            // The final floor: the warlord's blood-moon throne room.
+            name = "血月王座",
+            stone = new Color(0.95f, 0.78f, 0.78f), wall = new Color(0.92f, 0.72f, 0.74f), trim = new Color(0.75f, 0.45f, 0.5f), wood = new Color(0.8f, 0.6f, 0.6f),
+            fog = new Color(0.22f, 0.04f, 0.06f), fogDensity = 0.018f, ambient = new Color(0.62f, 0.45f, 0.5f),
+            sun = new Color(1f, 0.55f, 0.5f), fire = new Color(1f, 0.25f, 0.2f), sky = new Color(0.45f, 0.06f, 0.1f), particles = "embers",
+        },
         _ => new ThemeDef
         {
             name = "青苔地宫",

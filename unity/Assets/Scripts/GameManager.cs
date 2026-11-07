@@ -401,6 +401,28 @@ public class GameManager : MonoBehaviour
         // Levels: blood altar, trial room, loops.
         yield return LevelTests();
 
+        // The floor-3 boss: the lich.
+        {
+            Vector3 lichHome = dungeon.playerStart;
+            Vector3 lichFwd = Quaternion.Euler(0f, player.yaw, 0f) * Vector3.forward;
+            player.Teleport(lichHome);
+            player.hp = player.maxHp = 40;
+            var lich = Dummy(lichHome + lichFwd * 5f, EnemyKind.Boss, 3);
+            Check("floor 3's boss is the lich", lich.bossKind == BossKind.Lich && lich.displayName == "骸骨巫妖·霜冠", lich.displayName);
+            lich.target = player;
+            yield return new WaitForSeconds(0.5f);
+            lich.ForceAttack(0);
+            bool homing = Bullet.Live.Exists(b => !b.HitsEnemies && b.homing > 0f);
+            Check("the lich fires homing skulls", lich.skullVolleys == 1 && homing);
+            Vector3 lichFrom = lich.transform.position;
+            lich.ForceAttack(2);
+            Check("the lich blinks away", lich.blinks == 1 && Vector3.Distance(lichFrom, lich.transform.position) > 3f, $"moved {Vector3.Distance(lichFrom, lich.transform.position):F1} m");
+            Destroy(lich.gameObject);
+            foreach (var b in Bullet.Live.ToArray()) if (b && !b.HitsEnemies) Destroy(b.gameObject);
+            player.hp = player.maxHp = RunState.maxHp;
+            yield return new WaitForSeconds(0.8f);
+        }
+
         Check("run summary tracks the numbers", RunState.damageDealt > 0 && RunState.weaponsSeen.Count >= 2 && RunState.runTime > 1f && RunState.mechsPiloted >= 1,
             $"dealt={RunState.damageDealt} weapons={RunState.weaponsSeen.Count} time={RunState.runTime:F0} mechs={RunState.mechsPiloted}");
 
@@ -517,10 +539,10 @@ public class GameManager : MonoBehaviour
         boar.TakeDamage(999, Vector3.forward);
         yield return new WaitForSeconds(0.5f);
 
-        var orc = Dummy(room.Center(), EnemyKind.Boss, 3);
+        var orc = Dummy(room.Center(), EnemyKind.Boss, 4);
         orc.target = player;
         orc.Summon = (k, p) => { };
-        Check("floor 3 boss is the orc warlord", orc.bossKind == BossKind.OrcWarlord, orc.displayName);
+        Check("the final (floor 4) boss is the orc warlord", orc.bossKind == BossKind.OrcWarlord, orc.displayName);
         orc.TakeDamage(55, Vector3.forward);
         yield return null;
         yield return null;
@@ -1733,6 +1755,22 @@ public class GameManager : MonoBehaviour
         }
         player.Teleport(dungeon.playerStart);
         yield return new WaitForSeconds(0.3f);
+
+        // The lich: a volley of homing skulls.
+        {
+            Vector3 bp = player.transform.position;
+            Vector3 bf = Quaternion.Euler(0f, player.yaw, 0f) * Vector3.forward;
+            var lich = Dummy(bp + bf * 4.5f, EnemyKind.Boss, 3);
+            lich.target = player;
+            yield return new WaitForSeconds(0.6f);
+            lich.ForceAttack(0);
+            player.pitch = 8f;
+            yield return new WaitForSeconds(0.7f);
+            yield return Shot("26_lich.png");
+            Destroy(lich.gameObject);
+            foreach (var b in Bullet.Live.ToArray()) if (b && !b.HitsEnemies) Destroy(b.gameObject);
+            yield return new WaitForSeconds(0.3f);
+        }
 
         // The end-of-run summary card.
         hud.screen = Hud.Screen.Dead;
