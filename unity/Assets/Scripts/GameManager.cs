@@ -294,7 +294,7 @@ public class GameManager : MonoBehaviour
         Check("floor tile is 4x4 m", Mathf.Abs(floor.x - 4f) < 0.05f && Mathf.Abs(floor.z - 4f) < 0.05f, $"size={floor}");
         Check("wall runs along X, 4.3 m tall", wall.x > 3.95f && wall.z < 1f && Mathf.Abs(wall.y - 4.3f) < 0.05f, $"size={wall}");
         Check("door wall matches wall", Mathf.Abs(door.x - 4f) < 0.05f, $"size={door}");
-        Check("floor 1 layout: start, 3 combat, chest, shop, boss", dungeon.rooms.Count == 7 && dungeon.combatRooms.Count == 4 && dungeon.rooms.Exists(r => r.kind == Dungeon.Kind.Boss), $"rooms={dungeon.rooms.Count} combat={dungeon.combatRooms.Count}");
+        Check("floor 1 layout: start, 3 combat, chest, shop, boss (+ altar/trial when there is room)", dungeon.rooms.Count >= 7 && dungeon.combatRooms.Count == 4 && dungeon.rooms.Exists(r => r.kind == Dungeon.Kind.Boss), $"rooms={dungeon.rooms.Count} combat={dungeon.combatRooms.Count}");
         Check("every tile reachable from the start", dungeon.AllRoomsConnected());
 
         // Buff pick (the test takes the first card).
@@ -397,6 +397,9 @@ public class GameManager : MonoBehaviour
 
         // Elemental reactions and loot drops.
         yield return ReactionTests();
+
+        // Levels: blood altar, trial room, loops.
+        yield return LevelTests();
 
         Check("run summary tracks the numbers", RunState.damageDealt > 0 && RunState.weaponsSeen.Count >= 2 && RunState.runTime > 1f && RunState.mechsPiloted >= 1,
             $"dealt={RunState.damageDealt} weapons={RunState.weaponsSeen.Count} time={RunState.runTime:F0} mechs={RunState.mechsPiloted}");
@@ -987,6 +990,55 @@ public class GameManager : MonoBehaviour
         yield return new WaitForSeconds(0.7f);
     }
 
+    IEnumerator LevelTests()
+    {
+        Vector3 fwdDir = Quaternion.Euler(0f, player.yaw, 0f) * Vector3.forward;
+        Vector3 side = Quaternion.Euler(0f, 90f, 0f) * fwdDir;
+        Vector3 home = dungeon.playerStart;
+        player.Teleport(home);
+        Debug.Log($"AUTOTEST info layout: rooms={dungeon.rooms.Count} loops={dungeon.loops} altar={dungeon.rooms.Exists(r => r.kind == Dungeon.Kind.Altar)} trial={dungeon.trialRooms.Count}");
+        Check("every room is reachable (with loops and optional rooms)", dungeon.AllRoomsConnected());
+
+        // Blood altar: costs 2 max HP, offers three blessings, the pick applies.
+        var altar = Altar.Create(home + side * 3f, null);
+        int savedMax = player.maxHp, savedRunMax = RunState.maxHp, buffs = RunState.buffs.Count;
+        player.maxHp = player.hp = 10;
+        altar.Use(player);
+        Check("the blood altar takes 2 max health and offers blessings", player.maxHp == 8 && hud.screen == Hud.Screen.Buff, $"max={player.maxHp} screen={hud.screen}");
+        hud.PickBuff(0);
+        yield return null;
+        Check("picking the altar's blessing applies it and resumes", RunState.buffs.Count == buffs + 1 && hud.screen == Hud.Screen.None && !TimeControl.paused);
+        Destroy(altar.gameObject);
+        player.maxHp = savedMax;
+        RunState.maxHp = savedRunMax;
+        player.hp = player.maxHp = 40;
+
+        // Trial room: the statue starts it, everything in it is an elite, winning leaves an epic chest.
+        if (dungeon.trialRooms.Count > 0)
+        {
+            var trial = dungeon.trialRooms[0];
+            var statue = FindAnyObjectByType<TrialStatue>();
+            player.Teleport(trial.Center() + Vector3.forward * 3.5f);
+            yield return new WaitForSeconds(0.5f);
+            Check("a trial room waits for its statue", trial.state == Room.State.Idle);
+            statue.Use(player);
+            yield return new WaitForSeconds(2.2f);
+            Check("the statue starts the trial with elites", trial.state == Room.State.Fighting && Enemy.Elites.Count > 0, $"state={trial.state} elites={Enemy.Elites.Count}");
+            for (float u = 0; u < 25f && trial.state != Room.State.Cleared; u += 0.3f)
+            {
+                foreach (var e in FindObjectsByType<Enemy>(FindObjectsSortMode.None))
+                    if (!e.dead && trial.Center() != Vector3.zero && Vector3.Distance(e.transform.position, trial.Center()) < 20f) e.TakeDamage(9999, Vector3.forward);
+                player.hp = player.maxHp;
+                yield return new WaitForSeconds(0.3f);
+            }
+            Check("winning the trial leaves an epic chest", trial.state == Room.State.Cleared && FindObjectsByType<Chest>(FindObjectsSortMode.None).Length > 0, $"state={trial.state}");
+            player.Teleport(home);
+            yield return new WaitForSeconds(1.5f);
+        }
+        player.hp = player.maxHp = RunState.maxHp;
+        player.armor = player.maxArmor;
+    }
+
     IEnumerator ReactionTests()
     {
         Vector3 fwdDir = Quaternion.Euler(0f, player.yaw, 0f) * Vector3.forward;
@@ -1360,8 +1412,8 @@ public class GameManager : MonoBehaviour
     {
         if (Pet.Current) Pet.Current.gameObject.SetActive(false);
         yield return new WaitForSeconds(0.5f);
-        Check("floor 2 built after the portal", RunState.floor == 2 && dungeon.rooms.Count == 8, $"floor={RunState.floor} rooms={dungeon.rooms.Count}");
-        Check("hp, weapons and buffs carried over", player.hp == RunState.hp && player.weapons[0] != null && RunState.buffs.Count == 1, $"hp={player.hp} w0={player.weapons[0]?.id}");
+        Check("floor 2 built after the portal", RunState.floor == 2 && dungeon.rooms.Count >= 8, $"floor={RunState.floor} rooms={dungeon.rooms.Count}");
+        Check("hp, weapons and buffs carried over", player.hp == RunState.hp && player.weapons[0] != null && RunState.buffs.Count >= 1, $"hp={player.hp} w0={player.weapons[0]?.id} buffs={RunState.buffs.Count}");
         Check("floor 2 connected", dungeon.AllRoomsConnected());
         Check("new floor offers a buff again", !RunState.buffTaken);
         Finish();
@@ -1660,6 +1712,27 @@ public class GameManager : MonoBehaviour
             yield return Shot("23_loot.png");
             foreach (var d in drops) if (d) Destroy(d.gameObject);
         }
+
+        // The blood altar and the trial statue (when the floor has them).
+        var altarRoom = dungeon.rooms.Find(r => r.kind == Dungeon.Kind.Altar);
+        if (altarRoom != null)
+        {
+            player.Teleport(altarRoom.Center + Vector3.back * 3.5f);
+            player.yaw = 0f;
+            player.pitch = 10f;
+            yield return new WaitForSeconds(0.8f);
+            yield return Shot("24_altar.png");
+        }
+        if (dungeon.trialRooms.Count > 0)
+        {
+            player.Teleport(dungeon.trialRooms[0].Center() + Vector3.back * 5f);
+            player.yaw = 0f;
+            player.pitch = 14f;
+            yield return new WaitForSeconds(0.8f);
+            yield return Shot("25_trial.png");
+        }
+        player.Teleport(dungeon.playerStart);
+        yield return new WaitForSeconds(0.3f);
 
         // The end-of-run summary card.
         hud.screen = Hud.Screen.Dead;

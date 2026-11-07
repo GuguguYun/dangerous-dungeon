@@ -19,6 +19,8 @@ public class Room : MonoBehaviour
     public PlayerController player;
     public Hud hud;
     public System.Action<Room> Cleared;
+    public bool manual;      // a trial room: only the statue starts it
+    public bool forceElite;  // ... and every enemy in it is an elite
 
     public Vector3 Center() => (min + max) * 0.5f;
 
@@ -27,11 +29,11 @@ public class Room : MonoBehaviour
 
     void Update()
     {
-        if (state == State.Idle && player && !player.dead && Inside(player.transform.position, 2f))
+        if (!manual && state == State.Idle && player && !player.dead && Inside(player.transform.position, 2f))
             Begin();
     }
 
-    void Begin()
+    public void Begin()
     {
         state = State.Fighting;
         SetGates(true);
@@ -82,7 +84,7 @@ public class Room : MonoBehaviour
         e.Setup(kind, floor);
         // Some minions come as elites with an affix; a splitting elite's halves come out small.
         if (mini) e.MakeMini();
-        else if (kind != EnemyKind.Boss && Enemy.ElitesEnabled && Random.value < Enemy.EliteChance(floor))
+        else if (kind != EnemyKind.Boss && (forceElite || (Enemy.ElitesEnabled && Random.value < Enemy.EliteChance(floor))))
         {
             e.MakeElite((EliteKind)Random.Range(1, 5));
             Tips.Show("elite", "精英怪：头上写着它的词缀，更耐打，掉更多金币");

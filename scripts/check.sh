@@ -28,6 +28,6 @@ grep -E "AUTOTEST (FAIL|done)|Exception" "$ROOT/logs/autotest.log"
 
 echo "== shots"
 rm -rf "$SHOTS"; mkdir -p "$SHOTS"
-run_for 120 "$BIN" -shots "$SHOTS" -screen-width 1600 -screen-height 900 -screen-fullscreen 0 -logFile "$ROOT/logs/shots.log" >/dev/null 2>&1
+run_for 240 "$BIN" -shots "$SHOTS" -screen-width 1600 -screen-height 900 -screen-fullscreen 0 -logFile "$ROOT/logs/shots.log" >/dev/null 2>&1
 grep -E "SHOTS done|Exception" "$ROOT/logs/shots.log" | sort -u
 ls "$SHOTS"

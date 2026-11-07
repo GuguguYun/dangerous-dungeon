@@ -42,6 +42,7 @@ public partial class PlayerController : MonoBehaviour
     public Camera cam;
     public Pickup nearbyWeapon;
     public ShopItem nearbyWare;
+    public Interactable nearbyThing;
     public int damageTaken; // hp + armor lost, for the self-test
     public bool shielded, stealthed;
     public float poisoned;   // seconds of poison left
@@ -425,6 +426,14 @@ public partial class PlayerController : MonoBehaviour
                 float d = Vector3.Distance(new Vector3(it.transform.position.x, 0f, it.transform.position.z), new Vector3(transform.position.x, 0f, transform.position.z));
                 if (!it.sold && d < bestWare) { bestWare = d; nearbyWare = it; }
             }
+        nearbyThing = null;
+        float bestThing = 2.6f;
+        if (!InMech)
+            foreach (var it in Interactable.Live)
+            {
+                float d = Vector3.Distance(new Vector3(it.transform.position.x, 0f, it.transform.position.z), new Vector3(transform.position.x, 0f, transform.position.z));
+                if (it.Available && d < bestThing) { bestThing = d; nearbyThing = it; }
+            }
         nearbyMech = null;
         float bestMech = 3.2f;
         if (!InMech)
@@ -462,7 +471,8 @@ public partial class PlayerController : MonoBehaviour
                 if (Input.GetKeyDown(KeyCode.E))
                 {
                     bool mechCloser = nearbyMech && (!nearbyWeapon || bestMech < best);
-                    if (nearbyWare && !nearbyWeapon) nearbyWare.Buy(this);
+                    if (nearbyThing && !nearbyWeapon) nearbyThing.Use(this);
+                    else if (nearbyWare && !nearbyWeapon) nearbyWare.Buy(this);
                     else if (mechCloser) Mount(nearbyMech.def, nearbyMech.hp, nearbyMech);
                     else if (nearbyWeapon) PickUp(nearbyWeapon);
                 }

@@ -403,6 +403,14 @@ public class Hud : MonoBehaviour
             string Cmp(int a2, int b2) => b2 > a2 ? $"<color=#8CFF7A>{b2} ▲</color>" : b2 < a2 ? $"<color=#FF7A6A>{b2} ▼</color>" : $"{b2}";
             UiKit.Text(new Rect(r.x + 146, r.y + 64, 440, 22), $"伤害 {cur.damage} → {Cmp(cur.damage, pw.damage)}   耗能 {cur.energy} → {pw.energy}   会替换：{cur.name}", new GUIStyle(left) { fontSize = 14 }, UiKit.Dim);
         }
+        else if (player.nearbyThing)
+        {
+            var it = player.nearbyThing;
+            UiKit.DrawPanel(r);
+            GUI.DrawTexture(new Rect(r.x + 44, r.y + 18, 60, 60), Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, it.Tint.linear, 0f, 30f);
+            UiKit.Text(new Rect(r.x + 146, r.y + 14, 440, 34), $"<color=#FFD27A>E</color>  {it.Title}", new GUIStyle(left) { fontSize = 24 }, it.Tint);
+            UiKit.Text(new Rect(r.x + 146, r.y + 52, 440, 26), it.Desc, new GUIStyle(left) { fontSize = 16 });
+        }
         else if (player.nearbyWare)
         {
             var it = player.nearbyWare;
@@ -815,6 +823,8 @@ public class Hud : MonoBehaviour
                 Dungeon.Kind.Start => new Color(0.5f, 0.8f, 0.5f),
                 Dungeon.Kind.Chest => new Color(0.95f, 0.8f, 0.3f),
                 Dungeon.Kind.Shop => new Color(0.35f, 0.9f, 0.75f),
+                Dungeon.Kind.Altar => new Color(0.95f, 0.35f, 0.35f),
+                Dungeon.Kind.Trial => new Color(1f, 0.6f, 0.25f),
                 Dungeon.Kind.End => new Color(0.7f, 0.5f, 1f),
                 Dungeon.Kind.Boss => new Color(1f, 0.35f, 0.3f),
                 _ => new Color(0.75f, 0.75f, 0.85f),
@@ -828,6 +838,8 @@ public class Hud : MonoBehaviour
                 Dungeon.Kind.Boss => "<color=#FF5A4A>首</color>",
                 Dungeon.Kind.Chest => "<color=#7A5A10>宝</color>",
                 Dungeon.Kind.Shop => "<color=#0E5A48>商</color>",
+                Dungeon.Kind.Altar => "<color=#5A0E0E>祭</color>",
+                Dungeon.Kind.Trial => "<color=#5A2E08>试</color>",
                 _ => null,
             };
             if (icon != null) Label(new Rect(r.center.x - 15, r.center.y - 14, 30, 28), icon, new GUIStyle(center) { fontSize = 18, richText = true });

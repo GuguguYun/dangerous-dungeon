@@ -12,7 +12,7 @@ public class Dungeon : MonoBehaviour
     const int CellSpan = 11; // tiles between neighbouring room centres
     const int Corridor = -1;
 
-    public enum Kind { Start, Combat, Chest, End, Boss, Shop }
+    public enum Kind { Start, Combat, Chest, End, Boss, Shop, Altar, Trial }
 
     public class RoomInfo
     {
@@ -57,6 +57,8 @@ public class Dungeon : MonoBehaviour
     }
     readonly List<WallSlot> wallSlots = new List<WallSlot>();
     RoomInfo endRoom;
+    public int loops;                                       // extra corridors that make the floor a loop
+    public readonly List<Room> trialRooms = new List<Room>();
     public RoomInfo shopRoom;
 
     static Vector3 Center(Vector2Int t) => new Vector3(t.x * T, 0f, t.y * T);
@@ -137,6 +139,23 @@ public class Dungeon : MonoBehaviour
             var shopHost = shopFrom[rng.Next(shopFrom.Count)];
             var shopOptions = FreeNeighbours(shopHost, used);
             var shop = shopOptions[rng.Next(shopOptions.Count)];
+            used.Add(shop);
+
+            // Optional branches where there is room: a blood altar and a trial room.
+            (Vector2Int host, Vector2Int cell)? Branch()
+            {
+                var hosts = new List<Vector2Int>();
+                for (int i = 1; i < path.Count - 1; i++)
+                    if (FreeNeighbours(path[i], used).Count > 0) hosts.Add(path[i]);
+                if (hosts.Count == 0) return null;
+                var h = hosts[rng.Next(hosts.Count)];
+                var opts = FreeNeighbours(h, used);
+                var c = opts[rng.Next(opts.Count)];
+                used.Add(c);
+                return (h, c);
+            }
+            var altar = Branch();
+            var trial = Branch();
 
             rooms.Clear();
             links.Clear();
@@ -151,6 +170,20 @@ public class Dungeon : MonoBehaviour
             links.Add((host, chest));
             AddRoom(Kind.Shop, shop, 1);
             links.Add((shopHost, shop));
+            if (altar.HasValue) { AddRoom(Kind.Altar, altar.Value.cell, 1); links.Add((altar.Value.host, altar.Value.cell)); }
+            if (trial.HasValue) { AddRoom(Kind.Trial, trial.Value.cell, 2); links.Add((trial.Value.host, trial.Value.cell)); }
+
+            // Loops: neighbouring fight rooms not yet joined get a second way through (up to two).
+            int loops = 0;
+            for (int i = 1; i < path.Count - 1 && loops < 2; i++)
+                for (int j = i + 2; j < path.Count - 1 && loops < 2; j++)
+                {
+                    var d = path[j] - path[i];
+                    if (Mathf.Abs(d.x) + Mathf.Abs(d.y) != 1 || rng.NextDouble() < 0.4) continue;
+                    links.Add((path[i], path[j]));
+                    loops++;
+                }
+            this.loops = loops;
             return;
         }
         Debug.LogError("DUNGEON layout failed");
@@ -279,6 +312,36 @@ public class Dungeon : MonoBehaviour
                     var chest = Props.Spawn("chest", info.Center, face, transform);
                     chest.AddComponent<Chest>().dungeon = this;
                     break;
+                case Kind.Altar:
+                    Altar.Create(info.Center, transform);
+                    break;
+                case Kind.Trial:
+                {
+                    // A fight room that only the statue starts: three waves, all elites, an epic chest.
+                    var trialRoom = MakeCombatRoom(i, info, floor);
+                    combatRooms.Remove(trialRoom);
+                    trialRooms.Add(trialRoom);
+                    trialRoom.manual = true;
+                    trialRoom.forceElite = true;
+                    trialRoom.waves = new[]
+                    {
+                        new[] { EnemyKind.Gunner, EnemyKind.Charger },
+                        new[] { EnemyKind.Spreader, EnemyKind.Bomber, EnemyKind.Gunner },
+                        new[] { EnemyKind.Archer, EnemyKind.Charger, EnemyKind.Bomber },
+                    };
+                    var statue = TrialStatue.Create(info.Center, trialRoom, transform);
+                    trialRoom.blocked.Add(info.Center);
+                    trialRoom.Cleared += r =>
+                    {
+                        var chest = Props.Spawn("chest", r.Center() + Vector3.forward * 3f, Quaternion.identity, transform);
+                        var c = chest.AddComponent<Chest>();
+                        c.dungeon = this;
+                        c.minRarity = 3;
+                        Pickup.SpawnGold(r.Center(), 15);
+                        hud.Show("试炼完成！史诗宝箱出现了", 2.5f);
+                    };
+                    break;
+                }
                 case Kind.Shop:
                 {
                     var from = RoomAt(links.Find(l => l.b == info.cell).a);
@@ -294,7 +357,7 @@ public class Dungeon : MonoBehaviour
         }
     }
 
-    void MakeCombatRoom(int index, RoomInfo info, int floor)
+    Room MakeCombatRoom(int index, RoomInfo info, int floor)
     {
         var room = new GameObject($"room_{index}_{info.kind}").AddComponent<Room>();
         room.transform.SetParent(transform, false);
@@ -320,7 +383,39 @@ public class Dungeon : MonoBehaviour
                 room.blocked.Add(info.Center + p);
             }
         }
-        int crates = room.boss ? 0 : info.half * 2 - 1;
+        // Bigger fight rooms get a layout: four pillars, or low walls (chest-high cover that stops level
+        // shots but not lobbed bombs), or just the scattered crates below.
+        int layout = room.boss || info.half < 2 ? 0 : rng.Next(3);
+        float span = info.half * T;
+        bool ClearOfDoors(Vector3 p)
+        {
+            foreach (var door in doors) if (Vector3.Distance(p, door.pos) < 5f) return false;
+            return true;
+        }
+        if (layout == 1)
+        {
+            foreach (var sx in new[] { -1f, 1f })
+                foreach (var sz in new[] { -1f, 1f })
+                {
+                    var p = info.Center + new Vector3(sx, 0f, sz) * span * 0.45f;
+                    if (!ClearOfDoors(p)) continue;
+                    Kit.Spawn("pillar", p, Quaternion.identity, transform);
+                    room.blocked.Add(p);
+                }
+        }
+        else if (layout == 2)
+        {
+            for (int k = 0; k < 4; k++)
+            {
+                var dir = Quaternion.Euler(0f, 90f * k + 45f, 0f) * Vector3.forward;
+                var p = info.Center + dir * span * 0.5f;
+                if (!ClearOfDoors(p)) continue;
+                var cover = Kit.Spawn("wall", p, Quaternion.LookRotation(dir), transform); // runs across the room's radius
+                cover.transform.localScale = new Vector3(0.75f, 0.42f, 1f);
+                room.blocked.Add(p);
+            }
+        }
+        int crates = room.boss ? 0 : info.half * 2 - 1 - (layout > 0 ? 2 : 0);
         float inner = info.half * T;
         for (int k = 0, tries = 0; k < crates && tries < 60; tries++)
         {
@@ -354,6 +449,7 @@ public class Dungeon : MonoBehaviour
         };
         info.combat = room;
         combatRooms.Add(room);
+        return room;
     }
 
     /// Floor 1 meets gunners and chargers; spreaders join from floor 2.
