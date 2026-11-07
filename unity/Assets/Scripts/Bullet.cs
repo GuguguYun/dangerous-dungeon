@@ -308,7 +308,7 @@ public class Bullet : MonoBehaviour
         }
         Enemy best = null;
         float bestD = 30f;
-        foreach (var e in FindObjectsByType<Enemy>(FindObjectsSortMode.None))
+        foreach (var e in Enemy.Live)
         {
             if (e.dead) continue;
             float d = Vector3.Distance(e.transform.position, transform.position);

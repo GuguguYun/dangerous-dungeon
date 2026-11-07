@@ -202,12 +202,10 @@ public class PlayerSkill : MonoBehaviour
             armorT -= Time.deltaTime;
             hpT -= Time.deltaTime;
             ring.widthMultiplier = 0.15f + 0.08f * Mathf.Sin(t * 6f);
-            // Every friendly unit inside benefits; today that is the player (pets/mercenaries later).
-            foreach (var ally in FindObjectsByType<PlayerController>(FindObjectsSortMode.None))
+            // Friendly units inside benefit: the player here, the companion drone below.
+            var ally = PlayerController.Current;
+            if (ally && !ally.dead && Vector3.Distance(new Vector3(ally.transform.position.x, 0f, ally.transform.position.z), centre) <= radius)
             {
-                var d = ally.transform.position - centre;
-                d.y = 0f;
-                if (d.magnitude > radius || ally.dead) continue;
                 if (armorT <= 0f) ally.armor = Mathf.Min(ally.maxArmor, ally.armor + 1);
                 if (hpT <= 0f)
                 {

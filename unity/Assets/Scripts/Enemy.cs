@@ -9,6 +9,11 @@ public enum EnemyKind { Gunner, Charger, Spreader, Boss, Bomber, Archer }
 public partial class Enemy : MonoBehaviour
 {
     public static Enemy ActiveBoss;
+    /// Every enemy in the scene, kept up to date (per-frame lookups such as homing must not search the scene).
+    public static readonly System.Collections.Generic.List<Enemy> Live = new System.Collections.Generic.List<Enemy>();
+
+    void OnEnable() => Live.Add(this);
+    void OnDisable() => Live.Remove(this);
 
     public EnemyKind kind = EnemyKind.Gunner;
     public int hp = 6;
