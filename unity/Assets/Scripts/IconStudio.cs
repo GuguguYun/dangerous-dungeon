@@ -11,7 +11,9 @@ public class IconStudio : MonoBehaviour
     const int Layer = 30;
     static readonly Vector3 Origin = new Vector3(0f, -600f, 0f);
     readonly Dictionary<string, Texture2D> weaponIcons = new Dictionary<string, Texture2D>();
-    readonly Dictionary<string, RenderTexture> classViews = new Dictionary<string, RenderTexture>();
+    readonly Dictionary<string, RenderTexture> classTargets = new Dictionary<string, RenderTexture>();
+    readonly Dictionary<string, Texture2D> classViews = new Dictionary<string, Texture2D>();
+    float copyT;
     readonly Dictionary<string, CharacterAnim> classBodies = new Dictionary<string, CharacterAnim>();
     readonly List<Camera> classCams = new List<Camera>();
     readonly List<Transform> turntables = new List<Transform>();
@@ -100,6 +102,20 @@ public class IconStudio : MonoBehaviour
         Debug.Log($"ICONS {weaponIcons.Count}");
     }
 
+    IEnumerator CopyViews()
+    {
+        yield return new WaitForEndOfFrame();
+        var prev = RenderTexture.active;
+        foreach (var kv in classTargets)
+        {
+            RenderTexture.active = kv.Value;
+            var tex = classViews[kv.Key];
+            tex.ReadPixels(new Rect(0, 0, kv.Value.width, kv.Value.height), 0, 0);
+            tex.Apply();
+        }
+        RenderTexture.active = prev;
+    }
+
     /// Turntables for the class cards (built on first use).
     public void ShowClassPreviews(bool on)
     {
@@ -121,20 +137,27 @@ public class IconStudio : MonoBehaviour
             var body = CharacterAnim.Spawn(cls.model, table, Layer);
             if (body) classBodies[cls.id] = body;
             var rt = new RenderTexture(360, 420, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
-            classViews[cls.id] = rt;
+            classTargets[cls.id] = rt;
+            // Drawn from a copied texture (like the weapon icons): drawing the render target directly
+            // came out washed out and see-through in IMGUI.
+            classViews[cls.id] = new Texture2D(rt.width, rt.height, TextureFormat.RGBA32, false);
             var cam = MakeCamera(rt, spot + new Vector3(0f, 1.0f, 3.2f), spot + Vector3.up * 0.8f);
             cam.fieldOfView = 34f;
             // An opaque backdrop in the class colour, so the picture is drawn without alpha
             // (some Meshy textures carry alpha that would make the hero look see-through).
-            var tint = cls.id switch { "knight" => new Color(0.08f, 0.12f, 0.22f), "assassin" => new Color(0.13f, 0.08f, 0.2f), "mage" => new Color(0.2f, 0.09f, 0.06f), _ => new Color(0.18f, 0.16f, 0.08f) };
+            // Dark backdrops (the project is linear: these read much lighter than the numbers suggest).
+            var tint = cls.id switch { "knight" => new Color(0.012f, 0.02f, 0.045f), "assassin" => new Color(0.025f, 0.012f, 0.04f), "mage" => new Color(0.045f, 0.015f, 0.01f), _ => new Color(0.04f, 0.035f, 0.012f) };
             cam.backgroundColor = tint;
             // Same tone mapping as the game camera, or the heroes come out flat and washed out.
             var data = cam.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
             if (!data) data = cam.gameObject.AddComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
             data.renderPostProcessing = true;
             classCams.Add(cam);
-            Light(spot + new Vector3(-1.2f, 2.4f, 2.2f), 7f, 3.2f, new Color(1f, 0.93f, 0.82f));
-            Light(spot + new Vector3(1.6f, 1.6f, -1.4f), 6f, 3.5f, new Color(0.55f, 0.75f, 1f));
+            // Gentle key and rim lights: the sun and ambient light already reach down here, and strong
+            // close point lights overexposed the heroes into a pale, washed-out look.
+            // A warm key from the front and above, and a strong cool rim from behind for the silhouette.
+            Light(spot + new Vector3(-1.4f, 2.6f, 2.4f), 8f, 2.4f, new Color(1f, 0.92f, 0.8f));
+            Light(spot + new Vector3(0.8f, 2.2f, -1.6f), 5f, 4f, new Color(0.5f, 0.75f, 1f));
             turntables.Add(table);
             i++;
         }
@@ -143,6 +166,12 @@ public class IconStudio : MonoBehaviour
     void Update()
     {
         if (!previewsOn) return;
+        copyT -= Time.unscaledDeltaTime;
+        if (copyT <= 0f)
+        {
+            copyT = 1f / 15f; // the turntables only need ~15 updates a second
+            StartCoroutine(CopyViews());
+        }
         foreach (var t in turntables) t.Rotate(Vector3.up, 18f * Time.unscaledDeltaTime, Space.World);
         if (hovered != lastHovered)
         {
