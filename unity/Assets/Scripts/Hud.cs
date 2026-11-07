@@ -105,10 +105,21 @@ public class Hud : MonoBehaviour
         small.normal.textColor = new Color(1f, 1f, 1f, 0.75f);
         title = new GUIStyle(center) { fontSize = 56 };
         number = new GUIStyle(center) { fontSize = 26 };
-        button = new GUIStyle(GUI.skin.button) { font = font, fontSize = 22, wordWrap = true, alignment = TextAnchor.MiddleCenter };
-        button.normal.textColor = Color.white;
-        button.hover.textColor = new Color(1f, 0.9f, 0.5f);
+        UiKit.Init(font);
+        button = UiKit.Button;
     }
+
+    /// Seconds of actual play on this floor; the controls line fades out after a while.
+    float playT;
+
+    static Color ClassColor(string id) => id switch
+    {
+        "knight" => new Color(0.45f, 0.7f, 1f),
+        "assassin" => new Color(0.75f, 0.5f, 1f),
+        "mage" => new Color(1f, 0.55f, 0.3f),
+        "priest" => new Color(1f, 0.88f, 0.45f),
+        _ => Color.white,
+    };
 
     void Update()
     {
@@ -127,6 +138,8 @@ public class Hud : MonoBehaviour
             numbers[i] = n;
             if (n.t > 0.8f) numbers.RemoveAt(i);
         }
+        if (screen == Screen.None && player && !player.dead) playT += dt;
+        IconStudio.I?.ShowClassPreviews(screen == Screen.ClassSelect);
         if (screen == Screen.ClassSelect)
         {
             for (int i = 0; i < Classes.All.Count; i++)
@@ -138,6 +151,14 @@ public class Hud : MonoBehaviour
             if (Input.GetKeyDown(KeyCode.Alpha2)) PickBuff(1);
             if (Input.GetKeyDown(KeyCode.Alpha3)) PickBuff(2);
         }
+    }
+
+    /// A button that clicks when pressed.
+    static bool Btn(Rect r, string text, GUIStyle style)
+    {
+        if (!GUI.Button(r, text, style)) return false;
+        Sfx.Play("ui_click", 0.6f, 0.03f);
+        return true;
     }
 
     static void Box(Rect r, Color c)
@@ -188,18 +209,24 @@ public class Hud : MonoBehaviour
         {
             Box(new Rect(0, 0, w, 10), new Color(0.3f, 0.9f, 0.2f, 0.5f));
             Box(new Rect(0, h - 10, w, 10), new Color(0.3f, 0.9f, 0.2f, 0.5f));
-            Label(new Rect(22, 172 + Off, 300, 30), $"中毒 {player.poisoned:0.0}s", new GUIStyle(left) { fontSize = 20, normal = { textColor = new Color(0.5f, 1f, 0.4f) } });
+            UiKit.Text(new Rect(w / 2 - 100, h / 2 + 44, 200, 26), $"中毒 {player.poisoned:0.0}s", new GUIStyle(center) { fontSize = 18 }, new Color(0.55f, 1f, 0.45f));
         }
         if (GameSettings.flashes && perfect > 0f) Box(new Rect(0, 0, w, h), new Color(0.3f, 0.9f, 1f, perfect * 0.35f));
         if (GameSettings.showFps) DrawFps(w);
 
         if (player)
         {
-            // In a mech its durability bar sits on top: it is spent before your own.
-            if (player.InMech) Bar(20, player.mechDef.name, player.mechHp, player.mechDef.maxHp, player.mechDef.color * 0.8f);
-            Bar(20 + Off, "生命", player.hp, player.maxHp, new Color(0.78f, 0.16f, 0.22f));
-            Bar(50 + Off, "护甲", player.armor, player.maxArmor, new Color(0.40f, 0.45f, 0.56f));
-            Bar(80 + Off, "能量", player.energy, player.maxEnergy, new Color(0.18f, 0.38f, 0.88f));
+            DrawStatus();
+            // The companion drone's health, just above the skill card.
+            var pet = Pet.Current;
+            if (pet && pet.isActiveAndEnabled)
+            {
+                var pr = new Rect(20, h - 158, 280, 30);
+                GUI.Box(pr, GUIContent.none, UiKit.Pill);
+                UiKit.Text(new Rect(pr.x + 14, pr.y, 90, 30), "无人机", new GUIStyle(left) { fontSize = 15 });
+                UiKit.Bar(new Rect(pr.x + 78, pr.y + 9, 140, 12), pet.hp, pet.maxHp, pet.offline ? new Color(0.4f, 0.4f, 0.45f) : new Color(0.3f, 0.8f, 0.95f));
+                UiKit.Text(new Rect(pr.x + 224, pr.y, 60, 30), pet.offline ? "重启中" : $"{pet.hp}/{pet.maxHp}", new GUIStyle(left) { fontSize = 14 });
+            }
             if (player.InMech)
             {
                 DrawMech(w, h);
@@ -210,8 +237,6 @@ public class Hud : MonoBehaviour
                 DrawSkill(w, h);
             }
         }
-        Label(new Rect(22, 112 + Off, 560, 30), $"第 {RunState.floor} / {RunState.Floors} 层 · {themeName}    击杀 {RunState.kills}    <color=#FFD45A>金币 {RunState.gold}</color>", new GUIStyle(left) { richText = true });
-        if (enemiesLeft >= 0) Label(new Rect(22, 142 + Off, 400, 30), $"剩余敌人 {enemiesLeft}", left);
 
         DrawCrosshair(w, h);
         DrawEliteTags();
@@ -219,28 +244,7 @@ public class Hud : MonoBehaviour
         DrawBoss(w);
         DrawMinimap(w);
 
-        if (player && player.nearbyWeapon && screen == Screen.None)
-        {
-            var pw = player.nearbyWeapon.weapon;
-            var ps = new GUIStyle(center) { fontSize = 26, richText = true };
-            Label(new Rect(0, h * 0.62f, w, 40), $"按 E 拾取 <color=#{ColorUtility.ToHtmlStringRGB(Weapons.RarityColors[pw.rarity])}>{pw.name}</color>（{Weapons.RarityNames[pw.rarity]}）", ps);
-            Label(new Rect(0, h * 0.62f + 36, w, 30), pw.desc, new GUIStyle(small) { fontSize = 18 });
-        }
-        else if (player && player.nearbyWare && screen == Screen.None)
-        {
-            var it = player.nearbyWare;
-            bool afford = RunState.gold >= it.price;
-            var ps = new GUIStyle(center) { fontSize = 26, richText = true };
-            Label(new Rect(0, h * 0.62f, w, 40), $"按 E 购买 <color=#{ColorUtility.ToHtmlStringRGB(it.Tint)}>{it.Title}</color>  <color={(afford ? "#FFD45A" : "#FF6A5A")}>{it.price} 金币</color>", ps);
-            Label(new Rect(0, h * 0.62f + 36, w, 30), it.Desc, new GUIStyle(small) { fontSize = 18 });
-        }
-        else if (player && player.nearbyMech && screen == Screen.None)
-        {
-            var m = player.nearbyMech;
-            var ps = new GUIStyle(center) { fontSize = 26, richText = true };
-            Label(new Rect(0, h * 0.62f, w, 40), $"按 E 搭乘 <color=#{ColorUtility.ToHtmlStringRGB(m.def.color)}>{m.def.name}</color>（{(m.def.heavy ? "重装" : "轻装")} · 耐久 {m.hp}/{m.def.maxHp}）", ps);
-            Label(new Rect(0, h * 0.62f + 36, w, 30), $"{m.def.ranged} + {m.def.melee}：{m.def.desc}", new GUIStyle(small) { fontSize = 18 });
-        }
+        if (screen == Screen.None) DrawPrompt(w, h);
         if (bannerT > 0f && screen == Screen.None)
         {
             float a = Mathf.Clamp01(bannerT * 2f) * Mathf.Clamp01((2.8f - bannerT) * 4f);
@@ -262,13 +266,18 @@ public class Hud : MonoBehaviour
             Box(new Rect(w / 2 - 380, h * 0.74f, 760, 40), new Color(0f, 0f, 0f, 0.5f * a));
             Label(new Rect(w / 2 - 380, h * 0.74f + 4, 760, 32), "提示：" + tip, ts);
         }
+        float hintA = Mathf.Clamp01((45f - playT) / 5f);
         if (screen == Screen.None && player && player.InMech)
         {
             var d = player.mechDef;
             Label(new Rect(0, h - 36, w, 28), $"WASD 移动 · 左键 {d.ranged} · 右键 {d.melee} · F {d.special} · Shift {d.dashName} · 空格 {d.jumpName} · E 离开机甲 · Esc 暂停", small);
         }
-        else if (screen == Screen.None)
-            Label(new Rect(0, h - 36, w, 28), "WASD 移动 · 鼠标 瞄准 · 左键 攻击 · 右键/F 技能 · Q 换武器 · E 拾取 · Shift 冲刺 · 空格 跳 · Esc 暂停", small);
+        else if (screen == Screen.None && hintA > 0f)
+        {
+            var hs = new GUIStyle(small);
+            hs.normal.textColor = new Color(1f, 1f, 1f, 0.75f * hintA);
+            Label(new Rect(0, h - 36, w, 28), "WASD 移动 · 鼠标 瞄准 · 左键 攻击 · 右键/F 技能 · Q 换武器 · E 拾取 · Shift 冲刺 · 空格 跳 · Esc 暂停", hs);
+        }
 
         switch (screen)
         {
@@ -282,41 +291,133 @@ public class Hud : MonoBehaviour
 
     void DrawTitle(float w, float h)
     {
-        Box(new Rect(0, 0, w, h), new Color(0f, 0f, 0f, 0.45f));
-        Label(new Rect(0, h * 0.16f, w, 90), "Meshy 地牢", new GUIStyle(title) { fontSize = 84 });
-        Label(new Rect(0, h * 0.16f + 96, w, 36), "第三人称 · 随机地牢 · 射击与近战 · 三层通关", new GUIStyle(small) { fontSize = 22 });
-        if (GUI.Button(new Rect(w / 2 - 150, h * 0.45f, 300, 64), "开始游戏", button)) Begin?.Invoke();
-        if (GUI.Button(new Rect(w / 2 - 150, h * 0.45f + 76, 300, 52), "设置 · 防晕 3D", button)) OpenSettings();
-        if (GUI.Button(new Rect(w / 2 - 150, h * 0.45f + 140, 300, 52), "退出游戏", button)) Quit?.Invoke();
-        Label(new Rect(0, h * 0.72f, w, 120),
-            "WASD 移动 · 鼠标 瞄准 · 左键 攻击 · Q 换武器 · E 拾取 · Esc 暂停\n空格 跳：起跳时机对了，子弹会从脚下穿过；地面冲击波只能跳过\nShift 冲刺：短暂无敌躲子弹 · 跳跃和冲刺都消耗体力（准星下方）\n贴身躲开攻击触发「完美闪避」：子弹时间 + 下一击必暴击",
-            new GUIStyle(small) { fontSize = 20, wordWrap = true });
-        Label(new Rect(0, h - 40, w, 30), "角色、敌人、武器、道具由 Meshy 生成 · 场景拼块由 Blender 制作", small);
+        UiKit.Vignette(w, h);
+        var t = new GUIStyle(title) { fontSize = 96 };
+        UiKit.Text(new Rect(0, h * 0.12f, w, 110), "模境迷城", t, UiKit.Gold);
+        UiKit.Text(new Rect(0, h * 0.12f + 104, w, 30), "M E S H Y   D U N G E O N", new GUIStyle(small) { fontSize = 18 }, new Color(0.85f, 0.85f, 0.95f, 0.85f));
+        UiKit.Text(new Rect(0, h * 0.12f + 140, w, 30), "提示词铸成的迷城每晚都会重生 —— 带上武器，闯到最深处", new GUIStyle(small) { fontSize = 20 });
+        float bw = 320, bx = w / 2 - bw / 2, by = h * 0.45f;
+        if (Btn(new Rect(bx, by, bw, 66), "开始冒险", button)) Begin?.Invoke();
+        if (Btn(new Rect(bx, by + 80, bw, 54), "设置 · 防晕 3D", button)) OpenSettings();
+        if (Btn(new Rect(bx, by + 148, bw, 54), "退出游戏", button)) Quit?.Invoke();
+        // Controls in a small panel at the bottom.
+        var cr = new Rect(w / 2 - 430, h - 170, 860, 112);
+        UiKit.DrawPanel(cr);
+        var cs = new GUIStyle(left) { fontSize = 16, wordWrap = true, alignment = TextAnchor.UpperLeft };
+        UiKit.Text(new Rect(cr.x + 22, cr.y + 12, 400, 90), "<color=#F7CC75>操作</color>\nWASD 移动 · 鼠标瞄准 · 左键攻击\nQ 换武器 · E 拾取/购买/搭乘 · 右键或 F 技能", cs);
+        UiKit.Text(new Rect(cr.x + 440, cr.y + 12, 400, 90), "<color=#F7CC75>闪避</color>\n空格跳：时机对了子弹从脚下穿过\nShift 冲刺躲子弹 · 贴身躲开触发「完美闪避」", cs);
+        UiKit.Text(new Rect(0, h - 40, w, 30), "角色、敌人、武器、道具：Meshy 生成 · 场景：Blender · 音效：Kenney（CC0）", small);
     }
 
     void DrawClassSelect(float w, float h)
     {
-        Box(new Rect(0, 0, w, h), new Color(0f, 0f, 0f, 0.6f));
-        Label(new Rect(0, h * 0.08f, w, 70), "选择角色", title);
+        UiKit.Vignette(w, h);
+        UiKit.Rect(new Rect(0, 0, w, h), new Color(0.02f, 0.02f, 0.05f, 0.45f));
+        UiKit.Text(new Rect(0, h * 0.04f, w, 70), "选择你的英雄", new GUIStyle(title) { fontSize = 48 }, UiKit.Gold);
         int n = Classes.All.Count;
-        float cw = Mathf.Min(330f, (w - 80f) / n - 20f), ch = 430f, gap = 20f;
-        float x0 = w / 2 - (cw * n + gap * (n - 1)) / 2, y = h * 0.2f;
+        float gap = 18f, cw = Mathf.Min(340f, (w - 60f - gap * (n - 1)) / n), ch = Mathf.Min(h * 0.8f, 700f);
+        float x0 = w / 2 - (cw * n + gap * (n - 1)) / 2, y = h * 0.13f;
+        var mouse = Event.current.mousePosition;
+        string hover = null;
         for (int i = 0; i < n; i++)
         {
             var c = Classes.All[i];
             var r = new Rect(x0 + i * (cw + gap), y, cw, ch);
-            if (GUI.Button(r, "", button)) ChooseClass?.Invoke(c.id);
-            Label(new Rect(r.x, r.y + 14, r.width, 50), $"{i + 1}. {c.name}", new GUIStyle(center) { fontSize = 36 });
-            Label(new Rect(r.x, r.y + 62, r.width, 28), c.desc, new GUIStyle(small) { fontSize = 18 });
-            string weapons = string.Join(" + ", System.Array.ConvertAll(c.weapons, id => Weapons.Get(id).name));
-            Label(new Rect(r.x + 20, r.y + 96, r.width - 40, 130),
-                $"生命 {c.maxHp}   护甲 {c.maxArmor}   能量 {c.maxEnergy}\n闪避 {c.stamina} 次   移速 {c.speed:0.0}   暴击 {c.crit * 100f:0}%\n特性：{c.trait}\n初始武器：{weapons}",
-                new GUIStyle(left) { fontSize = 17, wordWrap = true, alignment = TextAnchor.UpperLeft });
-            Label(new Rect(r.x + 20, r.y + 232, r.width - 40, 36), $"技能（右键 / F）：{c.skillName}", new GUIStyle(left) { fontSize = 20, fontStyle = FontStyle.Bold });
-            Label(new Rect(r.x + 20, r.y + 268, r.width - 40, 150), $"{c.skillDesc}\n冷却 {c.cooldown:0} 秒",
-                new GUIStyle(left) { fontSize = 17, wordWrap = true, alignment = TextAnchor.UpperLeft });
+            bool over = r.Contains(mouse);
+            if (over) hover = c.id;
+            var cc = ClassColor(c.id);
+            GUI.Box(r, GUIContent.none, over ? UiKit.CardHover : UiKit.Card);
+            // Live 3D preview of the hero, turning slowly.
+            var view = IconStudio.I ? IconStudio.I.ClassView(c.id) : null;
+            var vr = new Rect(r.x + 10, r.y + 10, r.width - 20, ch * 0.42f);
+            UiKit.Fill(vr, new Color(cc.r * 0.18f, cc.g * 0.18f, cc.b * 0.22f, 0.9f));
+            if (view) GUI.DrawTexture(vr, view, ScaleMode.ScaleAndCrop, false);
+            UiKit.Text(new Rect(r.x + 16, vr.y + 6, 60, 28), $"{i + 1}", new GUIStyle(left) { fontSize = 20 }, UiKit.Gold);
+            float ty = vr.yMax + 8;
+            UiKit.Text(new Rect(r.x, ty, r.width, 40), c.name, new GUIStyle(center) { fontSize = 30 }, cc);
+            UiKit.Text(new Rect(r.x, ty + 38, r.width, 24), c.desc, new GUIStyle(small) { fontSize = 16 });
+            ty += 70;
+            // Stats as short bars.
+            float sx = r.x + 18, sw = r.width - 36;
+            void Stat(string name, float v, float max, string shown, Color col)
+            {
+                UiKit.Text(new Rect(sx, ty, 60, 20), name, new GUIStyle(left) { fontSize = 14 }, UiKit.Dim);
+                UiKit.Bar(new Rect(sx + 52, ty + 4, sw - 100, 12), v, max, col);
+                UiKit.Text(new Rect(sx + sw - 44, ty, 50, 20), shown, new GUIStyle(left) { fontSize = 14 });
+                ty += 21;
+            }
+            Stat("生命", c.maxHp, 8, $"{c.maxHp}", new Color(0.86f, 0.2f, 0.25f));
+            Stat("护甲", c.maxArmor, 6, $"{c.maxArmor}", new Color(0.62f, 0.68f, 0.8f));
+            Stat("能量", c.maxEnergy, 260, $"{c.maxEnergy}", new Color(0.25f, 0.55f, 1f));
+            Stat("闪避", c.stamina, 5, $"{c.stamina}", new Color(0.45f, 0.95f, 1f));
+            Stat("移速", c.speed, 7f, $"{c.speed:0.0}", new Color(0.6f, 0.9f, 0.5f));
+            Stat("暴击", c.crit, 0.2f, $"{c.crit * 100f:0}%", new Color(1f, 0.8f, 0.3f));
+            ty += 4;
+            UiKit.Text(new Rect(sx, ty, sw, 40), $"<color=#F7CC75>特性</color>  {c.trait}", new GUIStyle(left) { fontSize = 14, wordWrap = true, alignment = TextAnchor.UpperLeft });
+            ty += 40;
+            UiKit.Text(new Rect(sx, ty, sw, 24), $"<color=#F7CC75>技能</color>  {c.skillName}（冷却 {c.cooldown:0} 秒）", new GUIStyle(left) { fontSize = 15 }, cc);
+            UiKit.Text(new Rect(sx, ty + 24, sw, 58), c.skillDesc, new GUIStyle(left) { fontSize = 13, wordWrap = true, alignment = TextAnchor.UpperLeft }, UiKit.Dim);
+            ty += 84;
+            // Starting weapons with their icons.
+            float wx = sx;
+            foreach (var id in c.weapons)
+            {
+                var wd = Weapons.Get(id);
+                var ic = IconStudio.I ? IconStudio.I.Weapon(id) : null;
+                if (ic) GUI.DrawTexture(new Rect(wx, ty, 54, 32), ic, ScaleMode.ScaleToFit);
+                UiKit.Text(new Rect(wx + 56, ty, 90, 32), wd.name, new GUIStyle(left) { fontSize = 14 }, Weapons.RarityColors[wd.rarity]);
+                wx += sw / 2;
+            }
+            if (Event.current.type == EventType.MouseDown && over)
+            {
+                Sfx.Play("ui_click", 0.7f, 0.02f);
+                ChooseClass?.Invoke(c.id);
+                Event.current.Use();
+            }
         }
-        Label(new Rect(0, y + ch + 24, w, 30), "点击卡片或按 1 – 4", small);
+        if (IconStudio.I) IconStudio.I.hovered = hover;
+        UiKit.Text(new Rect(0, y + ch + 10, w, 30), "点击卡片或按 1 – 4 · 鼠标停在卡片上看看他们的招式", small);
+    }
+
+    /// The "press E" card above the weapon panel: a weapon on the floor (compared with what you hold),
+    /// a shop ware, or a mech to board.
+    void DrawPrompt(float w, float h)
+    {
+        if (!player) return;
+        var r = new Rect(w / 2 - 300, h * 0.64f, 600, 96);
+        if (player.nearbyWeapon)
+        {
+            var pw = player.nearbyWeapon.weapon;
+            var cur = player.Weapon;
+            UiKit.DrawPanel(r);
+            var ic = IconStudio.I ? IconStudio.I.Weapon(pw.id) : null;
+            if (ic) GUI.DrawTexture(new Rect(r.x + 14, r.y + 10, 120, 76), ic, ScaleMode.ScaleToFit);
+            var rc = Weapons.RarityColors[pw.rarity];
+            UiKit.Text(new Rect(r.x + 146, r.y + 6, 440, 34), $"<color=#FFD27A>E</color> 拾取  {pw.name}  <size=15>{pw.type} · {Weapons.RarityNames[pw.rarity]}</size>", new GUIStyle(left) { fontSize = 24 }, rc);
+            UiKit.Text(new Rect(r.x + 146, r.y + 40, 440, 22), pw.desc, new GUIStyle(left) { fontSize = 15 });
+            string Cmp(int a2, int b2) => b2 > a2 ? $"<color=#8CFF7A>{b2} ▲</color>" : b2 < a2 ? $"<color=#FF7A6A>{b2} ▼</color>" : $"{b2}";
+            UiKit.Text(new Rect(r.x + 146, r.y + 64, 440, 22), $"伤害 {cur.damage} → {Cmp(cur.damage, pw.damage)}   耗能 {cur.energy} → {pw.energy}   会替换：{cur.name}", new GUIStyle(left) { fontSize = 14 }, UiKit.Dim);
+        }
+        else if (player.nearbyWare)
+        {
+            var it = player.nearbyWare;
+            bool afford = RunState.gold >= it.price;
+            UiKit.DrawPanel(r);
+            var ic = it.kind == ShopItem.Kind.Weapon && IconStudio.I ? IconStudio.I.Weapon(it.weapon.id) : null;
+            if (ic) GUI.DrawTexture(new Rect(r.x + 14, r.y + 10, 120, 76), ic, ScaleMode.ScaleToFit);
+            else GUI.DrawTexture(new Rect(r.x + 44, r.y + 18, 60, 60), Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, it.Tint.linear, 0f, 30f);
+            UiKit.Text(new Rect(r.x + 146, r.y + 6, 440, 34), $"<color=#FFD27A>E</color> 购买  {it.Title}", new GUIStyle(left) { fontSize = 24 }, it.Tint);
+            UiKit.Text(new Rect(r.x + 146, r.y + 40, 440, 22), it.Desc, new GUIStyle(left) { fontSize = 15 });
+            UiKit.Text(new Rect(r.x + 146, r.y + 64, 440, 22), $"<color={(afford ? "#FFD45A" : "#FF6A5A")}>{it.price} 金币</color>   你有 {RunState.gold}", new GUIStyle(left) { fontSize = 15 });
+        }
+        else if (player.nearbyMech)
+        {
+            var m = player.nearbyMech;
+            UiKit.DrawPanel(r);
+            UiKit.Text(new Rect(r.x + 22, r.y + 6, 560, 34), $"<color=#FFD27A>E</color> 搭乘  {m.def.name}  <size=15>{(m.def.heavy ? "重装" : "轻装")}机甲 · 耐久 {m.hp}/{m.def.maxHp}</size>", new GUIStyle(left) { fontSize = 24 }, m.def.color);
+            UiKit.Text(new Rect(r.x + 22, r.y + 40, 560, 22), $"{m.def.ranged} + {m.def.melee} · 技能 {m.def.special}", new GUIStyle(left) { fontSize = 15 });
+            UiKit.Text(new Rect(r.x + 22, r.y + 64, 560, 22), m.def.desc, new GUIStyle(left) { fontSize = 14 }, UiKit.Dim);
+        }
     }
 
     /// Left-column offset: the mech's durability bar pushes the rest down one row.
@@ -326,20 +427,20 @@ public class Hud : MonoBehaviour
     void DrawMech(float w, float h)
     {
         var d = player.mechDef;
-        var r = new Rect(w - 330, h - 150, 310, 100);
-        Box(r, new Color(0f, 0f, 0f, 0.45f));
-        Box(new Rect(r.x, r.y, 5, r.height), d.color);
+        var r = new Rect(w - 470, h - 142, 450, 112);
+        UiKit.DrawPanel(r);
+        UiKit.Fill(new Rect(r.x + 10, r.y + 12, 4, r.height - 24), d.color);
         var nameStyle = new GUIStyle(left) { fontSize = 28, richText = true };
         nameStyle.normal.textColor = d.color;
-        Label(new Rect(r.x + 16, r.y + 6, 290, 36), $"{d.name}  <size=16>{(d.heavy ? "重装" : "轻装")}</size>", nameStyle);
-        Label(new Rect(r.x + 16, r.y + 42, 290, 26), $"左键 {d.ranged} · 右键 {d.melee}", new GUIStyle(left) { fontSize = 16 });
-        string gun = player.overheated ? "<color=#FF7A5A>过热冷却中</color>" : player.overdriveT > 0f ? $"<color=#7FE8FF>过载 {player.overdriveT:0.0}s</color>" : "不耗能量";
-        Label(new Rect(r.x + 16, r.y + 68, 290, 26), gun, new GUIStyle(left) { fontSize = 16, richText = true });
+        Label(new Rect(r.x + 24, r.y + 8, 360, 36), $"{d.name}  <size=16>{(d.heavy ? "重装机甲" : "轻装机甲")}</size>", nameStyle);
+        Label(new Rect(r.x + 24, r.y + 46, 360, 26), $"左键 {d.ranged} · 右键 {d.melee}", new GUIStyle(left) { fontSize = 16 });
+        string gun = player.overheated ? "<color=#FF7A5A>过热冷却中</color>" : player.overdriveT > 0f ? $"<color=#7FE8FF>超频 {player.overdriveT:0.0}s</color>" : "不耗能量";
+        Label(new Rect(r.x + 24, r.y + 74, 360, 26), gun, new GUIStyle(left) { fontSize = 16, richText = true });
 
-        var sr = new Rect(20, h - 118, 260, 62);
-        Box(sr, new Color(0f, 0f, 0f, 0.45f));
+        var sr = new Rect(20, h - 120, 280, 70);
+        UiKit.DrawPanel(sr);
         float ready = 1f - player.mechSpecialCd / d.specialCooldown;
-        Box(new Rect(sr.x, sr.yMax - 6, sr.width * ready, 6), ready >= 1f ? d.color : new Color(0.5f, 0.5f, 0.6f));
+        UiKit.Bar(new Rect(sr.x + 14, sr.yMax - 16, sr.width - 28, 8), ready, 1f, ready >= 1f ? d.color : new Color(0.5f, 0.5f, 0.6f));
         Label(new Rect(sr.x + 14, sr.y + 4, sr.width - 20, 30), $"{d.special}  <size=15>F</size>", new GUIStyle(left) { fontSize = 22, richText = true });
         Label(new Rect(sr.x + 14, sr.y + 32, sr.width - 20, 24), player.mechSpecialCd > 0f ? $"冷却 {player.mechSpecialCd:0.0}s" : "就绪", new GUIStyle(left) { fontSize = 16 });
     }
@@ -348,13 +449,20 @@ public class Hud : MonoBehaviour
     {
         var s = player ? player.skill : null;
         if (s == null || s.def == null) return;
-        var r = new Rect(20, h - 118, 260, 62);
-        Box(r, new Color(0f, 0f, 0f, 0.45f));
+        var r = new Rect(20, h - 120, 280, 90);
+        UiKit.DrawPanel(r);
         float ready = s.def.cooldown <= 0f ? 1f : 1f - s.cooldownLeft / s.def.cooldown;
-        Box(new Rect(r.x, r.yMax - 6, r.width * ready, 6), s.Active ? new Color(1f, 0.85f, 0.3f) : ready >= 1f ? new Color(0.45f, 0.95f, 1f) : new Color(0.5f, 0.5f, 0.6f));
-        string state = s.Active ? $"生效中 {s.activeLeft:0.0}s" : s.cooldownLeft > 0f ? $"冷却 {s.cooldownLeft:0.0}s" : "就绪";
-        Label(new Rect(r.x + 14, r.y + 4, r.width - 20, 30), $"{s.def.skillName}  <size=15>右键 / F</size>", new GUIStyle(left) { fontSize = 22, richText = true });
-        Label(new Rect(r.x + 14, r.y + 32, r.width - 20, 24), state, new GUIStyle(left) { fontSize = 16 });
+        var cc = ClassColor(s.def.id);
+        // A key badge that fills up as the skill comes back.
+        var key = new Rect(r.x + 12, r.y + 14, 62, 62);
+        GUI.DrawTexture(key, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, (ready >= 1f ? cc * 0.6f : new Color(0.2f, 0.2f, 0.25f)).linear, 0f, 12f);
+        if (ready < 1f) UiKit.Fill(new Rect(key.x, key.yMax - key.height * ready, key.width, key.height * ready), cc * 0.45f);
+        GUI.DrawTexture(key, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, (s.Active ? new Color(1f, 0.85f, 0.3f) : UiKit.Gold).linear, 2f, 12f);
+        UiKit.Text(key, ready >= 1f ? "F" : $"{s.cooldownLeft:0}", new GUIStyle(center) { fontSize = 26 });
+        string state = s.Active ? $"<color=#FFD45A>生效中 {s.activeLeft:0.0}s</color>" : s.cooldownLeft > 0f ? $"冷却 {s.cooldownLeft:0.0}s" : "<color=#7FE8FF>就绪</color>";
+        UiKit.Text(new Rect(r.x + 86, r.y + 10, 190, 34), s.def.skillName, new GUIStyle(left) { fontSize = 24 }, cc);
+        UiKit.Text(new Rect(r.x + 86, r.y + 44, 190, 22), $"右键 / F · {state}", new GUIStyle(left) { fontSize = 15 });
+        UiKit.Text(new Rect(r.x + 86, r.y + 64, 190, 20), $"冷却 {s.def.cooldown:0} 秒", new GUIStyle(left) { fontSize = 13 }, UiKit.Dim);
     }
 
     public void OpenSettings()
@@ -387,24 +495,25 @@ public class Hud : MonoBehaviour
     bool ToggleRow(float y, float x, string label, bool value)
     {
         Label(new Rect(x, y, 240, 32), label, new GUIStyle(left) { fontSize = 19 });
-        if (GUI.Button(new Rect(x + 250, y + 2, 110, 28), value ? "开" : "关", button)) return !value;
+        if (Btn(new Rect(x + 250, y + 2, 110, 28), value ? "开" : "关", button)) return !value;
         return value;
     }
 
     int ChoiceRow(float y, float x, string label, int value, string[] names)
     {
         Label(new Rect(x, y, 240, 32), label, new GUIStyle(left) { fontSize = 19 });
-        if (GUI.Button(new Rect(x + 250, y + 2, 34, 28), "<", button)) value = (value + names.Length - 1) % names.Length;
+        if (Btn(new Rect(x + 250, y + 2, 34, 28), "<", button)) value = (value + names.Length - 1) % names.Length;
         Label(new Rect(x + 290, y, 190, 32), names[value], new GUIStyle(center) { fontSize = 18 });
-        if (GUI.Button(new Rect(x + 486, y + 2, 34, 28), ">", button)) value = (value + 1) % names.Length;
+        if (Btn(new Rect(x + 486, y + 2, 34, 28), ">", button)) value = (value + 1) % names.Length;
         return value;
     }
 
     /// Comfort settings based on the motion-sickness checklist the user shared.
     void DrawSettings(float w, float h)
     {
-        Box(new Rect(0, 0, w, h), new Color(0f, 0f, 0f, 0.82f));
-        Label(new Rect(0, 18, w, 56), "设置 · 防晕 3D", new GUIStyle(title) { fontSize = 40 });
+        UiKit.Rect(new Rect(0, 0, w, h), new Color(0.02f, 0.02f, 0.05f, 0.85f));
+        UiKit.DrawPanel(new Rect(w / 2 - 370, 70, 740, h - 150));
+        UiKit.Text(new Rect(0, 18, w, 56), "设置 · 防晕 3D", new GUIStyle(title) { fontSize = 40 }, UiKit.Gold);
         float x = w / 2 - 330, y = 86, row = 38;
         GameSettings.fov = Mathf.Round(SliderRow(y, x, "视野 FOV（大一些更不晕）", GameSettings.fov, 55f, 90f, $"{GameSettings.fov:0}°")); y += row;
         GameSettings.sensitivity = SliderRow(y, x, "鼠标灵敏度", GameSettings.sensitivity, 0.3f, 3f, $"{GameSettings.sensitivity:0.0}×"); y += row;
@@ -427,7 +536,7 @@ public class Hud : MonoBehaviour
             "依据「解决晕 3D」：降延迟（关垂直同步、帧率 ≥ 80）、不用鼠标平滑、画面别太大（建议窗口宽度不超过观看距离的一半）、关运动模糊和景深、视野调大、减少闪烁和抖动。",
             new GUIStyle(small) { fontSize = 16, wordWrap = true });
         if (GUI.changed) SettingsChanged?.Invoke();
-        if (GUI.Button(new Rect(w / 2 - 110, h - 70, 220, 50), "返回", button) || Input.GetKeyDown(KeyCode.Escape))
+        if (Btn(new Rect(w / 2 - 110, h - 70, 220, 50), "返回", button) || Input.GetKeyDown(KeyCode.Escape))
         {
             GameSettings.Save();
             SettingsChanged?.Invoke();
@@ -439,17 +548,72 @@ public class Hud : MonoBehaviour
     {
         var cur = player.Weapon;
         var other = player.weapons[1 - player.slot];
-        var r = new Rect(w - 330, h - 150, 310, 100);
-        Box(r, new Color(0f, 0f, 0f, 0.45f));
-        Box(new Rect(r.x, r.y, 5, r.height), Weapons.RarityColors[cur.rarity]);
-        var nameStyle = new GUIStyle(left) { fontSize = 28 };
-        nameStyle.normal.textColor = Weapons.RarityColors[cur.rarity];
-        string tag = cur.chargeable || cur.kind == WeaponKind.Charge ? "  <size=15><color=#FFD27A>可蓄力</color></size>" : "";
-        Label(new Rect(r.x + 16, r.y + 6, 290, 36), $"{cur.name}  <size=16>{Weapons.RarityNames[cur.rarity]}</size>{tag}", new GUIStyle(nameStyle) { richText = true });
+        var r = new Rect(w - 470, h - 142, 450, 112);
+        UiKit.DrawPanel(r);
+        var rc = Weapons.RarityColors[cur.rarity];
+        UiKit.Fill(new Rect(r.x + 10, r.y + 12, 4, r.height - 24), rc);
+        var icon = IconStudio.I ? IconStudio.I.Weapon(cur.id) : null;
+        if (icon) GUI.DrawTexture(new Rect(r.x + 18, r.y + 14, 140, 84), icon, ScaleMode.ScaleToFit);
+        float tx = r.x + 168;
+        string tag = cur.chargeable || cur.kind == WeaponKind.Charge ? "  <size=14><color=#FFD27A>可蓄力</color></size>" : "";
+        UiKit.Text(new Rect(tx, r.y + 6, 270, 38), $"{cur.name}{tag}", new GUIStyle(left) { fontSize = 28 }, rc);
+        UiKit.Text(new Rect(tx, r.y + 42, 270, 22), $"{cur.type} · {Weapons.RarityNames[cur.rarity]}", new GUIStyle(left) { fontSize = 15 }, UiKit.Dim);
+        UiKit.Text(new Rect(tx, r.y + 62, 274, 22), cur.desc, new GUIStyle(left) { fontSize = 14, clipping = TextClipping.Clip });
         string cost = cur.energyPerSec > 0f ? $"每秒 {cur.energyPerSec:0} 能量" : cur.energy > 0 ? $"每次 {cur.energy} 能量" : "不耗能量";
-        Label(new Rect(r.x + 16, r.y + 42, 290, 26), cur.desc, new GUIStyle(left) { fontSize = 16 });
-        Label(new Rect(r.x + 16, r.y + 68, 290, 26), cost, new GUIStyle(left) { fontSize = 16 });
-        if (other != null) Label(new Rect(w - 330, h - 186, 310, 30), $"Q 切换：{other.name}", new GUIStyle(left) { fontSize = 18 });
+        UiKit.Text(new Rect(tx, r.y + 82, 270, 22), $"伤害 {cur.damage} · {cost}", new GUIStyle(left) { fontSize = 15 }, UiKit.Dim);
+        if (other != null)
+        {
+            var q = new Rect(w - 320, h - 190, 300, 42);
+            GUI.Box(q, GUIContent.none, UiKit.Pill);
+            var qi = IconStudio.I ? IconStudio.I.Weapon(other.id) : null;
+            if (qi) GUI.DrawTexture(new Rect(q.x + 10, q.y + 4, 56, 34), qi, ScaleMode.ScaleToFit);
+            UiKit.Text(new Rect(q.x + 72, q.y, 220, 42), $"<color=#FFD27A>Q</color>  {other.name}  <size=13>{other.type}</size>",
+                new GUIStyle(left) { fontSize = 17 }, Weapons.RarityColors[other.rarity]);
+        }
+    }
+
+    /// Top left: class emblem, segmented health and armour, energy; then a strip with floor, kills, gold.
+    void DrawStatus()
+    {
+        float y0 = 16f;
+        if (player.InMech)
+        {
+            // The mech's durability is spent first, so it sits on top.
+            var mr = new Rect(16, y0, 340, 38);
+            UiKit.DrawPanel(mr);
+            UiKit.Text(new Rect(mr.x + 14, mr.y, 110, 38), $"机甲 · {player.mechDef.name}", new GUIStyle(left) { fontSize = 16 }, player.mechDef.color);
+            UiKit.Bar(new Rect(mr.x + 116, mr.y + 11, 156, 16), player.mechHp, player.mechDef.maxHp, player.mechDef.color * 0.85f);
+            UiKit.Text(new Rect(mr.x + 280, mr.y, 60, 38), $"{player.mechHp}/{player.mechDef.maxHp}", new GUIStyle(left) { fontSize = 15 });
+            y0 += 44f;
+        }
+        var r = new Rect(16, y0, 340, 108);
+        UiKit.DrawPanel(r);
+        // Class emblem: a coloured disc with the class's key character.
+        var cls = Classes.Get(RunState.classId);
+        var cc = ClassColor(cls.id);
+        var disc = new Rect(r.x + 12, r.y + 19, 70, 70);
+        GUI.DrawTexture(disc, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, (cc * 0.55f).linear, 0f, 35f);
+        GUI.DrawTexture(disc, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, UiKit.Gold.linear, 2.5f, 35f);
+        UiKit.Text(disc, cls.name.Substring(cls.name.Length - 2, 1), new GUIStyle(center) { fontSize = 32 });
+        float bx = r.x + 94, bw = 180;
+        var lab = new GUIStyle(left) { fontSize = 14 };
+        UiKit.Bar(new Rect(bx, r.y + 14, bw, 20), player.hp, player.maxHp, new Color(0.86f, 0.2f, 0.25f), player.maxHp <= 14 ? player.maxHp : 0);
+        UiKit.Text(new Rect(bx + bw + 8, r.y + 10, 60, 28), $"{player.hp}/{player.maxHp}", lab);
+        UiKit.Bar(new Rect(bx, r.y + 44, bw, 20), player.armor, player.maxArmor, new Color(0.62f, 0.68f, 0.8f), player.maxArmor <= 14 ? player.maxArmor : 0);
+        UiKit.Text(new Rect(bx + bw + 8, r.y + 40, 60, 28), $"{player.armor}/{player.maxArmor}", lab);
+        UiKit.Bar(new Rect(bx, r.y + 74, bw, 20), player.energy, player.maxEnergy, new Color(0.25f, 0.55f, 1f));
+        UiKit.Text(new Rect(bx + bw + 8, r.y + 70, 60, 28), $"{player.energy}", lab);
+        // Floor · kills · gold, and how many are left in the room.
+        var strip = new Rect(16, r.yMax + 6, 340, 32);
+        GUI.Box(strip, GUIContent.none, UiKit.Pill);
+        UiKit.Text(new Rect(strip.x + 14, strip.y, 330, 32),
+            $"第 {RunState.floor}/{RunState.Floors} 层 · {themeName}   击杀 {RunState.kills}   <color=#FFD45A>金币 {RunState.gold}</color>", new GUIStyle(left) { fontSize = 15 });
+        if (enemiesLeft >= 0)
+        {
+            var er = new Rect(16, strip.yMax + 6, 170, 30);
+            GUI.Box(er, GUIContent.none, UiKit.Pill);
+            UiKit.Text(new Rect(er.x + 14, er.y, 160, 30), $"<color=#FF7A6A>剩余敌人 {enemiesLeft}</color>", new GUIStyle(left) { fontSize = 15 });
+        }
     }
 
     void DrawCrosshair(float w, float h)
@@ -495,7 +659,8 @@ public class Hud : MonoBehaviour
             Vector3 sp = cam.WorldToScreenPoint(head);
             if (sp.z < 0.5f || sp.z > 40f) continue;
             float x = sp.x, y = UnityEngine.Screen.height - sp.y;
-            Label(new Rect(x - 90, y - 34, 180, 24), $"<color=#{ColorUtility.ToHtmlStringRGB(e.EliteColor)}>{e.EliteName}</color>", tag);
+            Label(new Rect(x - 110, y - 50, 220, 22), $"<color=#{ColorUtility.ToHtmlStringRGB(e.EliteColor)}>{e.EliteName}</color>", tag);
+            Label(new Rect(x - 110, y - 30, 220, 20), e.KindName, new GUIStyle(tag) { fontSize = 14 });
             Box(new Rect(x - 40, y - 8, 80, 5), new Color(0f, 0f, 0f, 0.5f));
             Box(new Rect(x - 40, y - 8, 80f * e.hp / Mathf.Max(1, e.maxHp), 5), new Color(0.9f, 0.25f, 0.25f));
             if (e.maxShield > 0 && e.shield > 0)
@@ -521,47 +686,60 @@ public class Hud : MonoBehaviour
     {
         var b = Enemy.ActiveBoss;
         if (!b || b.dead) return;
-        var r = new Rect(w / 2 - 300, 24, 600, 22);
-        Box(r, new Color(0f, 0f, 0f, 0.6f));
-        Box(new Rect(r.x + 2, r.y + 2, (r.width - 4) * Mathf.Clamp01(b.hp / (float)b.maxHp), r.height - 4), new Color(0.85f, 0.15f, 0.2f));
-        string state = b.Stunned ? " · 眩晕（伤害翻倍）" : b.Enraged ? " · 狂暴" : "";
-        Label(new Rect(r.x, r.y + 22, r.width, 30), b.displayName + state, new GUIStyle(center) { fontSize = 20 });
+        var panel = new Rect(w / 2 - 330, 14, 660, 64);
+        UiKit.DrawPanel(panel);
+        string state = b.Stunned ? "  <color=#7FE8FF>眩晕 · 伤害翻倍</color>" : b.Enraged ? "  <color=#FF6A5A>狂暴</color>" : "";
+        UiKit.Text(new Rect(panel.x, panel.y + 4, panel.width, 28), b.displayName + state, new GUIStyle(center) { fontSize = 20 }, new Color(1f, 0.55f, 0.5f));
+        UiKit.Bar(new Rect(panel.x + 20, panel.y + 36, panel.width - 40, 16), b.hp, b.maxHp, b.Enraged ? new Color(1f, 0.3f, 0.15f) : new Color(0.86f, 0.15f, 0.2f));
     }
 
     void DrawBuffs(float w, float h)
     {
-        Box(new Rect(0, 0, w, h), new Color(0f, 0f, 0f, 0.6f));
-        Label(new Rect(0, h * 0.18f, w, 70), $"第 {RunState.floor} 层 · 选择一个增益", title);
-        float cw = 300, ch = 220, gap = 30;
+        UiKit.Rect(new Rect(0, 0, w, h), new Color(0.02f, 0.02f, 0.05f, 0.65f));
+        UiKit.Text(new Rect(0, h * 0.16f, w, 70), $"第 {RunState.floor} 层 · 选择一份祝福", new GUIStyle(title) { fontSize = 46 }, UiKit.Gold);
+        float cw = 300, ch = 240, gap = 30;
         float x0 = w / 2 - (cw * offer.Count + gap * (offer.Count - 1)) / 2;
+        var mouse = Event.current.mousePosition;
         for (int i = 0; i < offer.Count; i++)
         {
-            var r = new Rect(x0 + i * (cw + gap), h * 0.36f, cw, ch);
-            if (GUI.Button(r, $"{i + 1}. {offer[i].name}\n\n{offer[i].desc}", button)) PickBuff(i);
+            var r = new Rect(x0 + i * (cw + gap), h * 0.34f, cw, ch);
+            bool over = r.Contains(mouse);
+            GUI.Box(r, GUIContent.none, over ? UiKit.CardHover : UiKit.Card);
+            UiKit.Text(new Rect(r.x, r.y + 18, r.width, 30), $"{i + 1}", new GUIStyle(center) { fontSize = 22 }, UiKit.Dim);
+            UiKit.Text(new Rect(r.x, r.y + 50, r.width, 50), offer[i].name, new GUIStyle(center) { fontSize = 36 }, UiKit.Gold);
+            UiKit.Text(new Rect(r.x + 24, r.y + 112, r.width - 48, 100), offer[i].desc, new GUIStyle(center) { fontSize = 18, wordWrap = true, fontStyle = FontStyle.Normal });
+            if (offer[i].stackable) UiKit.Text(new Rect(r.x, r.yMax - 36, r.width, 24), "可叠加", new GUIStyle(small) { fontSize = 14 }, UiKit.Dim);
+            if (Event.current.type == EventType.MouseDown && over)
+            {
+                Sfx.Play("ui_click", 0.7f, 0.02f);
+                PickBuff(i);
+                Event.current.Use();
+                return;
+            }
         }
-        Label(new Rect(0, h * 0.36f + ch + 20, w, 30), "点击卡片或按 1 / 2 / 3", small);
+        UiKit.Text(new Rect(0, h * 0.34f + ch + 20, w, 30), "点击卡片或按 1 / 2 / 3", small);
     }
 
     void DrawMenu(float w, float h, string heading, string primary, System.Action primaryAction)
     {
-        Box(new Rect(0, 0, w, h), new Color(0f, 0f, 0f, 0.6f));
+        UiKit.Rect(new Rect(0, 0, w, h), new Color(0.02f, 0.02f, 0.05f, 0.62f));
         bool over = screen == Screen.Dead || screen == Screen.Won;
-        float top = over ? h * 0.12f : h * 0.25f;
-        Label(new Rect(0, top, w, 80), heading, title);
+        float top = over ? h * 0.10f : h * 0.22f;
+        UiKit.Text(new Rect(0, top, w, 80), heading, new GUIStyle(title) { fontSize = 58 }, screen == Screen.Dead ? new Color(1f, 0.45f, 0.4f) : UiKit.Gold);
         float y = h * 0.48f;
         if (over) y = DrawSummary(w, top + 90f) + 20f;
         else Label(new Rect(0, top + 80, w, 30), $"到达第 {RunState.floor} 层 · 击杀 {RunState.kills}", small);
-        if (GUI.Button(new Rect(w / 2 - 140, y, 280, 56), primary, button)) primaryAction?.Invoke();
-        if (screen == Screen.Pause && GUI.Button(new Rect(w / 2 - 140, y + 70, 280, 56), "重新开始", button)) Restart?.Invoke();
-        if (screen == Screen.Pause && GUI.Button(new Rect(w / 2 - 140, y + 140, 280, 56), "设置 · 防晕 3D", button)) OpenSettings();
-        if (GUI.Button(new Rect(w / 2 - 140, y + (screen == Screen.Pause ? 210 : 70), 280, 56), "退出游戏", button)) Quit?.Invoke();
+        if (Btn(new Rect(w / 2 - 140, y, 280, 56), primary, button)) primaryAction?.Invoke();
+        if (screen == Screen.Pause && Btn(new Rect(w / 2 - 140, y + 70, 280, 56), "重新开始", button)) Restart?.Invoke();
+        if (screen == Screen.Pause && Btn(new Rect(w / 2 - 140, y + 140, 280, 56), "设置 · 防晕 3D", button)) OpenSettings();
+        if (Btn(new Rect(w / 2 - 140, y + (screen == Screen.Pause ? 210 : 70), 280, 56), "退出游戏", button)) Quit?.Invoke();
     }
 
     /// End-of-run card: time, progress, combat numbers, the weapons you carried and the buffs you chose.
     float DrawSummary(float w, float y)
     {
-        var panel = new Rect(w / 2 - 330, y, 660, 250);
-        Box(panel, new Color(0.08f, 0.08f, 0.12f, 0.85f));
+        var panel = new Rect(w / 2 - 340, y, 680, 250);
+        UiKit.DrawPanel(panel);
         int secs = Mathf.FloorToInt(RunState.runTime);
         var cls = Classes.Get(RunState.classId);
         var big = new GUIStyle(left) { fontSize = 20, richText = true };
@@ -591,8 +769,11 @@ public class Hud : MonoBehaviour
         if (!dungeon || !player) return;
         const float scale = 0.9f; // pixels per metre
         const float size = 240f;
-        var panel = new Rect(screenW - size - 20, 20, size, size);
-        Box(panel, new Color(0f, 0f, 0f, 0.35f));
+        var frame = new Rect(screenW - size - 28, 12, size + 16, size + 44);
+        UiKit.DrawPanel(frame);
+        UiKit.Text(new Rect(frame.x, frame.y + 4, frame.width, 26), themeName, new GUIStyle(center) { fontSize = 15 }, UiKit.Gold);
+        var panel = new Rect(screenW - size - 20, 40, size, size);
+        UiKit.Rect(panel, new Color(0f, 0f, 0f, 0.35f));
         Vector3 c = player.transform.position;
 
         Rect ToMap(Vector3 min, Vector3 max)

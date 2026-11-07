@@ -96,6 +96,7 @@ public class GameManager : MonoBehaviour
         player.skill.Setup(player, Classes.Get(RunState.classId));
         player.yaw = dungeon.startYaw;
         Pet.Spawn(player, RunState.floor);
+        IconStudio.Create();
         hud.player = player;
         dungeon.SetPlayer(player);
         Vfx.Ambient(theme.particles, player.transform);
@@ -174,9 +175,10 @@ public class GameManager : MonoBehaviour
     {
         TimeControl.Apply();
         if (Scripted || !hud) return;
-        if (hud.screen == Hud.Screen.Title)
+        if (hud.screen == Hud.Screen.Title || hud.screen == Hud.Screen.ClassSelect)
         {
-            player.yaw += 8f * Time.deltaTime;
+            // A slow orbit behind the menus (slow on purpose: no motion sickness).
+            player.yaw += 4f * Time.unscaledDeltaTime;
             return;
         }
         if (Input.GetKeyDown(KeyCode.Escape))
