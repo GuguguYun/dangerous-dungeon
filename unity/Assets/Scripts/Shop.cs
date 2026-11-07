@@ -4,7 +4,7 @@ using UnityEngine;
 /// One thing for sale on a shop pedestal: walk up, press E, pay in gold.
 public class ShopItem : MonoBehaviour
 {
-    public enum Kind { Weapon, Potion, Energy, Buff }
+    public enum Kind { Weapon, Potion, Energy, Buff, Upgrade }
 
     public static readonly List<ShopItem> Live = new List<ShopItem>();
     public Kind kind;
@@ -23,6 +23,7 @@ public class ShopItem : MonoBehaviour
         Kind.Weapon => $"{weapon.name}（{weapon.type}）",
         Kind.Potion => "赤红药剂",
         Kind.Energy => "蓝晶电池",
+        Kind.Upgrade => "武器强化",
         _ => "增益：" + buff.name,
     };
 
@@ -31,6 +32,7 @@ public class ShopItem : MonoBehaviour
         Kind.Weapon => $"{Weapons.RarityNames[weapon.rarity]} · {weapon.desc}",
         Kind.Potion => "回复 3 点生命（在机甲里则修理机甲）",
         Kind.Energy => "回复 100 点能量",
+        Kind.Upgrade => PlayerController.Current ? $"手上的「{PlayerController.Current.Weapon.Title}」伤害 +1（这一局都有效，可叠加）" : "手上的武器伤害 +1",
         _ => buff.desc,
     };
 
@@ -39,6 +41,7 @@ public class ShopItem : MonoBehaviour
         Kind.Weapon => Weapons.RarityColors[weapon.rarity],
         Kind.Potion => new Color(1f, 0.35f, 0.4f),
         Kind.Energy => new Color(0.35f, 0.6f, 1f),
+        Kind.Upgrade => new Color(1f, 0.55f, 0.25f),
         _ => new Color(1f, 0.85f, 0.35f),
     };
 
@@ -65,6 +68,7 @@ public class ShopItem : MonoBehaviour
             Kind.Weapon => new[] { 12, 20, 32, 48, 70 }[w.rarity],
             Kind.Potion => 12,
             Kind.Energy => 8,
+            Kind.Upgrade => 22,
             _ => 30,
         };
         item.visual = new GameObject("ware").transform;
@@ -78,6 +82,7 @@ public class ShopItem : MonoBehaviour
                 break;
             case Kind.Potion: Orb(item.visual, 0.42f, "pickup_health"); break;
             case Kind.Energy: Orb(item.visual, 0.32f, "pickup_energy"); break;
+            case Kind.Upgrade: Orb(item.visual, 0.3f, "embers"); break;
             default: Orb(item.visual, 0.3f, "pickup_gold"); break;
         }
         item.glow = new GameObject("glow").AddComponent<Light>();
@@ -121,6 +126,7 @@ public class ShopItem : MonoBehaviour
             case Kind.Weapon: Pickup.Spawn(PickupKind.Weapon, transform.position + Vector3.back * 0.01f, 0, weapon); break;
             case Kind.Potion: p.Heal(3); break;
             case Kind.Energy: p.AddEnergy(100); break;
+            case Kind.Upgrade: p.UpgradeWeapon(); break;
             default: Buffs.Take(buff, p); break;
         }
         Vfx.Sparks(transform.position + Vector3.up * 1.35f, Tint, 14, 4f);
@@ -172,11 +178,12 @@ public static class Shop
         var w = Weapons.RandomExcept(owned);
         var offers = Buffs.Offer(1);
         Vector3 row = center - toDoor * 0.6f;
-        ShopItem.Create(ShopItem.Kind.Weapon, row - side * 2.4f, parent, w);
-        ShopItem.Create(ShopItem.Kind.Potion, row - side * 0.8f, parent);
-        ShopItem.Create(ShopItem.Kind.Energy, row + side * 0.8f, parent);
-        if (offers.Count > 0) ShopItem.Create(ShopItem.Kind.Buff, row + side * 2.4f, parent, null, offers[0]);
-        else ShopItem.Create(ShopItem.Kind.Potion, row + side * 2.4f, parent);
+        ShopItem.Create(ShopItem.Kind.Weapon, row - side * 3.2f, parent, w);
+        ShopItem.Create(ShopItem.Kind.Potion, row - side * 1.6f, parent);
+        ShopItem.Create(ShopItem.Kind.Energy, row, parent);
+        ShopItem.Create(ShopItem.Kind.Upgrade, row + side * 1.6f, parent);
+        if (offers.Count > 0) ShopItem.Create(ShopItem.Kind.Buff, row + side * 3.2f, parent, null, offers[0]);
+        else ShopItem.Create(ShopItem.Kind.Potion, row + side * 3.2f, parent);
     }
 }
 

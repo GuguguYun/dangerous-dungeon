@@ -12,6 +12,8 @@ public class WeaponDef
 {
     public string id, name;
     public string type; // what it is (双匕首, 霰弹枪 ...): shown under the name
+    public int level;   // shop upgrades (+1 damage each)
+    public string Title => level > 0 ? $"{name} +{level}" : name;
     public WeaponKind kind = WeaponKind.Gun;
     public int rarity; // 0 white, 1 green, 2 blue, 3 purple, 4 orange
     public int damage = 1;
@@ -82,6 +84,19 @@ public static class Weapons
     };
 
     public static WeaponDef Get(string id) => All.Find(w => w.id == id);
+
+    /// The weapon as the player holds it: a copy with this run's shop upgrades (+1 damage per level).
+    public static WeaponDef Held(string id)
+    {
+        var w = Get(id);
+        if (w == null) return null;
+        int level = RunState.LevelOf(id);
+        if (level == 0) return w;
+        var c = w.Clone();
+        c.damage += level;
+        c.level = level;
+        return c;
+    }
 
     /// A weapon the player doesn't hold; deeper floors lean towards rarer ones.
     public static WeaponDef RandomExcept(params string[] owned)

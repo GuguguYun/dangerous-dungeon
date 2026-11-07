@@ -245,6 +245,7 @@ public class Hud : MonoBehaviour
 
         DrawCrosshair(w, h);
         DrawEliteTags();
+        DrawLootTags();
         DrawNumbers();
         DrawBoss(w);
         DrawMinimap(w);
@@ -570,7 +571,7 @@ public class Hud : MonoBehaviour
         if (icon) GUI.DrawTexture(new Rect(r.x + 18, r.y + 14, 140, 84), icon, ScaleMode.ScaleToFit);
         float tx = r.x + 168;
         string tag = cur.chargeable || cur.kind == WeaponKind.Charge ? "  <size=14><color=#FFD27A>可蓄力</color></size>" : "";
-        UiKit.Text(new Rect(tx, r.y + 6, 270, 38), $"{cur.name}{tag}", new GUIStyle(left) { fontSize = 28 }, rc);
+        UiKit.Text(new Rect(tx, r.y + 6, 270, 38), $"{cur.Title}{tag}", new GUIStyle(left) { fontSize = 28 }, rc);
         UiKit.Text(new Rect(tx, r.y + 42, 270, 22), $"{cur.type} · {Weapons.RarityNames[cur.rarity]}", new GUIStyle(left) { fontSize = 15 }, UiKit.Dim);
         UiKit.Text(new Rect(tx, r.y + 62, 274, 22), cur.desc, new GUIStyle(left) { fontSize = 14, clipping = TextClipping.Clip });
         string cost = cur.energyPerSec > 0f ? $"每秒 {cur.energyPerSec:0} 能量" : cur.energy > 0 ? $"每次 {cur.energy} 能量" : "不耗能量";
@@ -660,6 +661,24 @@ public class Hud : MonoBehaviour
         }
     }
 
+    /// Names over weapons lying on the floor nearby, in their rarity colour.
+    void DrawLootTags()
+    {
+        var cam = Camera.main;
+        if (!cam || !player || screen != Screen.None) return;
+        var st = new GUIStyle(center) { fontSize = 16 };
+        foreach (var p in Pickup.Live)
+        {
+            if (p.kind != PickupKind.Weapon || p.weapon == null) continue;
+            if (Vector3.Distance(p.transform.position, player.transform.position) > 12f) continue;
+            // White text just above the floating weapon (the beam behind is already the rarity colour).
+            Vector3 sp = cam.WorldToScreenPoint(p.transform.position + Vector3.up * 1.15f);
+            if (sp.z < 0.5f) continue;
+            UiKit.Text(new Rect(sp.x - 80, UnityEngine.Screen.height - sp.y - 12, 160, 24),
+                $"<color=#{ColorUtility.ToHtmlStringRGB(Weapons.RarityColors[p.weapon.rarity])}>●</color> {p.weapon.name}", st, Color.white);
+        }
+    }
+
     /// Name tags (and the shield gauge) over elite enemies that are on screen.
     void DrawEliteTags()
     {
@@ -744,7 +763,18 @@ public class Hud : MonoBehaviour
         UiKit.Text(new Rect(0, top, w, 80), heading, new GUIStyle(title) { fontSize = 58 }, screen == Screen.Dead ? new Color(1f, 0.45f, 0.4f) : UiKit.Gold);
         float y = h * 0.48f;
         if (over) y = DrawSummary(w, top + 90f) + 20f;
-        else Label(new Rect(0, top + 80, w, 30), $"到达第 {RunState.floor} 层 · 击杀 {RunState.kills}", small);
+        else if (player)
+        {
+            // What you are carrying: both weapons (with upgrades), gold, the blessings so far.
+            var pr = new Rect(w / 2 - 300, top + 84, 600, 92);
+            UiKit.DrawPanel(pr);
+            string Wpn(WeaponDef d) => d == null ? "—" : $"<color=#{ColorUtility.ToHtmlStringRGB(Weapons.RarityColors[d.rarity])}>{d.Title}</color>";
+            UiKit.Text(new Rect(pr.x + 20, pr.y + 8, 560, 26), $"第 {RunState.floor}/{RunState.Floors} 层 · 击杀 {RunState.kills} · <color=#FFD45A>金币 {RunState.gold}</color> · 武器 {Wpn(player.weapons[0])}、{Wpn(player.weapons[1])}", new GUIStyle(left) { fontSize = 16 });
+            var names = new List<string>();
+            foreach (var id in RunState.buffs) { var b = Buffs.All.Find(d => d.id == id); names.Add(b != null ? b.name : id); }
+            UiKit.Text(new Rect(pr.x + 20, pr.y + 40, 560, 44), "祝福：" + (names.Count > 0 ? string.Join("、", names) : "—"), new GUIStyle(left) { fontSize = 16, wordWrap = true, alignment = TextAnchor.UpperLeft });
+            y = Mathf.Max(y, pr.yMax + 24);
+        }
         if (Btn(new Rect(w / 2 - 140, y, 280, 56), primary, button)) primaryAction?.Invoke();
         if (screen == Screen.Pause && Btn(new Rect(w / 2 - 140, y + 70, 280, 56), "重新开始", button)) Restart?.Invoke();
         if (screen == Screen.Pause && Btn(new Rect(w / 2 - 140, y + 140, 280, 56), "设置 · 防晕 3D", button)) OpenSettings();

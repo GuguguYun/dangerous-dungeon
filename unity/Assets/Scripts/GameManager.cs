@@ -1261,7 +1261,7 @@ public class GameManager : MonoBehaviour
         if (shop == null) yield break;
         var wares = new System.Collections.Generic.List<ShopItem>(ShopItem.Live);
         var keeper = GameObject.Find("merchant");
-        Check("the shop has a merchant and four wares", keeper && wares.Count == 4, $"merchant={(bool)keeper} wares={wares.Count}");
+        Check("the shop has a merchant and five wares", keeper && wares.Count == 5, $"merchant={(bool)keeper} wares={wares.Count}");
         if (!keeper || wares.Count == 0) yield break;
         Vector3 toDoor = shop.Center - keeper.transform.position;
         toDoor.y = 0f;
@@ -1293,6 +1293,13 @@ public class GameManager : MonoBehaviour
         Check("buying a weapon puts it on the floor", bought && Pickup.Live.FindAll(p => p.kind == PickupKind.Weapon).Count == before + 1 && RunState.gold == gold1 - gun.price,
             $"bought={bought} price={gun.price} gold={RunState.gold}");
         foreach (var p in Pickup.Live.ToArray()) if (p.kind == PickupKind.Weapon && p.weapon == gun.weapon) Destroy(p.gameObject);
+        // Weapon upgrade: +1 damage on the held weapon, remembered for the run.
+        var upgrade = wares.Find(w => w.kind == ShopItem.Kind.Upgrade);
+        RunState.gold = 100;
+        int dmg0 = player.Weapon.damage, lvl0 = RunState.LevelOf(player.Weapon.id);
+        Check("the weapon upgrade adds +1 damage for the run", upgrade.Buy(player) && player.Weapon.damage == dmg0 + 1 && RunState.LevelOf(player.Weapon.id) == lvl0 + 1 && player.Weapon.Title.Contains("+"),
+            $"damage {dmg0} -> {player.Weapon.damage} title={player.Weapon.Title}");
+        Check("upgrades never touch the shared weapon table", Weapons.Get(player.Weapon.id).damage == dmg0 - lvl0, $"table={Weapons.Get(player.Weapon.id).damage}");
         RunState.gold = g0;
         player.hp = player.maxHp;
         player.Teleport(dungeon.playerStart);

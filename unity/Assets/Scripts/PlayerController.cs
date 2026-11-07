@@ -177,8 +177,8 @@ public partial class PlayerController : MonoBehaviour
         cls = Classes.Get(RunState.classId);
         Speed = cls.speed;
         ArmorDelay = cls.armorDelay;
-        weapons[0] = Weapons.Get(RunState.weapons[0]);
-        weapons[1] = RunState.weapons[1] != null ? Weapons.Get(RunState.weapons[1]) : null;
+        weapons[0] = Weapons.Held(RunState.weapons[0]);
+        weapons[1] = RunState.weapons[1] != null ? Weapons.Held(RunState.weapons[1]) : null;
         slot = weapons[RunState.slot] != null ? RunState.slot : 0;
         RunState.SawWeapon(weapons[0]?.id);
         RunState.SawWeapon(weapons[1]?.id);
@@ -222,7 +222,7 @@ public partial class PlayerController : MonoBehaviour
         int target = weapons[1 - slot] == null ? 1 - slot : slot;
         if (target == slot)
             Pickup.Spawn(PickupKind.Weapon, transform.position + model.forward * 1.2f, 0, old);
-        weapons[target] = p.weapon;
+        weapons[target] = Weapons.Held(p.weapon.id) ?? p.weapon;
         slot = target;
         RunState.SawWeapon(p.weapon.id);
         Destroy(p.gameObject);
@@ -1047,6 +1047,14 @@ public partial class PlayerController : MonoBehaviour
     }
 
     void ClearBoomerang() => boomerangOut = false;
+
+    /// Shop upgrade: the held weapon gets +1 damage for the rest of the run.
+    public void UpgradeWeapon()
+    {
+        var id = Weapon.id;
+        RunState.weaponLevels[id] = RunState.LevelOf(id) + 1;
+        weapons[slot] = Weapons.Held(id);
+    }
 
     /// Put a weapon in the current slot (self-test).
     public void Equip(WeaponDef w)

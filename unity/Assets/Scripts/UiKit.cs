@@ -137,7 +137,7 @@ public static class UiKit
     {
         var s = new GUIStyle(style) { richText = true };
         var shadow = new GUIStyle(s);
-        shadow.normal.textColor = new Color(0f, 0f, 0f, 0.75f);
+        shadow.normal.textColor = new Color(0f, 0f, 0f, 0.75f * (color.HasValue ? color.Value.a : 1f)); // fades with the text
         string plain = StripColor(text);
         GUI.Label(new Rect(r.x + 2, r.y + 2, r.width, r.height), plain, shadow);
         GUI.Label(new Rect(r.x - 1, r.y + 1, r.width, r.height), plain, shadow);
