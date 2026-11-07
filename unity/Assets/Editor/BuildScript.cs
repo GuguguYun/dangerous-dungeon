@@ -335,6 +335,21 @@ public static class BuildScript
         var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(texPath);
         Save(Vfx.CreateMaterial(true, tex), $"{dir}/vfx_add.mat");
         Save(Vfx.CreateMaterial(false, tex), $"{dir}/vfx_alpha.mat");
+        // Flames: a noise-streaked texture on an additive particle material.
+        var flamePath = $"{dir}/vfx_flame.png";
+        File.WriteAllBytes(flamePath, Vfx.FlameTexture().EncodeToPNG());
+        AssetDatabase.ImportAsset(flamePath);
+        var fi = (TextureImporter)AssetImporter.GetAtPath(flamePath);
+        fi.alphaIsTransparency = true;
+        fi.wrapMode = TextureWrapMode.Clamp;
+        fi.SaveAndReimport();
+        var fireMat = Vfx.CreateMaterial(true, AssetDatabase.LoadAssetAtPath<Texture2D>(flamePath));
+        fireMat.name = "vfx_fire";
+        Save(fireMat, $"{dir}/vfx_fire.mat");
+        // Force fields (shield, stealth outline): the Meshy/Fresnel shader, kept in the build by this material.
+        var fresnel = Shader.Find("Meshy/Fresnel");
+        if (fresnel) Save(new Material(fresnel) { name = "vfx_fresnel" }, $"{dir}/vfx_fresnel.mat");
+        Debug.Log($"SETUP fresnel shader found={(bool)fresnel}");
         Debug.Log($"SETUP vfx shader={Vfx.CreateMaterial(true, tex).shader.name}");
     }
 

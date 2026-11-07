@@ -10,7 +10,8 @@ public class Shockwave : MonoBehaviour
     float radius, speed, maxRadius;
     int damage;
     bool resolved;
-    LineRenderer line;
+    LineRenderer line, glow, core;
+    float dustT;
 
     public static Shockwave Spawn(Vector3 center, float speed = 9f, float maxRadius = 18f, int damage = 1)
     {
@@ -31,10 +32,27 @@ public class Shockwave : MonoBehaviour
         var c = Palette.ColorOf("shockwave");
         s.line.startColor = s.line.endColor = c * 2.5f;
         s.line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        // A white-hot thin core and a wide faint glow around the orange band.
+        s.core = s.Ring("core", 0.16f, Color.white * 3f);
+        s.glow = s.Ring("glow", 1.5f, new Color(c.r, c.g, c.b, 0.22f) * 1.5f);
         s.Draw();
         Sfx.Play("door", 1f, 0.05f);
         CameraShake.Add(0.3f);
         return s;
+    }
+
+    LineRenderer Ring(string name, float width, Color c)
+    {
+        var lr = new GameObject(name).AddComponent<LineRenderer>();
+        lr.transform.SetParent(transform, false);
+        lr.loop = true;
+        lr.positionCount = Segments;
+        lr.useWorldSpace = false;
+        lr.widthMultiplier = width;
+        lr.sharedMaterial = Palette.Trail("shockwave");
+        lr.startColor = lr.endColor = c;
+        lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        return lr;
     }
 
     void Draw()
@@ -42,14 +60,34 @@ public class Shockwave : MonoBehaviour
         for (int i = 0; i < Segments; i++)
         {
             float a = i * Mathf.PI * 2f / Segments;
-            line.SetPosition(i, new Vector3(Mathf.Cos(a) * radius, 0f, Mathf.Sin(a) * radius));
+            var p = new Vector3(Mathf.Cos(a) * radius, 0f, Mathf.Sin(a) * radius);
+            line.SetPosition(i, p);
+            if (core) core.SetPosition(i, p + Vector3.up * 0.02f);
+            if (glow) glow.SetPosition(i, p - Vector3.up * 0.02f);
         }
+        // Fade out over the last few metres.
+        float fade = Mathf.Clamp01((maxRadius - radius) / 3f);
+        var c = Palette.ColorOf("shockwave");
+        line.startColor = line.endColor = c * 2.5f * new Color(1f, 1f, 1f, fade);
+        if (core) core.startColor = core.endColor = Color.white * 3f * new Color(1f, 1f, 1f, fade);
+        if (glow) glow.startColor = glow.endColor = new Color(c.r, c.g, c.b, 0.22f * fade) * 1.5f;
     }
 
     void Update()
     {
         radius += speed * Time.deltaTime;
         Draw();
+        // Dust kicked up along the front.
+        dustT -= Time.deltaTime;
+        if (dustT <= 0f && radius < maxRadius - 2f)
+        {
+            dustT = 0.15f;
+            for (int i = 0; i < 4; i++)
+            {
+                float a = Random.Range(0f, Mathf.PI * 2f);
+                Vfx.Puff(transform.position + new Vector3(Mathf.Cos(a) * radius, 0.15f, Mathf.Sin(a) * radius), new Color(0.55f, 0.48f, 0.4f, 0.45f), 0.6f, 3);
+            }
+        }
         var p = PlayerController.Current;
         if (p && !p.dead && !resolved)
         {

@@ -115,13 +115,7 @@ public partial class Enemy
 
     void MakeShieldFx()
     {
-        if (!shieldMat)
-        {
-            shieldMat = new Material(Vfx.Additive);
-            var c = new Color(0.3f, 0.7f, 1.4f, 0.25f);
-            if (shieldMat.HasProperty("_BaseColor")) shieldMat.SetColor("_BaseColor", c);
-            shieldMat.color = c;
-        }
+        if (!shieldMat) shieldMat = Vfx.Fresnel(new Color(0.35f, 0.75f, 1.6f), 2f, 0.03f, 0.6f);
         shieldFx = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         Destroy(shieldFx.GetComponent<Collider>());
         shieldFx.name = "elite_shield";

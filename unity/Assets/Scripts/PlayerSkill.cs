@@ -15,6 +15,8 @@ public class PlayerSkill : MonoBehaviour
     Renderer[] ghosted;
     Material[][] saved;
     Material ghostMat, shieldMat;
+    float pulse;
+    ParticleSystem motes;
 
     public bool Active => activeLeft > 0f;
 
@@ -59,7 +61,16 @@ public class PlayerSkill : MonoBehaviour
             shieldFx.transform.position = transform.position + Vector3.up * 0.9f;
             shieldFx.transform.localScale = Vector3.one * (4.4f + Mathf.Sin(Time.time * 10f) * 0.08f);
             foreach (var b in Bullet.Live.ToArray())
-                if (!b.HitsEnemies && Vector3.Distance(b.transform.position, shieldFx.transform.position) < 2.25f) b.Cancel();
+                if (!b.HitsEnemies && Vector3.Distance(b.transform.position, shieldFx.transform.position) < 2.25f)
+                {
+                    // The shield flares where it is struck.
+                    Vfx.Sparks(b.transform.position, new Color(0.5f, 0.9f, 1f), 8, 4f);
+                    Sfx.Play("clank", 0.4f, 0.1f, 1.4f);
+                    pulse = 0.2f;
+                    b.Cancel();
+                }
+            pulse = Mathf.Max(0f, pulse - Time.deltaTime);
+            shieldFx.transform.localScale *= 1f + pulse * 0.25f;
         }
     }
 
@@ -72,13 +83,8 @@ public class PlayerSkill : MonoBehaviour
         shieldFx = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         Destroy(shieldFx.GetComponent<Collider>());
         shieldFx.name = "shield";
-        if (!shieldMat)
-        {
-            shieldMat = new Material(Vfx.Additive);
-            var c = new Color(0.25f, 0.7f, 1.6f, 0.22f);
-            if (shieldMat.HasProperty("_BaseColor")) shieldMat.SetColor("_BaseColor", c);
-            shieldMat.color = c;
-        }
+        // A force field: a bright cyan rim with moving bands, clear in the middle.
+        if (!shieldMat) shieldMat = Vfx.Fresnel(new Color(0.3f, 0.8f, 1.5f), 3.2f, 0f, 0.5f); // rim only: the view stays clear
         var r = shieldFx.GetComponent<Renderer>();
         r.sharedMaterial = shieldMat;
         r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -99,13 +105,8 @@ public class PlayerSkill : MonoBehaviour
         activeLeft = 4f;
         p.stealthed = true;
         Vfx.Puff(transform.position + Vector3.up, new Color(0.5f, 0.3f, 0.7f, 0.6f), 1.2f, 12);
-        if (!ghostMat)
-        {
-            ghostMat = new Material(Vfx.Additive);
-            var c = new Color(0.55f, 0.35f, 1f, 0.18f);
-            if (ghostMat.HasProperty("_BaseColor")) ghostMat.SetColor("_BaseColor", c);
-            ghostMat.color = c;
-        }
+        // Stealth: the body becomes a faint glowing purple outline.
+        if (!ghostMat) ghostMat = Vfx.Fresnel(new Color(0.6f, 0.35f, 1.4f), 1.6f, 0.02f, 0.4f);
         ghosted = p.GetComponentsInChildren<Renderer>();
         saved = new Material[ghosted.Length][];
         for (int i = 0; i < ghosted.Length; i++)
@@ -186,6 +187,9 @@ public class PlayerSkill : MonoBehaviour
         centre.y = 0f;
         const float radius = 4.5f;
         var ring = GroundRing(centre, radius, new Color(1f, 0.85f, 0.35f));
+        var moteHost = new GameObject("sanctuary_motes").transform;
+        moteHost.position = centre + Vector3.up * 0.1f;
+        motes = Vfx.Trail(moteHost, "motes");
         var glow = new GameObject("sanctuary_light").AddComponent<Light>();
         glow.transform.position = centre + Vector3.up * 2f;
         glow.type = LightType.Point;
@@ -224,6 +228,8 @@ public class PlayerSkill : MonoBehaviour
         }
         Destroy(glow.gameObject);
         Destroy(ring.gameObject);
+        Vfx.Detach(motes);
+        Destroy(moteHost.gameObject, 2f);
     }
 
     static LineRenderer GroundRing(Vector3 centre, float radius, Color c)

@@ -165,6 +165,8 @@ public class PoisonCloud : Trap
         c.radius = 3f;
         var fx = Vfx.Trail(go.transform, "gas");
         fx.transform.localPosition = Vector3.up * 0.6f;
+        var bubbles = Vfx.Trail(go.transform, "bubbles");
+        bubbles.transform.localPosition = Vector3.up * 0.15f;
         // A sickly glow on the floor marks how far the cloud reaches.
         var glow = new GameObject("gas_light").AddComponent<Light>();
         glow.transform.SetParent(go.transform, false);

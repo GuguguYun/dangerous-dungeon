@@ -3,10 +3,10 @@ using UnityEngine;
 /// One crackling lightning segment (see Fx.Lightning).
 public class Bolt : MonoBehaviour
 {
-    LineRenderer core, glow;
+    LineRenderer core, glow, halo;
     Vector3 a, b;
     float t, jitterT;
-    const float Life = 0.16f;
+    const float Life = 0.24f;
     const int Points = 12;
 
     public static void Create(Vector3 a, Vector3 b, float coreWidth, float glowWidth, bool main)
@@ -15,8 +15,10 @@ public class Bolt : MonoBehaviour
         var bolt = go.AddComponent<Bolt>();
         bolt.a = a;
         bolt.b = b;
-        bolt.core = Line(go, "core", Color.white * 3f, coreWidth);
-        bolt.glow = Line(go, "glow", Palette.ColorOf("lightning") * 2.5f * new Color(1f, 1f, 1f, 0.4f), glowWidth);
+        bolt.core = Line(go, "core", Color.white * 4f, coreWidth);
+        bolt.glow = Line(go, "glow", Palette.ColorOf("lightning") * 3f * new Color(1f, 1f, 1f, 0.7f), glowWidth);
+        // A wide faint halo so the bolt reads from across the room.
+        bolt.halo = Line(go, "halo", Palette.ColorOf("lightning") * 1.5f * new Color(1f, 1f, 1f, 0.18f), glowWidth * 2.4f);
         bolt.Jitter();
     }
 
@@ -47,6 +49,7 @@ public class Bolt : MonoBehaviour
             }
             core.SetPosition(i, p);
             glow.SetPosition(i, p);
+            halo.SetPosition(i, p);
         }
     }
 
@@ -61,7 +64,11 @@ public class Bolt : MonoBehaviour
         }
         float fade = 1f - t / Life;
         core.widthMultiplier *= 0.98f;
-        glow.startColor = glow.endColor = Palette.ColorOf("lightning") * 2.5f * new Color(1f, 1f, 1f, 0.4f * fade);
+        // Flicker as it fades: lightning strobes rather than dimming smoothly.
+        float flick = Random.value < 0.25f ? 0.35f : 1f;
+        glow.startColor = glow.endColor = Palette.ColorOf("lightning") * 3f * new Color(1f, 1f, 1f, 0.7f * fade * flick);
+        halo.startColor = halo.endColor = Palette.ColorOf("lightning") * 1.5f * new Color(1f, 1f, 1f, 0.18f * fade * flick);
+        core.startColor = core.endColor = Color.white * 4f * new Color(1f, 1f, 1f, Mathf.Clamp01(fade * 1.5f) * flick);
         if (t >= Life) Destroy(gameObject);
     }
 }

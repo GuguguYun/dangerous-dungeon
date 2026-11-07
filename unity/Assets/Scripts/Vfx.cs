@@ -6,11 +6,48 @@ using UnityEngine.Rendering;
 /// BuildScript saves the materials under Resources/VFX so the URP particle shader is kept in builds.
 public static class Vfx
 {
-    static Material add, alpha;
+    static Material add, alpha, fire, fresnelBase;
     static Mesh crystal;
+    static readonly System.Collections.Generic.Dictionary<Color, Material> fresnels = new System.Collections.Generic.Dictionary<Color, Material>();
 
     public static Material Additive => add ? add : add = Load("VFX/vfx_add", true);
     public static Material AlphaBlend => alpha ? alpha : alpha = Load("VFX/vfx_alpha", false);
+    /// Additive with a streaky noise flame texture (flamer, burning, fire pits, meteors).
+    public static Material Fire => fire ? fire : fire = Resources.Load<Material>("VFX/vfx_fire") ?? Additive;
+
+    /// A force-field material in the given colour (bright rim, clear middle, moving bands).
+    public static Material Fresnel(Color c, float power = 2.5f, float inner = 0.05f, float bands = 0.6f)
+    {
+        var key = new Color(c.r, c.g, c.b, power + inner * 10f + bands * 100f);
+        if (fresnels.TryGetValue(key, out var m) && m) return m;
+        if (!fresnelBase) fresnelBase = Resources.Load<Material>("VFX/vfx_fresnel");
+        m = fresnelBase ? new Material(fresnelBase) : new Material(Additive);
+        m.SetColor("_Color", c);
+        m.SetFloat("_Power", power);
+        m.SetFloat("_Inner", inner);
+        m.SetFloat("_Bands", bands);
+        if (!fresnelBase && m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c * 0.4f);
+        fresnels[key] = m;
+        return m;
+    }
+
+    /// A soft blob broken up by stretched value noise: reads as a tongue of flame or a wisp.
+    public static Texture2D FlameTexture()
+    {
+        const int n = 64;
+        var t = new Texture2D(n, n, TextureFormat.RGBA32, false) { name = "vfx_flame", wrapMode = TextureWrapMode.Clamp };
+        for (int y = 0; y < n; y++)
+        for (int x = 0; x < n; x++)
+        {
+            float u = (x + 0.5f) / n - 0.5f, v = (y + 0.5f) / n - 0.5f;
+            float d = Mathf.Sqrt(u * u * 4f + v * v * 2.2f) * 2f;
+            float noise = Mathf.PerlinNoise(x * 0.11f, y * 0.045f) * 0.65f + Mathf.PerlinNoise(x * 0.3f + 7f, y * 0.12f) * 0.35f;
+            float a = Mathf.Clamp01(1f - d) * Mathf.Lerp(0.35f, 1.25f, noise);
+            t.SetPixel(x, y, new Color(1f, 1f, 1f, Mathf.Clamp01(a * a * 1.4f)));
+        }
+        t.Apply();
+        return t;
+    }
 
     static Material Load(string path, bool additive)
     {
@@ -102,6 +139,19 @@ public static class Vfx
         var g = new Gradient();
         g.SetKeys(new[] { new GradientColorKey(from, 0f), new GradientColorKey(to, 1f) },
             new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0.8f, 0.4f), new GradientAlphaKey(0f, 1f) });
+        col.color = g;
+    }
+
+    /// Fire colour over life: white-hot core, yellow, orange, deep red, fading out as dark smoke.
+    static void Flames(ParticleSystem ps)
+    {
+        var col = ps.colorOverLifetime;
+        col.enabled = true;
+        var g = new Gradient();
+        g.SetKeys(
+            new[] { new GradientColorKey(new Color(1f, 0.97f, 0.8f), 0f), new GradientColorKey(new Color(1f, 0.78f, 0.25f), 0.2f),
+                    new GradientColorKey(new Color(1f, 0.42f, 0.08f), 0.5f), new GradientColorKey(new Color(0.55f, 0.08f, 0.04f), 1f) },
+            new[] { new GradientAlphaKey(0.9f, 0f), new GradientAlphaKey(1f, 0.15f), new GradientAlphaKey(0.7f, 0.55f), new GradientAlphaKey(0f, 1f) });
         col.color = g;
     }
 
@@ -302,25 +352,32 @@ public static class Vfx
             case "fire":
             case "burn":
                 bool burn = kind == "burn";
+                ps.GetComponent<ParticleSystemRenderer>().sharedMaterial = Fire;
+                m.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
+                var spinF = ps.rotationOverLifetime;
+                spinF.enabled = true;
+                spinF.z = new ParticleSystem.MinMaxCurve(-2f, 2f);
                 m.startLifetime = new ParticleSystem.MinMaxCurve(0.2f, burn ? 0.6f : 0.35f);
                 m.startSpeed = new ParticleSystem.MinMaxCurve(0.2f, burn ? 1.2f : 0.6f);
-                m.startSize = new ParticleSystem.MinMaxCurve(burn ? 0.2f : 0.25f, burn ? 0.45f : 0.55f);
+                m.startSize = new ParticleSystem.MinMaxCurve(burn ? 0.25f : 0.35f, burn ? 0.5f : 0.75f);
                 m.startColor = Grad(new Color(1f, 0.8f, 0.3f), new Color(1f, 0.4f, 0.1f));
                 m.gravityModifier = burn ? -0.4f : 0f;
-                if (burn) em.rateOverTime = 22f; else em.rateOverDistance = 9f;
+                if (burn) em.rateOverTime = 26f; else em.rateOverDistance = 14f;
                 sh.radius = burn ? 0.35f : 0.1f;
-                Fade(ps, new Color(1f, 0.85f, 0.4f), new Color(0.6f, 0.1f, 0.05f));
+                Flames(ps);
                 if (burn) Shrink(ps, 0.2f);
                 else
                 {
                     // Projectile flames billow out as they travel, so the stream reads as a cone.
                     var grow = ps.sizeOverLifetime;
                     grow.enabled = true;
-                    grow.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 1f, 1f, 2.2f));
+                    grow.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 1f, 1f, 2.8f));
                 }
                 break;
             case "pillar":
                 // A column of fire shooting up out of a grate.
+                ps.GetComponent<ParticleSystemRenderer>().sharedMaterial = Fire;
+                m.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
                 m.startLifetime = new ParticleSystem.MinMaxCurve(0.3f, 0.5f);
                 m.startSpeed = new ParticleSystem.MinMaxCurve(3.5f, 5f);
                 m.startSize = new ParticleSystem.MinMaxCurve(0.45f, 0.8f);
@@ -330,8 +387,35 @@ public static class Vfx
                 sh.angle = 8f;
                 sh.radius = 0.6f;
                 sh.rotation = new Vector3(-90f, 0f, 0f);
-                Fade(ps, new Color(1f, 0.9f, 0.5f), new Color(0.7f, 0.15f, 0.05f));
+                Flames(ps);
                 Shrink(ps, 0.3f);
+                break;
+            case "motes":
+                // Golden motes rising out of the priest's sanctuary circle.
+                m.startLifetime = new ParticleSystem.MinMaxCurve(1.0f, 1.8f);
+                m.startSpeed = new ParticleSystem.MinMaxCurve(0.6f, 1.4f);
+                m.startSize = new ParticleSystem.MinMaxCurve(0.06f, 0.16f);
+                m.startColor = Grad(new Color(1f, 0.95f, 0.6f), new Color(1f, 0.8f, 0.35f));
+                m.gravityModifier = -0.05f;
+                em.rateOverTime = 40f;
+                sh.shapeType = ParticleSystemShapeType.Circle;
+                sh.radius = 4.3f;
+                sh.radiusThickness = 1f;
+                sh.rotation = new Vector3(-90f, 0f, 0f);
+                Fade(ps, new Color(1f, 0.95f, 0.7f), new Color(1f, 0.75f, 0.3f));
+                break;
+            case "bubbles":
+                // Bubbles that rise and pop out of a poison cloud.
+                ps.GetComponent<ParticleSystemRenderer>().sharedMaterial = AlphaBlend;
+                m.startLifetime = new ParticleSystem.MinMaxCurve(0.6f, 1.2f);
+                m.startSpeed = new ParticleSystem.MinMaxCurve(0.3f, 0.9f);
+                m.startSize = new ParticleSystem.MinMaxCurve(0.08f, 0.2f);
+                m.startColor = new Color(0.55f, 1f, 0.35f, 0.8f);
+                m.gravityModifier = -0.15f;
+                em.rateOverTime = 18f;
+                sh.radius = 2.4f;
+                sh.scale = new Vector3(1f, 0.15f, 1f);
+                Fade(ps, new Color(0.7f, 1f, 0.5f), new Color(0.4f, 0.8f, 0.25f));
                 break;
             case "gas":
                 // A low cloud hugging the floor over the whole 3 m area, there from the first frame.
