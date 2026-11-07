@@ -18,6 +18,7 @@ public class GameManager : MonoBehaviour
     Dungeon dungeon;
     string shotDir;
     string gripDir; // -grips <dir>: close-up contact sheets of every weapon grip
+    string iconDir; // -icons <dir>: save the UI icons and hero portraits (works without a window)
     bool autotest;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -32,7 +33,7 @@ public class GameManager : MonoBehaviour
     static bool showTitle = true;
     static bool argsApplied;
 
-    bool Scripted => autotest || shotDir != null || gripDir != null;
+    bool Scripted => autotest || shotDir != null || gripDir != null || iconDir != null;
 
     void Start()
     {
@@ -115,6 +116,7 @@ public class GameManager : MonoBehaviour
         if (autotest) StartCoroutine(RunState.floor == 1 ? AutoTest() : AutoTestNextFloor());
         else if (shotDir != null) StartCoroutine(Shots());
         else if (gripDir != null) StartCoroutine(GripSheets());
+        else if (iconDir != null) StartCoroutine(DumpIcons());
         else if (showTitle)
         {
             hud.screen = Hud.Screen.Title;
@@ -223,6 +225,7 @@ public class GameManager : MonoBehaviour
             if (args[i] == "-autotest") autotest = true;
             if (args[i] == "-shots" && i + 1 < args.Length) shotDir = args[i + 1];
             if (args[i] == "-grips" && i + 1 < args.Length) gripDir = args[i + 1];
+            if (args[i] == "-icons" && i + 1 < args.Length) iconDir = args[i + 1];
             // Self-check helpers: start as a class and/or on a floor (first load only).
             if (!argsApplied && args[i] == "-class" && i + 1 < args.Length) RunState.ChooseClass(args[i + 1]);
         }
@@ -1498,6 +1501,14 @@ public class GameManager : MonoBehaviour
     /// Grip inspection: the hero holding each weapon, close up from behind (the gameplay view),
     /// front three-quarter and the left side (melee: mid-swing instead of the side), as contact
     /// sheets of six weapons each.
+    IEnumerator DumpIcons()
+    {
+        for (float t = 0f; t < 30f && !(IconStudio.I && IconStudio.I.Ready); t += Time.unscaledDeltaTime) yield return null;
+        if (IconStudio.I) IconStudio.I.Dump(iconDir);
+        Debug.Log($"ICONS dumped ready={(IconStudio.I && IconStudio.I.Ready)}");
+        Application.Quit();
+    }
+
     IEnumerator GripSheets()
     {
         const int Tile = 420;

@@ -32,6 +32,15 @@ public class IconStudio : MonoBehaviour
     }
 
     public Texture2D Weapon(string id) => id != null && weaponIcons.TryGetValue(id, out var t) ? t : null;
+    public bool Ready => portraits.Count == Classes.All.Count;
+
+    /// Save every icon and portrait as PNG (-icons <dir>: checking them without a window on screen).
+    public void Dump(string dir)
+    {
+        System.IO.Directory.CreateDirectory(dir);
+        foreach (var kv in weaponIcons) System.IO.File.WriteAllBytes(System.IO.Path.Combine(dir, $"weapon_{kv.Key}.png"), kv.Value.EncodeToPNG());
+        foreach (var kv in portraits) System.IO.File.WriteAllBytes(System.IO.Path.Combine(dir, $"portrait_{kv.Key}.png"), kv.Value.EncodeToPNG());
+    }
     // Still portraits made exactly like the weapon icons (that path renders true colours).
     readonly Dictionary<string, Texture2D> portraits = new Dictionary<string, Texture2D>();
     public Texture ClassView(string id) => portraits.TryGetValue(id, out var p) ? p : classViews.TryGetValue(id, out var t) ? t : null;
@@ -52,7 +61,7 @@ public class IconStudio : MonoBehaviour
         return cam;
     }
 
-    void Light(Vector3 at, float range, float intensity, Color c)
+    Light Light(Vector3 at, float range, float intensity, Color c)
     {
         var l = new GameObject("studio_light").AddComponent<Light>();
         l.transform.SetParent(transform, false);
@@ -61,6 +70,7 @@ public class IconStudio : MonoBehaviour
         l.range = range;
         l.intensity = intensity;
         l.color = c;
+        return l;
     }
 
     IEnumerator BuildWeaponIcons()
@@ -69,8 +79,9 @@ public class IconStudio : MonoBehaviour
         Vector3 spot = Origin + new Vector3(-50f, 0f, 0f);
         var cam = MakeCamera(rt, spot + new Vector3(0f, 0.2f, -3f), spot);
         cam.orthographic = true;
-        Light(spot + new Vector3(-1.5f, 2f, -2.5f), 8f, 6f, new Color(1f, 0.95f, 0.85f));
-        Light(spot + new Vector3(2f, -0.5f, -1.5f), 6f, 2.5f, new Color(0.6f, 0.75f, 1f));
+        cam.enabled = false; // rendered on demand
+        var key = Light(spot + new Vector3(-1.5f, 2f, -2.5f), 8f, 6f, new Color(1f, 0.95f, 0.85f));
+        var fill = Light(spot + new Vector3(2f, -0.5f, -1.5f), 6f, 2.5f, new Color(0.6f, 0.75f, 1f));
         var holder = new GameObject("icon_holder").transform;
         holder.SetParent(transform, false);
         holder.position = spot;
@@ -88,8 +99,7 @@ public class IconStudio : MonoBehaviour
             }
             v.transform.position += spot - b.center;
             cam.orthographicSize = Mathf.Max(b.extents.y, b.extents.x * rt.height / rt.width) * 1.15f;
-            cam.enabled = true;
-            yield return new WaitForEndOfFrame();
+            cam.Render(); // explicit: also works without a window (batch mode never renders cameras by itself)
             var prev = RenderTexture.active;
             RenderTexture.active = rt;
             var tex = new Texture2D(rt.width, rt.height, TextureFormat.RGBA32, false);
@@ -100,9 +110,12 @@ public class IconStudio : MonoBehaviour
             Destroy(v);
             yield return null;
         }
-        // Hero portraits, the same way: orthographic, no post-processing, clear background.
+        // Hero portraits, the same way: orthographic, no post-processing, clear background. Softer lights
+        // than for the shiny weapons: at full strength the cloth and skin wash out (dark outfits most).
         var prt = new RenderTexture(360, 420, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
         cam.targetTexture = prt;
+        key.intensity = 2.2f;
+        fill.intensity = 1.0f;
         foreach (var cls in Classes.All)
         {
             var body = CharacterAnim.Spawn(cls.model, holder, Layer);
@@ -117,19 +130,17 @@ public class IconStudio : MonoBehaviour
             }
             body.transform.position += spot - b.center;
             cam.orthographicSize = Mathf.Max(b.extents.y, b.extents.x * prt.height / prt.width) * 1.08f;
-            cam.enabled = true;
-            yield return new WaitForEndOfFrame();
+            cam.Render(); // explicit: also works without a window (batch mode never renders cameras by itself)
             var prev = RenderTexture.active;
             RenderTexture.active = prt;
             var tex = new Texture2D(prt.width, prt.height, TextureFormat.RGBA32, false);
             tex.ReadPixels(new Rect(0, 0, prt.width, prt.height), 0, 0);
-            tex.Apply();
+            Grade(tex);
             RenderTexture.active = prev;
             portraits[cls.id] = tex;
             Destroy(body.gameObject);
             yield return null;
         }
-        cam.enabled = false;
         Debug.Log($"ICONS {weaponIcons.Count} portraits {portraits.Count}");
     }
 
@@ -145,6 +156,23 @@ public class IconStudio : MonoBehaviour
             tex.Apply();
         }
         RenderTexture.active = prev;
+    }
+
+    /// A light stand-in for the game camera's tone mapping: a little more contrast and saturation.
+    static void Grade(Texture2D tex)
+    {
+        var px = tex.GetPixels();
+        for (int i = 0; i < px.Length; i++)
+        {
+            var c = px[i];
+            if (c.a <= 0.01f) continue;
+            float l = c.r * 0.299f + c.g * 0.587f + c.b * 0.114f;
+            Color sat = Color.LerpUnclamped(new Color(l, l, l), c, 1.3f);
+            Color con = new Color((sat.r - 0.5f) * 1.12f + 0.47f, (sat.g - 0.5f) * 1.12f + 0.47f, (sat.b - 0.5f) * 1.12f + 0.47f);
+            px[i] = new Color(Mathf.Clamp01(con.r), Mathf.Clamp01(con.g), Mathf.Clamp01(con.b), c.a);
+        }
+        tex.SetPixels(px);
+        tex.Apply();
     }
 
     /// Turntables for the class cards (built on first use).

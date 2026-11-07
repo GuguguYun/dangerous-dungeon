@@ -24,7 +24,8 @@ public class PhysicsProp : MonoBehaviour
         {
             if (!any) { b = r.bounds; any = true; } else b.Encapsulate(r.bounds);
         }
-        foreach (var c in go.GetComponentsInChildren<Collider>()) Destroy(c);
+        // Now, not at the end of the frame: a concave mesh collider must not meet the rigidbody added below.
+        foreach (var c in go.GetComponentsInChildren<Collider>()) DestroyImmediate(c);
         var box = go.AddComponent<BoxCollider>();
         box.center = go.transform.InverseTransformPoint(b.center);
         var size = go.transform.InverseTransformVector(b.size);

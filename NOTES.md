@@ -27,7 +27,8 @@
 
 - 构建：`Unity -batchmode -quit -projectPath unity -executeMethod BuildScript.BuildMac -logFile logs/build.log`
 - 自动测试：`unity/Builds/MeshyDungeon.app/Contents/MacOS/* -batchmode -nographics -autotest -logFile logs/autotest.log`，看 `AUTOTEST PASS/FAIL` 行。
-- 截图：运行 .app 加 `-shots <dir> -screen-width 1600 -screen-height 900 -screen-fullscreen 0`，会弹出窗口几秒，存 3 张图。
+- 截图：运行 .app 加 `-shots <dir> -screen-width 1600 -screen-height 900 -screen-fullscreen 0`，会弹出窗口跑约 3 分钟。**显示器熄屏/锁屏后窗口不刷新，截图会卡住**（2026-11-08 05:27 之后）。
+- 不依赖显示器的检查：`-batchmode -icons <dir>` 导出全部武器图标和职业立绘（相机显式 Render，无窗口也能渲染）；`-grips <dir>` 要窗口。
 
 ## 里程碑
 
@@ -107,7 +108,7 @@
 
 ### 已知问题（待查）
 
-- 【已改善】选角卡改用和武器图标同一方法拍的静态立绘（正交相机、不开后处理、透明背景），骑士/法师/牧师颜色和细节正常了，刺客仍偏淡。原问题：选角卡的 3D 预览偏白偏平：试过 ① 不透明绘制 ② 开后处理 ③ 读回成贴图再画 ④ 调暗/调亮点光 ⑤ 深色底，模型外观都没变；也确认了角色材质不是半透明（日志里没有被改成不透明的材质）。怀疑预览相机下的光照/环境光与游戏镜头不同，待查。武器图标（同一套相机做法）颜色正常。
+- 【已解决 2026-11-08 06:20】选角立绘发白：主光强度 6 对布料皮肤太亮、又没有游戏镜头的色调映射。立绘改用弱光（2.2/1.0）+ 一点对比度和饱和度，四个职业颜色都正常（刺客深紫）。原问题：选角卡的 3D 预览偏白偏平：试过 ① 不透明绘制 ② 开后处理 ③ 读回成贴图再画 ④ 调暗/调亮点光 ⑤ 深色底，模型外观都没变；也确认了角色材质不是半透明（日志里没有被改成不透明的材质）。怀疑预览相机下的光照/环境光与游戏镜头不同，待查。武器图标（同一套相机做法）颜色正常。
 
 ### 通宵额外做的（不在清单里，顺手补的）
 
