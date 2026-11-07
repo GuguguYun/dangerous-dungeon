@@ -138,11 +138,21 @@ public static class UiKit
         var s = new GUIStyle(style) { richText = true };
         var shadow = new GUIStyle(s);
         shadow.normal.textColor = new Color(0f, 0f, 0f, 0.75f);
-        foreach (var o in new[] { new Vector2(2, 2), new Vector2(-1, 1), new Vector2(1, -1) })
-            GUI.Label(new Rect(r.x + o.x, r.y + o.y, r.width, r.height), StripColor(text), shadow);
+        string plain = StripColor(text);
+        GUI.Label(new Rect(r.x + 2, r.y + 2, r.width, r.height), plain, shadow);
+        GUI.Label(new Rect(r.x - 1, r.y + 1, r.width, r.height), plain, shadow);
         if (color.HasValue) s.normal.textColor = color.Value;
         GUI.Label(r, text, s);
     }
 
-    static string StripColor(string t) => System.Text.RegularExpressions.Regex.Replace(t, "</?color[^>]*>", "");
+    // The shadow copy has no colour tags; texts repeat every frame, so remember the stripped versions.
+    static readonly System.Collections.Generic.Dictionary<string, string> stripped = new System.Collections.Generic.Dictionary<string, string>();
+
+    static string StripColor(string t)
+    {
+        if (t.IndexOf('<') < 0) return t;
+        if (stripped.TryGetValue(t, out var s)) return s;
+        if (stripped.Count > 2000) stripped.Clear();
+        return stripped[t] = System.Text.RegularExpressions.Regex.Replace(t, "</?color[^>]*>", "");
+    }
 }

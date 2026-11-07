@@ -25,6 +25,7 @@ public static class BuildScript
         PlayerSettings.defaultScreenHeight = 900;
         PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
         PlayerSettings.resizableWindow = true;
+        PlayerSettings.enableFrameTimingStats = true; // CPU/GPU frame times for the PERF check
         UseLegacyInput();
         SetupUrp();
         ConvertModelMaterials();

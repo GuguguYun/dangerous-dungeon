@@ -1548,11 +1548,23 @@ public class GameManager : MonoBehaviour
         Application.targetFrameRate = -1;
         QualitySettings.vSyncCount = 0;
         var times = new System.Collections.Generic.List<float>();
+        double cpuMs = 0, gpuMs = 0;
+        int timed = 0;
+        var timing = new FrameTiming[1];
         for (float u = 0; u < 3f; u += Time.unscaledDeltaTime)
         {
             yield return null;
             times.Add(Time.unscaledDeltaTime);
+            FrameTimingManager.CaptureFrameTimings();
+            if (FrameTimingManager.GetLatestTimings(1, timing) > 0)
+            {
+                cpuMs += timing[0].cpuMainThreadFrameTime;
+                gpuMs += timing[0].gpuFrameTime;
+                timed++;
+            }
         }
+        // Where the time goes: a small CPU and GPU time with a slow frame means the window was throttled.
+        if (timed > 0) Debug.Log($"PERF frame cost: cpu main {cpuMs / timed:F2} ms, gpu {gpuMs / timed:F2} ms (over {timed} frames)");
         times.Sort();
         float avg = 0f;
         foreach (var t in times) avg += t;
