@@ -1755,7 +1755,8 @@ public class GameManager : MonoBehaviour
             var shown = new System.Collections.Generic.List<Enemy>();
             for (int i = 0; i < 4; i++)
             {
-                var e = Dummy(ep + ef * 6.5f + er * (i - 1.5f) * 2.4f, i % 2 == 0 ? EnemyKind.Gunner : EnemyKind.Spreader);
+                // Inside the 12 m start room (its walls are 6 m from the centre).
+                var e = Dummy(ep + ef * 4f + er * (i - 1.5f) * 2.2f, i % 2 == 0 ? EnemyKind.Gunner : EnemyKind.Spreader);
                 e.MakeElite((EliteKind)(i + 1)); // dummies have no target, so they hold still for the picture
                 shown.Add(e);
             }
@@ -1769,10 +1770,10 @@ public class GameManager : MonoBehaviour
         {
             Vector3 np = player.transform.position;
             Vector3 nf = Quaternion.Euler(0f, player.yaw, 0f) * Vector3.forward, nr = Quaternion.Euler(0f, player.yaw + 90f, 0f) * Vector3.forward;
-            var bomber = Dummy(np + nf * 7f - nr * 1.6f, EnemyKind.Bomber);
-            var archer = Dummy(np + nf * 7f + nr * 1.6f, EnemyKind.Archer);
+            var bomber = Dummy(np + nf * 4.5f - nr * 1.6f, EnemyKind.Bomber);
+            var archer = Dummy(np + nf * 4.5f + nr * 1.6f, EnemyKind.Archer);
             yield return new WaitForSeconds(0.5f);
-            EnemyBomb.Throw(bomber.transform.position + Vector3.up * 1.4f, np + nf * 2.5f, 1.2f, 2.2f);
+            EnemyBomb.Throw(bomber.transform.position + Vector3.up * 1.4f, np + nf * 1.8f, 1.2f, 2.2f);
             player.pitch = 10f;
             yield return new WaitForSeconds(0.6f);
             yield return Shot("22_new_enemies.png");

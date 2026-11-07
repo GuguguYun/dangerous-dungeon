@@ -710,8 +710,9 @@ public class Hud : MonoBehaviour
             Vector3 sp = cam.WorldToScreenPoint(head);
             if (sp.z < 0.5f || sp.z > 40f) continue;
             float x = sp.x, y = UnityEngine.Screen.height - sp.y;
-            Label(new Rect(x - 110, y - 50, 220, 22), $"<color=#{ColorUtility.ToHtmlStringRGB(e.EliteColor)}>{e.EliteName}</color>", tag);
-            Label(new Rect(x - 110, y - 30, 220, 20), e.KindName, new GUIStyle(tag) { fontSize = 14 });
+            // Outlined so the affix colour reads on any floor (blue on the frost floor was lost).
+            UiKit.Text(new Rect(x - 110, y - 50, 220, 22), e.EliteName, tag, Color.Lerp(e.EliteColor, Color.white, 0.25f));
+            UiKit.Text(new Rect(x - 110, y - 30, 220, 20), e.KindName, new GUIStyle(tag) { fontSize = 14 }, Color.white);
             Box(new Rect(x - 40, y - 8, 80, 5), new Color(0f, 0f, 0f, 0.5f));
             Box(new Rect(x - 40, y - 8, 80f * e.hp / Mathf.Max(1, e.maxHp), 5), new Color(0.9f, 0.25f, 0.25f));
             if (e.maxShield > 0 && e.shield > 0)
