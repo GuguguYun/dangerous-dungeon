@@ -110,20 +110,26 @@ public partial class Enemy
         shieldFx.Show(0.5f);
     }
 
-    /// Shield first; returns what is left for the health bar.
-    int AbsorbWithShield(int amount)
+    /// Shield first; returns what is left for the health bar. The ripple goes where the blow came
+    /// through the dome: its path (hitDir) traced back from where it landed (point, e.g. a bullet's hit
+    /// on the body; else the middle of the body). Damage with no direction (burning) ripples somewhere
+    /// on the upper dome.
+    int AbsorbWithShield(int amount, Vector3 hitDir, Vector3? point)
     {
         if (elite != EliteKind.Shielded) return amount;
         shieldIdle = 0f;
         if (shield <= 0) return amount;
         int soaked = Mathf.Min(shield, amount);
         shield -= soaked;
-        Vector3 at = AimPoint;
+        Vector3 at = point ?? AimPoint;
         if (shieldFx)
         {
-            // Most hits come from the player: ripple on the side facing them.
-            var p = PlayerController.Current;
-            at = shieldFx.SurfaceToward(p ? p.transform.position + Vector3.up : AimPoint + transform.forward);
+            if (hitDir.sqrMagnitude > 1e-6f) at = shieldFx.Entry(point ?? AimPoint, hitDir);
+            else
+            {
+                Vector3 d = Random.onUnitSphere;
+                at = shieldFx.SurfaceToward(shieldFx.Centre + new Vector3(d.x, Mathf.Abs(d.y) + 0.3f, d.z));
+            }
             shieldFx.Hit(at);
         }
         Vfx.Sparks(at, EliteColor, 5, 3f);

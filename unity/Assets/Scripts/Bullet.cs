@@ -280,7 +280,7 @@ public class Bullet : MonoBehaviour
         }
         if (explode > 0f) { Detonate(rh.point); return true; }
         hit.Add(e);
-        e.TakeDamage(damage, velocity.normalized, crit, explode > 0f ? 9f : 3.5f);
+        e.TakeDamage(damage, velocity.normalized, crit, explode > 0f ? 9f : 3.5f, rh.point);
         if (slow > 0f) e.ApplySlow(slow, 2f);
         if (burn > 0f) e.ApplyBurn(burn);
         if (returnTo || pierce > 0)

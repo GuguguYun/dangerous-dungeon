@@ -4,8 +4,9 @@ using UnityEngine.Rendering;
 
 /// The energy-shield dome for the knight's 誓约壁垒 and for shielded elites (Meshy/Shield): geodesic
 /// hex cells on a sphere whose centre sits a little above the floor, so the dome is cut cleanly by the
-/// floor with a glowing seam. Cells grow in when it goes up and dissolve when it drops; a struck spot
-/// sends out a ripple. One material instance per shield (it carries the impact points).
+/// floor with a glowing seam (lifted clear of the floor it is a whole bubble). Cells grow in when it goes
+/// up and dissolve when it drops; a struck spot sends out a ripple. One material instance per shield
+/// (it carries the impact points).
 public class ShieldFx : MonoBehaviour
 {
     static Mesh fineDome, coarseDome;
@@ -13,17 +14,32 @@ public class ShieldFx : MonoBehaviour
     static readonly int FillId = Shader.PropertyToID("_Fill"), FloorId = Shader.PropertyToID("_FloorY"), NowId = Shader.PropertyToID("_Now");
     static readonly int[] HitIds = { Shader.PropertyToID("_Hit0"), Shader.PropertyToID("_Hit1"), Shader.PropertyToID("_Hit2"), Shader.PropertyToID("_Hit3") };
 
-    public float radius;  // world radius of the sphere
-    public float lift;    // how far the sphere's centre sits above the floor (this object sits on the floor)
+    public float radius;  // radius of the sphere (world, at the parent's scale 1)
+    float lift;           // how far the sphere's centre sits above the floor (this object sits on the floor)
     Transform dome;
     Material mat;
     MeshRenderer mr;
     Renderer pool;
-    float fill, fillTarget, fillSpeed = 3f, strength = 1f;
+    float fill, fillTarget, fillSpeed = 3f, strength = 1f, poolSize;
     int nextHit;
 
     public bool Up => fillTarget > 0f;
     public Vector3 Centre => dome.position;
+    public float WorldRadius => radius * transform.lossyScale.x; // an enemy pops in from a tiny scale
+
+    /// The centre's height above the floor. Raise it and the floor cuts off less of the sphere; above
+    /// one radius the dome floats as a whole bubble. The light pool on the floor shrinks to match.
+    public float Lift
+    {
+        get => lift;
+        set
+        {
+            lift = value;
+            dome.localPosition = Vector3.up * lift;
+            float footprint = Mathf.Sqrt(Mathf.Max(0f, radius * radius - lift * lift));
+            pool.transform.localScale = new Vector3(footprint * poolSize, 1f, footprint * poolSize);
+        }
+    }
 
     /// fine: smaller cells (the knight's big dome); field/accent are sRGB hues times a linear intensity.
     /// The object sits on the floor (parent it at the owner's feet, or move it there each frame).
@@ -34,10 +50,8 @@ public class ShieldFx : MonoBehaviour
         if (parent) go.transform.SetParent(parent, false);
         var fx = go.AddComponent<ShieldFx>();
         fx.radius = radius;
-        fx.lift = lift;
         fx.dome = new GameObject("dome").transform;
         fx.dome.SetParent(go.transform, false);
-        fx.dome.localPosition = Vector3.up * lift;
         fx.dome.localScale = Vector3.one * radius;
         fx.dome.gameObject.AddComponent<MeshFilter>().sharedMesh = fine ? (fineDome ? fineDome : fineDome = Dome(3)) : (coarseDome ? coarseDome : coarseDome = Dome(2));
         fx.mr = fx.dome.gameObject.AddComponent<MeshRenderer>();
@@ -54,9 +68,10 @@ public class ShieldFx : MonoBehaviour
         fx.mr.sharedMaterial = fx.mat;
         fx.mr.enabled = false;
         // A soft pool of the shield's light on the floor inside it.
-        float footprint = Mathf.Sqrt(Mathf.Max(0.01f, radius * radius - lift * lift));
-        fx.pool = LootFx.Glow(go.transform, field, 0.3f * fieldIntensity, footprint * 2.2f, 0f, 0f);
+        fx.pool = LootFx.Glow(go.transform, field, 0.3f * fieldIntensity, 1f, 0f, 0f);
         fx.pool.enabled = false;
+        fx.poolSize = 2.2f;
+        fx.Lift = lift;
         return fx;
     }
 
@@ -91,7 +106,22 @@ public class ShieldFx : MonoBehaviour
     public Vector3 SurfaceToward(Vector3 world)
     {
         Vector3 d = world - Centre;
-        return Centre + (d.sqrMagnitude > 1e-6f ? d.normalized : Vector3.forward) * radius;
+        return Centre + (d.sqrMagnitude > 1e-6f ? d.normalized : Vector3.forward) * WorldRadius;
+    }
+
+    /// Where a blow travelling along dir that ended at point (on the body inside) came through the dome:
+    /// the path traced back to the sphere.
+    public Vector3 Entry(Vector3 point, Vector3 dir)
+    {
+        if (dir.sqrMagnitude < 1e-6f) return SurfaceToward(point);
+        dir.Normalize();
+        float r = WorldRadius;
+        Vector3 m = point - Centre;
+        // |m - t dir| = r, furthest back along the path (t >= 0 when the point is inside).
+        float b = Vector3.Dot(m, dir);
+        float disc = b * b - m.sqrMagnitude + r * r;
+        if (disc < 0f) return SurfaceToward(point - dir); // the path never crossed the dome
+        return point - dir * (b + Mathf.Sqrt(disc));
     }
 
     void LateUpdate()
@@ -113,8 +143,8 @@ public class ShieldFx : MonoBehaviour
     // ---------- the dome mesh ----------
 
     /// A unit icosphere drawn as hex cells: every triangle gets its own three vertices with barycentric
-    /// colours, plus the three corners' random values (one per cell) in UV0. Triangles wholly below
-    /// the floor (more than half the radius down) are left out.
+    /// colours, plus the three corners' random values (one per cell) in UV0. The whole sphere: the
+    /// shader clips what is under the floor, wherever the dome is lifted to.
     static Mesh Dome(int subdivisions)
     {
         float t = (1f + Mathf.Sqrt(5f)) / 2f;
@@ -159,7 +189,6 @@ public class ShieldFx : MonoBehaviour
         for (int i = 0; i < f.Count; i += 3)
         {
             int a = f[i], b = f[i + 1], c = f[i + 2];
-            if (v[a].y < -0.5f && v[b].y < -0.5f && v[c].y < -0.5f) continue;
             // Outward winding (Unity: front face where Cross(b-a, c-a) points).
             if (Vector3.Dot(Vector3.Cross(v[b] - v[a], v[c] - v[a]), v[a] + v[b] + v[c]) < 0f) (b, c) = (c, b);
             var r = new Vector3(Rand(a), Rand(b), Rand(c));

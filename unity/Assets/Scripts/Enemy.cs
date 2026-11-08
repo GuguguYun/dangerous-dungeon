@@ -433,11 +433,13 @@ public partial class Enemy : MonoBehaviour
             hit.rigidbody.AddForceAtPosition(hit.moveDirection * 1.5f, hit.point, ForceMode.VelocityChange);
     }
 
-    public void TakeDamage(int amount, Vector3 hitDir, bool crit = false, float force = 3.5f)
+    /// at: where the blow landed on the body when that is known (a bullet's hit), so a shield ripples
+    /// where it was struck.
+    public void TakeDamage(int amount, Vector3 hitDir, bool crit = false, float force = 3.5f, Vector3? at = null)
     {
         if (dead) return;
         if (kind == EnemyKind.Boss) amount = ModifyIncoming(amount);
-        amount = AbsorbWithShield(amount);
+        amount = AbsorbWithShield(amount, hitDir, at);
         amount = Reactions.Shatter(this, amount); // a heavy hit on a frozen enemy shatters the ice
         if (amount <= 0)
         {
