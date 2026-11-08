@@ -1156,35 +1156,28 @@ public class Hud : MonoBehaviour
             if (!known) continue;
             var r = ToMap(room.min, room.max);
             if (r.width <= 0 || r.height <= 0) continue;
-            Color col = room.kind switch
-            {
-                Dungeon.Kind.Start => new Color(0.5f, 0.8f, 0.5f),
-                Dungeon.Kind.Chest => new Color(0.95f, 0.8f, 0.3f),
-                Dungeon.Kind.Shop => new Color(0.35f, 0.9f, 0.75f),
-                Dungeon.Kind.Altar => new Color(0.95f, 0.35f, 0.35f),
-                Dungeon.Kind.Trial => new Color(1f, 0.6f, 0.25f),
-                Dungeon.Kind.End => new Color(0.7f, 0.5f, 1f),
-                Dungeon.Kind.Boss => new Color(1f, 0.35f, 0.3f),
-                _ => new Color(0.75f, 0.75f, 0.85f),
-            };
-            if (!room.visited) col.a = 0.35f;
-            if (room == dungeon.current) col = Color.Lerp(col, Color.white, 0.4f);
-            // A rounded tile with a dark edge; the room you are in gets a gold rim.
-            GUI.DrawTexture(r, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, (col * 0.8f).linear, 0f, 5f);
-            GUI.DrawTexture(new Rect(r.x + 2, r.y + 2, r.width - 4, r.height - 4), Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, col.linear, 0f, 4f);
+            // Cleared rooms are small white tiles; rooms still to clear are big black ones (a fight
+            // room counts once its doors open again, any other room once you have walked in).
+            bool cleared = room.combat ? room.combat.state == Room.State.Cleared : room.visited;
+            var tile = cleared ? new Rect(r.x + r.width * 0.2f, r.y + r.height * 0.2f, r.width * 0.6f, r.height * 0.6f) : r;
+            var fill = cleared ? new Color(0.93f, 0.93f, 0.95f) : new Color(0.03f, 0.03f, 0.04f, room.visited ? 1f : 0.85f);
+            var rim = cleared ? new Color(0.55f, 0.55f, 0.6f) : new Color(0.6f, 0.58f, 0.62f, room.visited ? 0.9f : 0.5f);
+            GUI.DrawTexture(tile, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, fill.linear, 0f, 4f);
+            GUI.DrawTexture(tile, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, rim.linear, 1.5f, 4f);
             if (room == dungeon.current)
-                GUI.DrawTexture(r, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, UiKit.Gold.linear, 2f, 5f);
+                GUI.DrawTexture(new Rect(r.x - 2, r.y - 2, r.width + 4, r.height + 4), Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, UiKit.Gold.linear, 2f, 6f);
             // An icon on the rooms that matter: boss, chest, shop.
+            // Bright on the black tiles, dark on the white ones.
             string icon = room.kind switch
             {
-                Dungeon.Kind.Boss => "<color=#FF5A4A>首</color>",
-                Dungeon.Kind.Chest => "<color=#7A5A10>宝</color>",
-                Dungeon.Kind.Shop => "<color=#0E5A48>商</color>",
-                Dungeon.Kind.Altar => "<color=#5A0E0E>祭</color>",
-                Dungeon.Kind.Trial => "<color=#5A2E08>试</color>",
+                Dungeon.Kind.Boss => cleared ? "<color=#A01E14>首</color>" : "<color=#FF5A4A>首</color>",
+                Dungeon.Kind.Chest => cleared ? "<color=#7A5A10>宝</color>" : "<color=#FFD45A>宝</color>",
+                Dungeon.Kind.Shop => cleared ? "<color=#0E5A48>商</color>" : "<color=#4FE3C1>商</color>",
+                Dungeon.Kind.Altar => cleared ? "<color=#8A1A1A>祭</color>" : "<color=#FF6A6A>祭</color>",
+                Dungeon.Kind.Trial => cleared ? "<color=#8A4A10>试</color>" : "<color=#FFA040>试</color>",
                 _ => null,
             };
-            if (icon != null) Label(new Rect(r.center.x - 15, r.center.y - 14, 30, 28), icon, new GUIStyle(center) { fontSize = 20, richText = true });
+            if (icon != null) Label(new Rect(r.center.x - 15, r.center.y - 14, 30, 28), icon, new GUIStyle(center) { fontSize = cleared ? 16 : 20, richText = true });
         }
         // The portal once it is open, and parked mechs.
         if (dungeon.portal)
