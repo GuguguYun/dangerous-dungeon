@@ -131,6 +131,14 @@ public static class UiKit
         float tw = t.width, th = t.height;
         float[] xs = { r.x, r.x + bl * scale, r.xMax - br * scale, r.xMax };
         float[] ys = { r.y, r.y + bt * scale, r.yMax - bb * scale, r.yMax };
+        // Seams on whole screen pixels: under the HUD's scale matrix a seam on a fraction of a pixel left a
+        // one-pixel gap between two slices (a thin line of the scene across the panel).
+        var m = GUI.matrix;
+        for (int i = 0; i < 4; i++)
+        {
+            xs[i] = (Mathf.Round(xs[i] * m.m00 + m.m03) - m.m03) / m.m00;
+            ys[i] = (Mathf.Round(ys[i] * m.m11 + m.m13) - m.m13) / m.m11;
+        }
         float[] us = { 0f, bl / tw, 1f - br / tw, 1f };
         float[] vs = { 1f, 1f - bt / th, bb / th, 0f };
         for (int i = 0; i < 3; i++)

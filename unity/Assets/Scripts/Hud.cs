@@ -1057,8 +1057,9 @@ public partial class Hud : MonoBehaviour
             y = Mathf.Max(y, pr.yMax + 24);
         }
         if (Btn(new Rect(w / 2 - 140, y, 280, 56), primary, button)) primaryAction?.Invoke();
-        if (screen == Screen.Pause && Btn(new Rect(w / 2 - 140, y + 70, 136, 56), "重新开始", button)) Restart?.Invoke();
-        if (screen == Screen.Pause && Btn(new Rect(w / 2 + 4, y + 70, 136, 56), "武器图鉴", button)) OpenCodex();
+        var half = new GUIStyle(button) { fontSize = Mathf.RoundToInt((button.fontSize > 0 ? button.fontSize : 13) * 0.8f) }; // clear of the end caps
+        if (screen == Screen.Pause && Btn(new Rect(w / 2 - 140, y + 70, 136, 56), "重新开始", half)) Restart?.Invoke();
+        if (screen == Screen.Pause && Btn(new Rect(w / 2 + 4, y + 70, 136, 56), "武器图鉴", half)) OpenCodex();
         if (screen == Screen.Pause && Btn(new Rect(w / 2 - 140, y + 140, 280, 56), "设置 · 防晕 3D", button)) OpenSettings();
         if (Btn(new Rect(w / 2 - 140, y + (screen == Screen.Pause ? 210 : 70), 280, 56), "退出游戏", button)) Quit?.Invoke();
     }
