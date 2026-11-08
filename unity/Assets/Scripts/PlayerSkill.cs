@@ -11,6 +11,7 @@ public class PlayerSkill : MonoBehaviour
     public int uses;
 
     PlayerController p;
+    CharacterController body;
     ShieldFx shield;
     float shieldFloor;
     Renderer[] ghosted;
@@ -18,8 +19,9 @@ public class PlayerSkill : MonoBehaviour
     Material ghostMat;
     ParticleSystem motes;
 
-    // The knight's dome: a sphere sitting a little above the floor, cut by it (see ShieldFx).
-    const float ShieldRadius = 2.05f, ShieldLift = 0.3f;
+    // The knight's dome: a sphere sitting a little above the floor, cut by it (see ShieldFx). HeadRoom:
+    // the clearance kept over the head when a jump lifts the dome.
+    const float ShieldRadius = 2.05f, ShieldLift = 0.3f, HeadRoom = 0.3f;
     public static readonly Color ShieldGold = new Color(1f, 0.84f, 0.42f), ShieldBlue = new Color(0.45f, 0.75f, 1f);
 
     public bool Active => activeLeft > 0f;
@@ -28,6 +30,7 @@ public class PlayerSkill : MonoBehaviour
     {
         End();
         p = owner;
+        body = owner ? owner.GetComponent<CharacterController>() : null;
         def = d;
         cooldownLeft = 0f;
         activeLeft = 0f;
@@ -62,9 +65,13 @@ public class PlayerSkill : MonoBehaviour
         }
         if (shield)
         {
-            // The dome stays on the floor (a jump goes up inside it) and follows the knight across it.
+            // The dome stays on the floor and follows the knight across it. A jump goes up inside it; near
+            // the top the dome rises just enough to keep the head inside (a double jump floats it off
+            // the floor as a whole bubble), and settles back as the knight comes down.
             if (p && p.Grounded) shieldFloor = transform.position.y;
             shield.transform.position = new Vector3(transform.position.x, shieldFloor, transform.position.z);
+            float top = (body ? body.bounds.max.y : transform.position.y + 1.6f) + HeadRoom;
+            shield.Lift = Mathf.Max(ShieldLift, top - ShieldRadius - shieldFloor);
             if (p && p.shielded)
             {
                 Vector3 centre = shield.Centre;
