@@ -286,6 +286,12 @@ public partial class PlayerController
     void MechFire(bool trigger)
     {
         if (!trigger || mechFireCd > 0f) return;
+        // The first shell waits until the gun arm is up (MechAim); it used to leave from a hanging arm.
+        if (mechAimBlend < 0.75f)
+        {
+            lastShot = Time.time;
+            return;
+        }
         lastShot = Time.time;
         Vector3 aimAt = AimPoint();
         if (!HeavyMech)
@@ -330,6 +336,25 @@ public partial class PlayerController
         }
         mechShots++;
         nextCrit = false;
+    }
+
+    float mechAimBlend; // 0: the gun arm hangs as animated, 1: it points at the crosshair
+
+    /// After the animation: while firing, the gun arm swings up to point at the crosshair (the mech
+    /// clips never raise it when standing).
+    void MechAim(float dt)
+    {
+        bool aiming = !mechBlade && Time.time - lastShot < 0.6f;
+        mechAimBlend = Mathf.MoveTowards(mechAimBlend, aiming ? 1f : 0f, dt * (aiming ? 8f : 3f));
+        if (mechAimBlend <= 0.001f || !body) return;
+        string side = mechDef.gunBone.Contains("left") ? "left" : "right";
+        var upper = body.Find(side + "arm");
+        var hand = body.Find(side + "hand");
+        if (!upper || !hand) return;
+        Vector3 cur = hand.position - upper.position, want = AimPoint() - upper.position;
+        if (cur.sqrMagnitude < 1e-6f || want.sqrMagnitude < 1e-6f) return;
+        float k = mechAimBlend * mechAimBlend * (3f - 2f * mechAimBlend);
+        upper.rotation = Quaternion.Slerp(Quaternion.identity, Quaternion.FromToRotation(cur, want), k) * upper.rotation;
     }
 
     /// Q: switch the left button between the gun and the melee arm.

@@ -544,6 +544,7 @@ public partial class PlayerController : MonoBehaviour
         if (!cam) return;
         // After animation: grips and hand IK (PlayerHold). Without a rig, point the gun at the crosshair.
         if (handsOnWeapon) PoseWeapon(Time.deltaTime);
+        if (InMech && !dead) MechAim(Time.deltaTime);
         else if (body && !dead && !Weapon.melee)
         {
             Vector3 to = AimPoint() - weaponPivot.position;
@@ -594,6 +595,8 @@ public partial class PlayerController : MonoBehaviour
         else if (InMech) Sfx.Play("step", 0.35f, 0.08f, 0.8f);
         else Sfx.Play("step", 0.22f, 0.1f);
     }
+
+    bool WeaponRaised(WeaponDef w) => !handsOnWeapon || (w.grip == WeaponGrip.Staff ? staffLift > 0.7f : aimBlend > 0.75f);
 
     /// Keep the firing pose up without shooting (grip inspection).
     public void HoldAim() => lastShot = Time.time;
@@ -652,7 +655,11 @@ public partial class PlayerController : MonoBehaviour
                 if (w.kind == WeaponKind.Flame && trigger) DrainEnergy(w, dt);
                 bool canFlame = w.kind != WeaponKind.Flame || energy > 0;
                 if (trigger && fireCd <= 0f && canFlame && !(w.kind == WeaponKind.Boomerang && boomerangOut))
-                    Attack();
+                {
+                    // The first shot waits until the gun (or staff) is up: it used to leave before the arm moved.
+                    if (!w.melee && !WeaponRaised(w)) HoldAim();
+                    else Attack();
+                }
                 break;
         }
         if (w.kind != WeaponKind.Charge && !w.chargeable) charge = 0f;
