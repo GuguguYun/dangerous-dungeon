@@ -173,6 +173,15 @@ ASSETS = {
         "A skeleton lich king boss for a 3D action game, chunky stylized proportions, tall and gaunt, bleached "
         "skull with glowing icy blue eyes, jagged ice crown, tattered dark purple and frost-blue royal robes with "
         "silver trim, bony hands, floating icy shards around the shoulders, no weapon, no staff. ")),
+    # round 10: floor pickups and shop wares (health potion, energy crystal); size = largest dimension
+    "potion_red": dict(kind="prop", size=0.5, polycount=4000, prompt=(
+        "A chunky stylized health potion: a round-bellied glass flask with a short thick neck, filled to the "
+        "top with glowing bright ruby-red liquid with a few bubbles, a big brown cork stopper, a gold metal "
+        "collar on the neck tied with a small red ribbon. The glass is painted solid and glossy, not see-through. ")),
+    "energy_crystal": dict(kind="prop", size=0.42, polycount=4000, prompt=(
+        "A chunk of glowing blue energy crystal: one big chunky faceted crystal shard pointing straight up with "
+        "three smaller shards fused around its base, bright sapphire blue with a glowing cyan inner core and "
+        "white edge highlights, no rock, no stand, no base. ")),
     # tileable textures for the Blender dungeon kit (image only)
     "tex_floor": dict(kind="texture", prompt=(
         "Seamless tileable texture of square stone floor flagstones, 2 by 2 large slabs with dark grout, "

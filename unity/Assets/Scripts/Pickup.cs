@@ -3,8 +3,9 @@ using UnityEngine;
 
 public enum PickupKind { Energy, Health, Weapon, Gold }
 
-/// Things on the floor: energy orbs fly to the player, health potions heal on touch,
+/// Things on the floor: energy crystals fly to the player, health potions heal on touch,
 /// weapons wait for the player to press E under a rarity-coloured light pillar.
+/// Potions and crystals are Meshy models (LootFx); they bounce out, settle, then hover over a glow.
 public class Pickup : MonoBehaviour
 {
     public static readonly List<Pickup> Live = new List<Pickup>();
@@ -13,8 +14,8 @@ public class Pickup : MonoBehaviour
     public int amount;
     public WeaponDef weapon;
     public Rigidbody body;
-    Transform visual, beam;
-    float age, beamWidth, beamHeight;
+    Transform visual, beam, floorGlow;
+    float age, settledAt = -1f, beamWidth, beamHeight, glowSize, spin = 90f;
     Vector3 basePos;
 
     public static Pickup Spawn(PickupKind kind, Vector3 pos, int amount = 0, WeaponDef weapon = null)
@@ -36,6 +37,7 @@ public class Pickup : MonoBehaviour
             p.body = go.AddComponent<Rigidbody>();
             p.body.mass = 0.2f;
             p.body.linearDamping = 0.4f;
+            p.body.constraints = RigidbodyConstraints.FreezeRotation; // bottles and crystals land upright
             p.body.AddForce(new Vector3(Random.Range(-2f, 2f), Random.Range(3f, 5f), Random.Range(-2f, 2f)), ForceMode.VelocityChange);
         }
 
@@ -45,10 +47,25 @@ public class Pickup : MonoBehaviour
         switch (kind)
         {
             case PickupKind.Energy:
-                Ball(holder, 0.22f, "pickup_energy");
+                // A chunk of blue energy crystal (Meshy), self-lit; many drop at once, so no light of its own.
+                if (!LootFx.PickupModel(LootFx.CrystalModel, holder, 1f, false)) Ball(holder, 0.22f, "pickup_energy");
+                LootFx.Halo(holder, LootFx.EnergyColor, 0.8f, 0.85f);
+                p.spin = 75f;
+                p.AddFloorGlow(LootFx.EnergyColor, 0.7f, 0.9f);
                 break;
             case PickupKind.Health:
-                Ball(holder, 0.4f, "pickup_health");
+                // A red potion bottle (Meshy) with a small warm light, so it reads across a dark room.
+                if (!LootFx.PickupModel(LootFx.PotionModel, holder, 1f, true)) Ball(holder, 0.4f, "pickup_health");
+                LootFx.Halo(holder, LootFx.HealthColor, 0.35f, 0.95f);
+                p.spin = 55f;
+                p.AddFloorGlow(LootFx.HealthColor, 0.75f, 1.3f);
+                var hl = new GameObject("glow").AddComponent<Light>();
+                hl.transform.SetParent(holder, false);
+                hl.type = LightType.Point;
+                hl.color = LootFx.HealthColor;
+                hl.range = 2.2f;
+                hl.intensity = 1.2f;
+                hl.shadows = LightShadows.None;
                 break;
             case PickupKind.Gold:
             {
@@ -94,6 +111,13 @@ public class Pickup : MonoBehaviour
         return drop;
     }
 
+    /// A glow on the floor under a potion or crystal; it stays on the floor while the pickup bounces.
+    void AddFloorGlow(Color c, float intensity, float diameter)
+    {
+        floorGlow = LootFx.Glow(transform, c, intensity, diameter, 0.5f, 0f).transform;
+        glowSize = diameter;
+    }
+
     static void Ball(Transform parent, float r, string mat)
     {
         var s = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -130,15 +154,38 @@ public class Pickup : MonoBehaviour
     void Update()
     {
         age += Time.deltaTime;
-        // Weapons pop up and bounce down when they drop, then hover.
-        float pop = kind == PickupKind.Weapon && age < 0.6f ? Mathf.Abs(Mathf.Cos(age * 9f)) * (0.6f - age) * 2.2f : 0f;
-        visual.localPosition = body ? Vector3.zero : Vector3.up * (0.7f + pop + Mathf.Sin(age * 3f) * 0.12f);
-        visual.localRotation = Quaternion.Euler(0f, age * 90f, 0f);
-        if (beam && age < 0.9f)
+        if (kind == PickupKind.Weapon)
         {
-            // The pillar grows up out of the floor as the weapon lands.
-            float k = 1f - Mathf.Pow(1f - Mathf.Clamp01(age / 0.9f), 3f);
-            beam.localScale = new Vector3(beamWidth, Mathf.Max(0.01f, beamHeight * k), beamWidth);
+            // Weapons pop up and bounce down when they drop, then hover; the pillar grows up out of the floor.
+            float pop = age < 0.6f ? Mathf.Abs(Mathf.Cos(age * 9f)) * (0.6f - age) * 2.2f : 0f;
+            visual.localPosition = Vector3.up * (0.7f + pop + Mathf.Sin(age * 3f) * 0.12f);
+            if (beam && age < 0.9f)
+            {
+                float k = 1f - Mathf.Pow(1f - Mathf.Clamp01(age / 0.9f), 3f);
+                beam.localScale = new Vector3(beamWidth, Mathf.Max(0.01f, beamHeight * k), beamWidth);
+            }
+        }
+        else if (body && kind == PickupKind.Gold) visual.localPosition = Vector3.zero; // coins lie where they land
+        else if (body)
+        {
+            // Bounce out under physics, settle, then lift off the floor into a gentle hover.
+            if (settledAt < 0f && !body.isKinematic && age > 0.7f && body.linearVelocity.sqrMagnitude < 0.03f)
+            {
+                body.isKinematic = true;
+                settledAt = age;
+            }
+            float hover = settledAt < 0f ? 0f : Mathf.SmoothStep(0f, 1f, (age - settledAt) * 1.5f);
+            visual.localPosition = Vector3.up * (hover * (0.16f + Mathf.Sin((age - settledAt) * 2.2f) * 0.05f));
+        }
+        else visual.localPosition = Vector3.up * (0.7f + Mathf.Sin(age * 3f) * 0.12f);
+        visual.localRotation = Quaternion.Euler(0f, age * spin, 0f);
+        if (floorGlow)
+        {
+            // The glow lies on the floor under the pickup and fades (shrinks) as it rises off it.
+            Vector3 at = transform.position;
+            floorGlow.position = new Vector3(at.x, 0.02f, at.z);
+            float s = glowSize * Mathf.Clamp01(1.25f - at.y * 0.5f);
+            floorGlow.localScale = new Vector3(s, 1f, s);
         }
 
         var player = PlayerController.Current;
@@ -154,13 +201,21 @@ public class Pickup : MonoBehaviour
         }
         if (dist < 1.0f)
         {
-            if (kind == PickupKind.Energy) player.AddEnergy(amount);
+            if (kind == PickupKind.Energy)
+            {
+                player.AddEnergy(amount);
+                LootFx.Collect(player.transform.position, LootFx.EnergyColor, false);
+            }
             else if (kind == PickupKind.Gold)
             {
                 RunState.gold += amount;
                 Tips.Show("gold", "金币能在商店花掉（小地图上标「商」的房间）");
             }
-            else player.Heal(amount);
+            else
+            {
+                player.Heal(amount);
+                LootFx.Collect(player.transform.position, LootFx.HealthColor, true);
+            }
             if (kind == PickupKind.Gold) Sfx.Play("coin", 0.3f, 0.15f, 1.15f);
             else Sfx.Play("pickup", kind == PickupKind.Health ? 0.6f : 0.25f, 0.15f);
             Destroy(gameObject);

@@ -352,11 +352,31 @@ public static class BuildScript
         if (fresnel) Save(new Material(fresnel) { name = "vfx_fresnel" }, $"{dir}/vfx_fresnel.mat");
         Debug.Log($"SETUP fresnel shader found={(bool)fresnel}");
         // Energy shields, loot pillars and floor glows (ShieldFx, LootFx): one base material per shader.
-        foreach (var (shaderName, file) in new[] { ("Meshy/Shield", "vfx_shield"), ("Meshy/LootBeam", "vfx_beam"), ("Meshy/GroundGlow", "vfx_ground") })
+        foreach (var (shaderName, file) in new[] { ("Meshy/Shield", "vfx_shield"), ("Meshy/LootBeam", "vfx_beam"), ("Meshy/GroundGlow", "vfx_ground"), ("Meshy/Halo", "vfx_halo") })
         {
             var sh = Shader.Find(shaderName);
             if (sh) Save(new Material(sh) { name = file }, $"{dir}/{file}.mat");
             Debug.Log($"SETUP {file} shader found={(bool)sh}");
+        }
+        // The Meshy potion and energy crystal, self-lit (their texture as emission), saved so the
+        // emissive Lit variant ships in the build. The round potion gets smooth normals (its remesh is
+        // faceted); the crystal keeps its hard facets.
+        if (AssetImporter.GetAtPath($"Assets/Resources/Models/Props/{LootFx.PotionModel}.fbx") is ModelImporter potion
+            && potion.importNormals != ModelImporterNormals.Calculate)
+        {
+            potion.importNormals = ModelImporterNormals.Calculate;
+            potion.normalSmoothingAngle = 75f;
+            potion.SaveAndReimport();
+        }
+        foreach (var (id, amount) in new[] { (LootFx.PotionModel, 0.3f), (LootFx.CrystalModel, 1.1f) })
+        {
+            var model = AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/Resources/Models/Props/{id}.fbx");
+            var r = model ? model.GetComponentInChildren<Renderer>() : null;
+            if (!r || !r.sharedMaterial) continue;
+            var glow = new Material(r.sharedMaterial) { name = "glow_" + id };
+            LootFx.MakeSelfLit(glow, amount);
+            Save(glow, $"{dir}/glow_{id}.mat");
+            Debug.Log($"SETUP glow_{id} shader={glow.shader.name} texture={(bool)glow.GetTexture("_EmissionMap")}");
         }
         Debug.Log($"SETUP vfx shader={Vfx.CreateMaterial(true, tex).shader.name}");
     }

@@ -80,8 +80,9 @@ public class ShopItem : MonoBehaviour
                 var v = Weapons.MakeVisual(w, item.visual, 0);
                 v.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
                 break;
-            case Kind.Potion: Orb(item.visual, 0.42f, "pickup_health"); break;
-            case Kind.Energy: Orb(item.visual, 0.32f, "pickup_energy"); break;
+            // The same Meshy potion and energy crystal that drop on the floor, a size up on the pedestal.
+            case Kind.Potion: if (!LootFx.PickupModel(LootFx.PotionModel, item.visual, 1.3f, true)) Orb(item.visual, 0.42f, "pickup_health"); break;
+            case Kind.Energy: if (!LootFx.PickupModel(LootFx.CrystalModel, item.visual, 1.75f, true)) Orb(item.visual, 0.32f, "pickup_energy"); break;
             case Kind.Upgrade: Orb(item.visual, 0.3f, "embers"); break;
             default: Orb(item.visual, 0.3f, "pickup_gold"); break;
         }
