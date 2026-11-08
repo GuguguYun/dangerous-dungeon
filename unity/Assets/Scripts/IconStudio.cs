@@ -32,7 +32,7 @@ public class IconStudio : MonoBehaviour
     }
 
     public Texture2D Weapon(string id) => id != null && weaponIcons.TryGetValue(id, out var t) ? t : null;
-    public bool Ready => portraits.Count == Classes.All.Count;
+    public bool Ready => portraits.Count == Classes.All.Count && faces.Count == Classes.All.Count;
 
     /// Save every icon and portrait as PNG (-icons <dir>: checking them without a window on screen).
     public void Dump(string dir)
@@ -40,10 +40,16 @@ public class IconStudio : MonoBehaviour
         System.IO.Directory.CreateDirectory(dir);
         foreach (var kv in weaponIcons) System.IO.File.WriteAllBytes(System.IO.Path.Combine(dir, $"weapon_{kv.Key}.png"), kv.Value.EncodeToPNG());
         foreach (var kv in portraits) System.IO.File.WriteAllBytes(System.IO.Path.Combine(dir, $"portrait_{kv.Key}.png"), kv.Value.EncodeToPNG());
+        foreach (var kv in facesRaw) System.IO.File.WriteAllBytes(System.IO.Path.Combine(dir, $"face_{kv.Key}.png"), kv.Value.EncodeToPNG());
     }
     // Still portraits made exactly like the weapon icons (that path renders true colours).
     readonly Dictionary<string, Texture2D> portraits = new Dictionary<string, Texture2D>();
     public Texture ClassView(string id) => portraits.TryGetValue(id, out var p) ? p : classViews.TryGetValue(id, out var t) ? t : null;
+
+    // Head-and-shoulders close-ups for the round medallions (HUD, run summary), cut to a circle.
+    readonly Dictionary<string, Texture2D> faces = new Dictionary<string, Texture2D>();
+    readonly Dictionary<string, Texture2D> facesRaw = new Dictionary<string, Texture2D>(); // as rendered, for -icons
+    public Texture2D Face(string id) => faces.TryGetValue(id, out var f) ? f : null;
 
     Camera MakeCamera(RenderTexture rt, Vector3 at, Vector3 look)
     {
@@ -143,7 +149,77 @@ public class IconStudio : MonoBehaviour
             Destroy(body.gameObject);
             yield return null;
         }
-        Debug.Log($"ICONS {weaponIcons.Count} portraits {portraits.Count}");
+        // Faces: the full portrait cropped to the head and blown up to a medallion on a big screen came out
+        // blurred and grey. A 512 px close-up of head and shoulders instead, lit warm from the front-left,
+        // filled cool from the right and rimmed from behind.
+        var frt = new RenderTexture(512, 512, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+        cam.targetTexture = frt;
+        key.intensity = 3.2f;
+        fill.intensity = 1.4f;
+        var rim = Light(spot + new Vector3(0.6f, 1.6f, 1.6f), 6f, 3f, new Color(0.75f, 0.85f, 1f));
+        foreach (var cls in Classes.All)
+        {
+            var body = CharacterAnim.Spawn(cls.model, holder, Layer);
+            if (!body) continue;
+            holder.rotation = Quaternion.Euler(0f, 165f, 0f);
+            yield return null; // let the idle pose apply
+            // Frame the head from a first, wider picture: the topmost opaque block of it is the head
+            // (with hair, hat, halo). Guessing from bones or skinned vertices left the faces off-centre.
+            var b = new Bounds(body.transform.position, Vector3.zero);
+            bool any = false;
+            foreach (var r in body.GetComponentsInChildren<Renderer>())
+            {
+                if (!any) { b = r.bounds; any = true; } else b.Encapsulate(r.bounds);
+            }
+            float h = b.size.y;
+            body.transform.position += spot - new Vector3(b.center.x, b.max.y - h * 0.25f, b.center.z);
+            float wide = h * 0.3f;
+            cam.orthographicSize = wide;
+            cam.Render();
+            var prev0 = RenderTexture.active;
+            RenderTexture.active = frt;
+            var probe = new Texture2D(frt.width, frt.height, TextureFormat.RGBA32, false);
+            probe.ReadPixels(new Rect(0, 0, frt.width, frt.height), 0, 0);
+            RenderTexture.active = prev0;
+            var px = probe.GetPixels32();
+            int n = frt.width, top = -1;
+            for (int y = n - 1; y >= 0 && top < 0; y--)
+                for (int x = 0; x < n; x++) if (px[y * n + x].a > 20) { top = y; break; }
+            float centreX = 0.5f, centreY = 0.5f, span = 0.6f;
+            if (top >= 0)
+            {
+                // The head of these chibi heroes is about the top 36% of their height.
+                int headPx = Mathf.RoundToInt(h * 0.36f / (2f * wide) * n), bottom = Mathf.Max(0, top - headPx);
+                int minX = n, maxX = -1;
+                for (int y = bottom; y <= top; y++)
+                    for (int x = 0; x < n; x++)
+                        if (px[y * n + x].a > 20) { minX = Mathf.Min(minX, x); maxX = Mathf.Max(maxX, x); }
+                if (maxX >= minX)
+                {
+                    span = Mathf.Max(maxX - minX, top - bottom) / (float)n;
+                    centreX = (minX + maxX) * 0.5f / n;
+                    // A little below the block's middle: hats and halos sit on top, the face lower down.
+                    centreY = (bottom + top) * 0.5f / n - span * 0.12f;
+                }
+            }
+            Destroy(probe);
+            // Move the head to the middle (in the camera's plane) and fill most of the circle with it.
+            body.transform.position -= cam.transform.right * (centreX - 0.5f) * 2f * wide + cam.transform.up * (centreY - 0.5f) * 2f * wide;
+            cam.orthographicSize = Mathf.Max(0.05f, span * wide * 1.15f);
+            cam.Render();
+            var prev = RenderTexture.active;
+            RenderTexture.active = frt;
+            var raw = new Texture2D(frt.width, frt.height, TextureFormat.RGBA32, false);
+            raw.ReadPixels(new Rect(0, 0, frt.width, frt.height), 0, 0);
+            raw.Apply();
+            RenderTexture.active = prev;
+            facesRaw[cls.id] = raw;
+            faces[cls.id] = ForMedal(raw);
+            Destroy(body.gameObject);
+            yield return null;
+        }
+        Destroy(rim.gameObject);
+        Debug.Log($"ICONS {weaponIcons.Count} portraits {portraits.Count} faces {faces.Count}");
     }
 
     IEnumerator CopyViews()
@@ -161,6 +237,28 @@ public class IconStudio : MonoBehaviour
     }
 
     /// A light stand-in for the game camera's tone mapping: a little more contrast and saturation.
+    /// A copy cut to a soft-edged circle, its colours decoded once more: IMGUI shows textures encoded
+    /// twice in this linear project (see UiArtImporter), which is what made the faces grey and pale.
+    static Texture2D ForMedal(Texture2D raw)
+    {
+        int w = raw.width, hgt = raw.height;
+        var px = raw.GetPixels();
+        float r0 = Mathf.Min(w, hgt) * 0.5f;
+        for (int y = 0; y < hgt; y++)
+            for (int x = 0; x < w; x++)
+            {
+                int i = y * w + x;
+                var c = px[i];
+                float d = new Vector2(x + 0.5f - w * 0.5f, y + 0.5f - hgt * 0.5f).magnitude;
+                float edge = Mathf.Clamp01((r0 - d) / 2f);
+                px[i] = new Color(Mathf.GammaToLinearSpace(c.r), Mathf.GammaToLinearSpace(c.g), Mathf.GammaToLinearSpace(c.b), c.a * edge);
+            }
+        var tex = new Texture2D(w, hgt, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Trilinear };
+        tex.SetPixels(px);
+        tex.Apply(true);
+        return tex;
+    }
+
     static void Grade(Texture2D tex)
     {
         var px = tex.GetPixels();
