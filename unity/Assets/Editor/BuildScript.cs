@@ -33,6 +33,7 @@ public static class BuildScript
         LogAxisProbe();
         ConfigureCharacters();
         WriteHandFrames();
+        RobeFix.Run();
         LogModels();
         CreatePaletteAssets();
         CreateVfxAssets();

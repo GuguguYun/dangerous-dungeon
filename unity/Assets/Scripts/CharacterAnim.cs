@@ -13,6 +13,10 @@ public class CharacterAnim : MonoBehaviour
     Animation anim;
     Transform hips;
     Vector3 hipsRest;
+    // Robed heroes run with half the knee bend, so the heel doesn't kick up through the back of the robe.
+    Transform[] knees;
+    Quaternion[] kneeRest;
+    float kneeBend = 1f;
     string base_ = "idle";
     string oneShot;
     float oneShotUntil;
@@ -45,6 +49,11 @@ public class CharacterAnim : MonoBehaviour
             }
             if (b.size.y > 0.01f) go.transform.localScale *= want / b.size.y;
         }
+        // Long robes re-weighted at build time so running doesn't tear them open (Editor/RobeFix).
+        var robe = Resources.Load<Mesh>($"Models/Chars/{id}/robe");
+        if (robe)
+            foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>())
+                if (smr.sharedMesh && smr.sharedMesh.vertexCount == robe.vertexCount) smr.sharedMesh = robe;
         foreach (var t in go.GetComponentsInChildren<Transform>()) t.gameObject.layer = layer;
         foreach (var c in go.GetComponentsInChildren<Collider>()) DestroyImmediate(c);
         FaceForward(go.transform, parent);
@@ -63,6 +72,12 @@ public class CharacterAnim : MonoBehaviour
         }
         ca.anim.playAutomatically = false;
         ca.hips = ca.Find("hips");
+        if (robe)
+        {
+            ca.knees = System.Array.FindAll(go.GetComponentsInChildren<Transform>(), t => t.name == "LeftLeg" || t.name == "RightLeg");
+            ca.kneeRest = System.Array.ConvertAll(ca.knees, t => t.localRotation); // straight, as modelled
+            ca.kneeBend = 0.5f;
+        }
         if (ca.hips) ca.hipsRest = ca.transform.InverseTransformPoint(ca.hips.position);
         ca.Play("idle");
         return ca;
@@ -127,6 +142,9 @@ public class CharacterAnim : MonoBehaviour
     /// character, so pin the hips' horizontal position and keep only the vertical bob.
     void LateUpdate()
     {
+        if (knees != null)
+            for (int i = 0; i < knees.Length; i++)
+                if (knees[i]) knees[i].localRotation = Quaternion.Slerp(kneeRest[i], knees[i].localRotation, kneeBend);
         if (!hips) return;
         // Work in the model's own space: the rig's parent bones may be rotated (Z-up armatures).
         var p = transform.InverseTransformPoint(hips.position);
