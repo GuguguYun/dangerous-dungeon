@@ -1,6 +1,7 @@
 #!/bin/zsh
 # Build the Unity client, run the headless self-test, then capture screenshots.
 # Usage: scripts/check.sh [shot-name]   (screenshots land in logs/shots/<shot-name>, default "latest")
+# SKIP_BUILD=1 reuses the current .app.
 set -u
 ROOT=${0:A:h:h}
 UNITY=/Applications/Unity/Hub/Editor/6000.3.28f1/Unity.app/Contents/MacOS/Unity
@@ -17,10 +18,12 @@ run_for() {
   wait $pid
 }
 
-echo "== build"
-"$UNITY" -batchmode -quit -nographics -projectPath "$ROOT/unity" -executeMethod BuildScript.BuildMac -logFile "$ROOT/logs/build.log" >/dev/null 2>&1
-grep -E "error CS|BUILD " "$ROOT/logs/build.log" | sort -u
-grep -q "BUILD Succeeded" "$ROOT/logs/build.log" || { echo "BUILD FAILED"; exit 1; }
+if [[ -z "${SKIP_BUILD:-}" ]]; then
+  echo "== build"
+  "$UNITY" -batchmode -quit -nographics -projectPath "$ROOT/unity" -executeMethod BuildScript.BuildMac -logFile "$ROOT/logs/build.log" >/dev/null 2>&1
+  grep -E "error CS|BUILD " "$ROOT/logs/build.log" | sort -u
+  grep -q "BUILD Succeeded" "$ROOT/logs/build.log" || { echo "BUILD FAILED"; exit 1; }
+fi
 
 echo "== autotest"
 run_for 200 "$BIN" -batchmode -nographics -autotest -logFile "$ROOT/logs/autotest.log" >/dev/null 2>&1
@@ -28,6 +31,8 @@ grep -E "AUTOTEST (FAIL|done)|Exception" "$ROOT/logs/autotest.log"
 
 echo "== shots"
 rm -rf "$SHOTS"; mkdir -p "$SHOTS"
+# A sleeping display stalls the windowed player; keep it lit (it works even behind the lock screen).
+caffeinate -u -t 260 &
 run_for 240 "$BIN" -shots "$SHOTS" -screen-width 1600 -screen-height 900 -screen-fullscreen 0 -logFile "$ROOT/logs/shots.log" >/dev/null 2>&1
 grep -E "SHOTS done|Exception" "$ROOT/logs/shots.log" | sort -u
 ls "$SHOTS"
