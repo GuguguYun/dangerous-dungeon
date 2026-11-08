@@ -313,6 +313,7 @@ public class Dungeon : MonoBehaviour
                     var real = chest.AddComponent<Chest>();
                     real.dungeon = this;
                     real.mimic = rng.NextDouble() < Chest.MimicChance;
+                    real.mechChance = 0.3f;
                     break;
                 case Kind.Altar:
                     Altar.Create(info.Center, transform);

@@ -8,6 +8,7 @@ public class Chest : MonoBehaviour
     public Dungeon dungeon;
     public int minRarity;
     public bool mimic;
+    public float mechChance; // the chest room's chest sometimes calls in a mech as well
     public Enemy woke; // the mimic it turned into (self-test)
     bool opened;
 
@@ -29,6 +30,8 @@ public class Chest : MonoBehaviour
         Pickup.Spawn(PickupKind.Weapon, transform.position - d.normalized * 1.4f, 0, w);
         Pickup.SpawnEnergy(transform.position, 4);
         dungeon.ShowMessage($"宝箱：{w.name}（{w.type}，按 E 拾取）", 2f);
+        if (Random.value < mechChance)
+            ParkedMech.Drop(Mechs.Random(), transform.position + d.normalized * -3.2f, Random.Range(0f, 360f)); // behind the chest
         transform.localScale = new Vector3(1.1f, 0.8f, 1.1f);
         Sfx.Play("chest", 0.9f, 0f);
         Sfx.Play("buff", 0.4f, 0f);

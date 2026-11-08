@@ -40,18 +40,6 @@ public static class Mechs
 
     public static MechDef Random() => UnityEngine.Random.value < 0.5f ? Light : Heavy;
 
-    /// Each cleared room may drop a mech; every miss raises the next room's chance.
-    public static bool RollDrop()
-    {
-        if (UnityEngine.Random.value < 0.25f + RunState.mechPity)
-        {
-            RunState.mechPity = 0f;
-            return true;
-        }
-        RunState.mechPity += 0.15f;
-        return false;
-    }
-
     /// A ground impact (drop landing, heavy stomp): hurts and throws back enemies, shoves loose props.
     public static int Shock(Vector3 at, float radius, int damage, float knock)
     {

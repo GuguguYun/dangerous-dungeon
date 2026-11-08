@@ -491,7 +491,6 @@ public partial class Enemy : MonoBehaviour
             Vfx.Detach(chillFx);
             Pickup.SpawnEnergy(transform.position, kind == EnemyKind.Boss ? 12 : Random.Range(1, 4));
             Pickup.SpawnGold(transform.position, kind == EnemyKind.Boss ? 20 : Random.Range(1, 4));
-            if (kind != EnemyKind.Boss && elite == EliteKind.None && !mini && Random.value < 0.03f) Pickup.DropWeapon(transform.position);
             if (Random.value < (kind == EnemyKind.Boss ? 1f : 0.06f))
                 Pickup.Spawn(PickupKind.Health, transform.position + Vector3.right, 2);
             RunState.kills++;

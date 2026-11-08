@@ -4,7 +4,7 @@ using UnityEngine;
 /// One thing for sale on a shop pedestal: walk up, press E, pay in gold.
 public class ShopItem : MonoBehaviour
 {
-    public enum Kind { Weapon, Potion, Energy, Buff, Upgrade }
+    public enum Kind { Weapon, Potion, Energy, Buff, Upgrade, Mech }
 
     public static readonly List<ShopItem> Live = new List<ShopItem>();
     public const string UpgradeModel = "smith_anvil", BlessingModel = "blessing_scroll";
@@ -12,6 +12,8 @@ public class ShopItem : MonoBehaviour
     public int price;
     public WeaponDef weapon;
     public BuffDef buff;
+    public MechDef mech;      // Mech: which one the beacon calls in (its figurine turns on the pedestal)
+    public Vector3 dropAt;    // Mech: where it lands
     public bool sold;
     Transform visual;
     Light glow;
@@ -25,6 +27,7 @@ public class ShopItem : MonoBehaviour
         Kind.Potion => "赤红药剂",
         Kind.Energy => "蓝晶电池",
         Kind.Upgrade => "武器强化",
+        Kind.Mech => $"机甲信标：{mech.name}",
         _ => "增益：" + buff.name,
     };
 
@@ -34,6 +37,7 @@ public class ShopItem : MonoBehaviour
         Kind.Potion => "回复 3 点生命（在机甲里则修理机甲）",
         Kind.Energy => "回复 100 点能量",
         Kind.Upgrade => PlayerController.Current ? $"手上的「{PlayerController.Current.Weapon.Title}」伤害 +1（这一局都有效，可叠加）" : "手上的武器伤害 +1",
+        Kind.Mech => $"呼叫{(mech.heavy ? "重装" : "轻装")}机甲「{mech.name}」空投到商店门口",
         _ => buff.desc,
     };
 
@@ -43,10 +47,11 @@ public class ShopItem : MonoBehaviour
         Kind.Potion => new Color(1f, 0.35f, 0.4f),
         Kind.Energy => new Color(0.35f, 0.6f, 1f),
         Kind.Upgrade => new Color(1f, 0.55f, 0.25f),
+        Kind.Mech => mech.color,
         _ => new Color(1f, 0.85f, 0.35f),
     };
 
-    public static ShopItem Create(Kind kind, Vector3 at, Transform parent, WeaponDef w = null, BuffDef b = null)
+    public static ShopItem Create(Kind kind, Vector3 at, Transform parent, WeaponDef w = null, BuffDef b = null, MechDef m = null)
     {
         // A carved stone pedestal (the dungeon's pillar, cut down) with the ware floating and turning above it.
         var stand = Kit.Spawn("pillar", at, Quaternion.identity, parent);
@@ -60,12 +65,14 @@ public class ShopItem : MonoBehaviour
         item.kind = kind;
         item.weapon = w;
         item.buff = b;
+        item.mech = m;
         item.price = kind switch
         {
             Kind.Weapon => new[] { 12, 20, 32, 48, 70 }[w.rarity],
             Kind.Potion => 12,
             Kind.Energy => 8,
             Kind.Upgrade => 22,
+            Kind.Mech => 45,
             _ => 30,
         };
         item.visual = new GameObject("ware").transform;
@@ -80,6 +87,16 @@ public class ShopItem : MonoBehaviour
             // The same Meshy potion and energy crystal that drop on the floor, a size up on the pedestal.
             case Kind.Potion: if (!LootFx.PickupModel(LootFx.PotionModel, item.visual, 1.3f, true)) Orb(item.visual, 0.42f, "pickup_health"); break;
             case Kind.Energy: if (!LootFx.PickupModel(LootFx.CrystalModel, item.visual, 1.75f, true)) Orb(item.visual, 0.32f, "pickup_energy"); break;
+            case Kind.Mech:
+            {
+                // A little figurine of the mech it calls in.
+                var fig = new GameObject("figurine").transform;
+                fig.SetParent(item.visual, false);
+                Mechs.Visual(m, fig, Layers.World, out _);
+                fig.localScale = Vector3.one * 0.3f;
+                fig.localPosition = Vector3.down * 0.35f;
+                break;
+            }
             // A smith's anvil for the weapon upgrade, a blessing scroll for the random blessing.
             case Kind.Upgrade: if (!LootFx.PickupModel(UpgradeModel, item.visual, 1.2f, true)) Orb(item.visual, 0.3f, "embers"); break;
             default:
@@ -132,6 +149,7 @@ public class ShopItem : MonoBehaviour
             case Kind.Potion: p.Heal(3); break;
             case Kind.Energy: p.AddEnergy(100); break;
             case Kind.Upgrade: p.UpgradeWeapon(); break;
+            case Kind.Mech: ParkedMech.Drop(mech, dropAt, Random.Range(0f, 360f)); break;
             default: Buffs.Take(buff, p); break;
         }
         Vfx.Sparks(transform.position + Vector3.up * 1.35f, Tint, 14, 4f);
@@ -178,17 +196,20 @@ public static class Shop
         col.center = Vector3.up * 0.7f;
         keeper.gameObject.layer = Layers.World;
 
-        // Four wares in a row between the merchant and the door.
+        // Six wares in a row between the merchant and the door (the shop and chests are the only
+        // places to get weapons and mechs).
         var owned = new[] { PlayerController.Current?.weapons[0]?.id, PlayerController.Current?.weapons[1]?.id };
         var w = Weapons.RandomExcept(owned);
         var offers = Buffs.Offer(1);
         Vector3 row = center - toDoor * 0.6f;
-        ShopItem.Create(ShopItem.Kind.Weapon, row - side * 3.2f, parent, w);
-        ShopItem.Create(ShopItem.Kind.Potion, row - side * 1.6f, parent);
-        ShopItem.Create(ShopItem.Kind.Energy, row, parent);
-        ShopItem.Create(ShopItem.Kind.Upgrade, row + side * 1.6f, parent);
-        if (offers.Count > 0) ShopItem.Create(ShopItem.Kind.Buff, row + side * 3.2f, parent, null, offers[0]);
-        else ShopItem.Create(ShopItem.Kind.Potion, row + side * 3.2f, parent);
+        ShopItem.Create(ShopItem.Kind.Weapon, row - side * 3.5f, parent, w);
+        ShopItem.Create(ShopItem.Kind.Potion, row - side * 2.1f, parent);
+        ShopItem.Create(ShopItem.Kind.Energy, row - side * 0.7f, parent);
+        ShopItem.Create(ShopItem.Kind.Upgrade, row + side * 0.7f, parent);
+        if (offers.Count > 0) ShopItem.Create(ShopItem.Kind.Buff, row + side * 2.1f, parent, null, offers[0]);
+        else ShopItem.Create(ShopItem.Kind.Potion, row + side * 2.1f, parent);
+        var beacon = ShopItem.Create(ShopItem.Kind.Mech, row + side * 3.5f, parent, null, null, Mechs.Random());
+        beacon.dropAt = center + toDoor * 2.6f;
     }
 }
 

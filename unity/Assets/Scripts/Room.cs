@@ -144,46 +144,16 @@ public class Room : MonoBehaviour
         hud.enemiesLeft = -1;
         SetGates(false);
         hud.Show(boss ? "首领被击败！宝箱和传送门出现了" : "房间已清空！", 2.5f);
-        if (!boss)
-        {
-            DropReward();
-            // Sometimes a mech drops in as well (more likely after rooms that gave none).
-            if (Mechs.RollDrop())
-                ParkedMech.Drop(Mechs.Random(), MechSpot(), Random.Range(0f, 360f));
-        }
+        // Fights pay in health, energy and gold; weapons and mechs come only from chests and the shop.
+        if (!boss) DropReward();
         Cleared?.Invoke(this);
-    }
-
-    /// Clear floor near the middle for a mech to land: no walls, props or traps underneath.
-    Vector3 MechSpot()
-    {
-        Vector3 c = Center();
-        for (int i = 0; i < 16; i++)
-        {
-            float a = i * 67.5f;
-            Vector3 p = c + Quaternion.Euler(0f, a, 0f) * Vector3.forward * (2.5f + 0.4f * i);
-            p.y = 0f;
-            if (Physics.CheckCapsule(p + Vector3.up * 1.0f, p + Vector3.up * 2.2f, 0.85f, ~(Layers.PlayerMask | Layers.EnemyMask | Layers.DebrisMask), QueryTriggerInteraction.Ignore)) continue;
-            bool trap = false;
-            foreach (var t in Trap.Live)
-                if (t && Vector3.Distance(new Vector3(t.transform.position.x, 0f, t.transform.position.z), p) < t.radius + 1.2f) trap = true;
-            if (!trap) return p;
-        }
-        return c + new Vector3(2.5f, 0f, -2.5f);
     }
 
     void DropReward()
     {
-        float r = Random.value;
         var c = Center();
-        // A weapon one room in four, and never more than three rooms in a row without one.
-        if (player && (r < 0.25f || RunState.weaponPity >= 3)) Pickup.DropWeapon(c);
-        else
-        {
-            RunState.weaponPity++;
-            if (r < 0.55f) Pickup.Spawn(PickupKind.Health, c, 2);
-            else Pickup.SpawnEnergy(c, 8);
-        }
-        Pickup.SpawnGold(c, 4);
+        if (Random.value < 0.45f) Pickup.Spawn(PickupKind.Health, c, 2);
+        else Pickup.SpawnEnergy(c, 8);
+        Pickup.SpawnGold(c, 6);
     }
 }

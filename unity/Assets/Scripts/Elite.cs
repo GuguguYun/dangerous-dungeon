@@ -166,8 +166,8 @@ public partial class Enemy
             Destroy(shieldFx.gameObject, 0.3f);
         }
         if (elite == EliteKind.None) return;
-        Pickup.SpawnGold(transform.position, 6);
-        if (Random.value < 0.25f) Pickup.DropWeapon(transform.position + Vector3.right, 1); // elites: a good weapon now and then
+        // Elites pay in gold (weapons only come from chests and the shop).
+        Pickup.SpawnGold(transform.position, 9);
         if (Random.value < 0.35f) Pickup.Spawn(PickupKind.Health, transform.position + Vector3.left, 2);
         if (elite == EliteKind.Splitting && Split != null)
         {
