@@ -18,6 +18,7 @@ public class GameManager : MonoBehaviour
     Dungeon dungeon;
     string shotDir;
     string gripDir; // -grips <dir>: close-up contact sheets of every weapon grip
+    string flickerDir; // -flicker <dir>: consecutive frames of the hero under a slowly turning camera
     string iconDir; // -icons <dir>: save the UI icons and hero portraits (works without a window)
     bool autotest;
 
@@ -33,7 +34,7 @@ public class GameManager : MonoBehaviour
     static bool showTitle = true;
     static bool argsApplied;
 
-    bool Scripted => autotest || shotDir != null || gripDir != null || iconDir != null;
+    bool Scripted => autotest || shotDir != null || gripDir != null || iconDir != null || flickerDir != null;
 
     void Start()
     {
@@ -116,6 +117,7 @@ public class GameManager : MonoBehaviour
         if (autotest) StartCoroutine(RunState.floor == 1 ? AutoTest() : AutoTestNextFloor());
         else if (shotDir != null) StartCoroutine(Shots());
         else if (gripDir != null) StartCoroutine(GripSheets());
+        else if (flickerDir != null) StartCoroutine(FlickerFrames());
         else if (iconDir != null) StartCoroutine(DumpIcons());
         else if (showTitle)
         {
@@ -225,6 +227,7 @@ public class GameManager : MonoBehaviour
             if (args[i] == "-autotest") autotest = true;
             if (args[i] == "-shots" && i + 1 < args.Length) shotDir = args[i + 1];
             if (args[i] == "-grips" && i + 1 < args.Length) gripDir = args[i + 1];
+            if (args[i] == "-flicker" && i + 1 < args.Length) flickerDir = args[i + 1];
             if (args[i] == "-icons" && i + 1 < args.Length) iconDir = args[i + 1];
             // Self-check helpers: start as a class and/or on a floor (first load only).
             if (!argsApplied && args[i] == "-class" && i + 1 < args.Length) RunState.ChooseClass(args[i + 1]);
@@ -1619,6 +1622,110 @@ public class GameManager : MonoBehaviour
         if (IconStudio.I) IconStudio.I.Dump(iconDir);
         Debug.Log($"ICONS dumped ready={(IconStudio.I && IconStudio.I.Ready)}");
         Application.Quit();
+    }
+
+    /// Flicker check (the user gets motion sick from shimmer): the idle hero seen from the play
+    /// camera's spot while the view turns slowly, as when aiming with the mouse; 24 consecutive frames
+    /// cropped around the hero, then the same close up. Flicker = brightness that jumps up and down from
+    /// frame to frame instead of drifting (see scripts/flicker.py).
+    IEnumerator FlickerFrames()
+    {
+        foreach (var e in FindObjectsByType<Enemy>(FindObjectsSortMode.None)) Destroy(e.gameObject);
+        if (Pet.Current) Pet.Current.gameObject.SetActive(false);
+        hud.enabled = false;
+        player.controlEnabled = false;
+        player.externalCamera = true;
+        player.Teleport(dungeon.playerStart);
+        yield return new WaitForSeconds(1.5f);
+        Directory.CreateDirectory(flickerDir);
+        Vector3 pos = player.transform.position, chest = pos + Vector3.up * 1.0f;
+        float yaw0 = player.yaw;
+        foreach (var (tag, back, side, up, tile) in new[] { ("play", 3.0f, 0.95f, 0.85f, 520), ("close", 1.6f, 0.3f, 0.3f, 640) })
+        {
+            for (int f = 0; f < 24; f++)
+            {
+                float yaw = yaw0 + f * 0.35f; // a slow mouse turn: 21°/s at 60 fps
+                Vector3 fwd = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward, right = Vector3.Cross(Vector3.up, fwd);
+                Vector3 eye = chest - fwd * back + right * side + Vector3.up * up;
+                cam.transform.SetPositionAndRotation(eye, Quaternion.LookRotation(chest - eye));
+                yield return new WaitForEndOfFrame();
+                var screen = ScreenCapture.CaptureScreenshotAsTexture();
+                int x0 = (screen.width - tile) / 2, y0 = (screen.height - tile) / 2;
+                var crop = new Texture2D(tile, tile, TextureFormat.RGB24, false);
+                crop.SetPixels(screen.GetPixels(x0, y0, tile, tile));
+                crop.Apply();
+                File.WriteAllBytes(Path.Combine(flickerDir, $"{tag}_{f:00}.png"), crop.EncodeToPNG());
+                Destroy(screen);
+                Destroy(crop);
+            }
+        }
+        // The same close turn with one thing off at a time, to see which one the flicker comes from.
+        var ssao = SsaoFeature();
+        var lights = FindObjectsByType<Light>(FindObjectsSortMode.None);
+        var shadows = System.Array.ConvertAll(lights, l => l.shadows);
+        foreach (var variant in new[] { "noshadow", "noao", "nopost" })
+        {
+            for (int i = 0; i < lights.Length; i++) if (lights[i]) lights[i].shadows = variant == "noshadow" ? LightShadows.None : shadows[i];
+            if (ssao) ssao.SetActive(variant != "noao");
+            if (post) post.enabled = variant != "nopost";
+            yield return new WaitForSeconds(0.3f);
+            for (int f = 0; f < 24; f++)
+            {
+                float yaw = yaw0 + f * 0.35f;
+                Vector3 fwd = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward, right = Vector3.Cross(Vector3.up, fwd);
+                Vector3 eye = chest - fwd * 1.6f + right * 0.3f + Vector3.up * 0.3f;
+                cam.transform.SetPositionAndRotation(eye, Quaternion.LookRotation(chest - eye));
+                yield return new WaitForEndOfFrame();
+                var screen = ScreenCapture.CaptureScreenshotAsTexture();
+                int x0 = (screen.width - 640) / 2, y0 = (screen.height - 640) / 2;
+                var crop = new Texture2D(640, 640, TextureFormat.RGB24, false);
+                crop.SetPixels(screen.GetPixels(x0, y0, 640, 640));
+                crop.Apply();
+                File.WriteAllBytes(Path.Combine(flickerDir, $"{variant}_{f:00}.png"), crop.EncodeToPNG());
+                Destroy(screen);
+                Destroy(crop);
+            }
+        }
+        for (int i = 0; i < lights.Length; i++) if (lights[i]) lights[i].shadows = shadows[i];
+        if (ssao) ssao.SetActive(true);
+        if (post) post.enabled = true;
+
+        // Running in place, camera still and behind: a robe or skirt that legs poke through flickers here.
+        var anim = player.GetComponentInChildren<CharacterAnim>();
+        if (anim)
+        {
+            player.enabled = false; // its Update would put the idle clip back
+            anim.SetBase("run");
+            Vector3 fwd = Quaternion.Euler(0f, yaw0, 0f) * Vector3.forward, right = Vector3.Cross(Vector3.up, fwd);
+            Vector3 eye = chest - fwd * 3.0f + right * 0.95f + Vector3.up * 0.85f;
+            cam.transform.SetPositionAndRotation(eye, Quaternion.LookRotation(chest - eye));
+            yield return new WaitForSeconds(0.6f);
+            for (int f = 0; f < 24; f++)
+            {
+                yield return new WaitForEndOfFrame();
+                var screen = ScreenCapture.CaptureScreenshotAsTexture();
+                int x0 = (screen.width - 520) / 2, y0 = (screen.height - 520) / 2;
+                var crop = new Texture2D(520, 520, TextureFormat.RGB24, false);
+                crop.SetPixels(screen.GetPixels(x0, y0, 520, 520));
+                crop.Apply();
+                File.WriteAllBytes(Path.Combine(flickerDir, $"run_{f:00}.png"), crop.EncodeToPNG());
+                Destroy(screen);
+                Destroy(crop);
+            }
+        }
+        Debug.Log("FLICKER done");
+        Application.Quit();
+    }
+
+    /// The renderer's SSAO feature (the asset keeps its renderer list private).
+    static ScriptableRendererFeature SsaoFeature()
+    {
+        if (!(GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset urp)) return null;
+        var field = typeof(UniversalRenderPipelineAsset).GetField("m_RendererDataList", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        if (!(field?.GetValue(urp) is ScriptableRendererData[] list)) return null;
+        foreach (var data in list)
+            if (data) foreach (var f in data.rendererFeatures) if (f && f.name == "SSAO") return f;
+        return null;
     }
 
     IEnumerator GripSheets()
