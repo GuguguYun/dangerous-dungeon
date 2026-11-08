@@ -34,7 +34,7 @@ public static class Classes
             maxHp = 7, maxArmor = 5, maxEnergy = 180, weapons = new[] { "pistol", "sword" },
             stamina = 3, speed = 5.6f, armorDelay = 2f, dashMul = 0.9f, staminaRegen = 0.9f, trait = "护甲 2 秒后就开始恢复",
             skill = SkillKind.Shield, skillName = "誓约壁垒", cooldown = 12f,
-            skillDesc = "震开身边敌人，召唤誓约圣剑与圣盾 6 秒：圣盾自动挡 3 次伤害，圣剑剑气更长、伤害 +20%" },
+            skillDesc = "震开身边敌人，召唤圣剑圣盾 6 秒：圣盾挡 3 次伤害，圣剑剑气更长、伤害 +20%" },
         new ClassDef { id = "assassin", name = "夜鸦刺客", model = "assassin", desc = "神出鬼没，一击致命",
             maxHp = 5, maxArmor = 3, maxEnergy = 200, weapons = new[] { "smg", "daggers" },
             stamina = 5, speed = 6.8f, crit = 0.2f, meleeMul = 1.3f, dashCooldownMul = 0.5f, dashMul = 1.35f, staminaRegen = 1.5f, dashShadows = true,

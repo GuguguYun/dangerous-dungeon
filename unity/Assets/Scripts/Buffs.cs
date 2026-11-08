@@ -25,7 +25,7 @@ public static class Buffs
             apply = p => { RunState.maxEnergy += 100; p.maxEnergy = p.energy = RunState.maxEnergy; } },
         new BuffDef { id = "dash", name = "风行", desc = "冲刺冷却减半",
             apply = p => RunState.dashCooldownMul = 0.5f },
-        new BuffDef { id = "crit", name = "鹰眼", desc = "暴击率 +20%（暴击伤害翻倍）", stackable = true,
+        new BuffDef { id = "crit", name = "鹰眼", desc = "暴击率 +20%（暴击 ×2）", stackable = true,
             apply = p => RunState.critChance += 0.2f },
         new BuffDef { id = "leech", name = "噬能", desc = "每击杀一个敌人回复 4 点能量",
             apply = p => RunState.energyOnKill += 4 },

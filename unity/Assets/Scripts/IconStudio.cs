@@ -42,9 +42,12 @@ public class IconStudio : MonoBehaviour
         foreach (var kv in portraits) System.IO.File.WriteAllBytes(System.IO.Path.Combine(dir, $"portrait_{kv.Key}.png"), kv.Value.EncodeToPNG());
         foreach (var kv in facesRaw) System.IO.File.WriteAllBytes(System.IO.Path.Combine(dir, $"face_{kv.Key}.png"), kv.Value.EncodeToPNG());
     }
-    // Still portraits made exactly like the weapon icons (that path renders true colours).
+    // Still portraits made like the weapon icons. `portraits` holds the true colours (saved by -icons);
+    // the cards draw `portraitsShown`, decoded once more for IMGUI like the medal faces (drawn as they
+    // were, the dark assassin came out a pale lavender grey and every hero looked washed out).
     readonly Dictionary<string, Texture2D> portraits = new Dictionary<string, Texture2D>();
-    public Texture ClassView(string id) => portraits.TryGetValue(id, out var p) ? p : classViews.TryGetValue(id, out var t) ? t : null;
+    readonly Dictionary<string, Texture2D> portraitsShown = new Dictionary<string, Texture2D>();
+    public Texture ClassView(string id) => portraitsShown.TryGetValue(id, out var p) ? p : classViews.TryGetValue(id, out var t) ? t : null;
 
     // Head-and-shoulders close-ups for the round medallions (HUD, run summary), cut to a circle.
     readonly Dictionary<string, Texture2D> faces = new Dictionary<string, Texture2D>();
@@ -149,6 +152,7 @@ public class IconStudio : MonoBehaviour
             Grade(tex);
             RenderTexture.active = prev;
             portraits[cls.id] = tex;
+            portraitsShown[cls.id] = ForImgui(tex, false);
             Destroy(body.gameObject);
             yield return null;
         }
@@ -239,10 +243,12 @@ public class IconStudio : MonoBehaviour
         RenderTexture.active = prev;
     }
 
-    /// A light stand-in for the game camera's tone mapping: a little more contrast and saturation.
-    /// A copy cut to a soft-edged circle, its colours decoded once more: IMGUI shows textures encoded
-    /// twice in this linear project (see UiArtImporter), which is what made the faces grey and pale.
-    static Texture2D ForMedal(Texture2D raw)
+    static Texture2D ForMedal(Texture2D raw) => ForImgui(raw, true);
+
+    /// A copy (for a medal: cut to a soft-edged circle) with its colours decoded once more: IMGUI shows
+    /// textures encoded twice in this linear project (see UiArtImporter), which is what made the faces
+    /// grey and pale.
+    static Texture2D ForImgui(Texture2D raw, bool circle)
     {
         int w = raw.width, hgt = raw.height;
         var px = raw.GetPixels();
@@ -253,7 +259,7 @@ public class IconStudio : MonoBehaviour
                 int i = y * w + x;
                 var c = px[i];
                 float d = new Vector2(x + 0.5f - w * 0.5f, y + 0.5f - hgt * 0.5f).magnitude;
-                float edge = Mathf.Clamp01((r0 - d) / 2f);
+                float edge = circle ? Mathf.Clamp01((r0 - d) / 2f) : 1f;
                 px[i] = new Color(Mathf.GammaToLinearSpace(c.r), Mathf.GammaToLinearSpace(c.g), Mathf.GammaToLinearSpace(c.b), c.a * edge);
             }
         var tex = new Texture2D(w, hgt, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Trilinear };
@@ -262,6 +268,7 @@ public class IconStudio : MonoBehaviour
         return tex;
     }
 
+    /// A light stand-in for the game camera's tone mapping: a little more contrast and saturation.
     static void Grade(Texture2D tex)
     {
         var px = tex.GetPixels();
