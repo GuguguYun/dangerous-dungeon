@@ -147,14 +147,17 @@ public partial class Enemy
         if (held && !dead) held.gameObject.SetActive(true);
     }
 
+    static readonly Collider[] nearBuf = new Collider[16]; // shared: every enemy steers every frame, no allocations
+
     /// Separation from other enemies plus a sidestep around obstacles ahead.
     Vector3 Steer(Vector3 move)
     {
         if (move.sqrMagnitude < 0.01f) return move;
         Vector3 sep = Vector3.zero;
-        foreach (var c in Physics.OverlapSphere(transform.position, 1.6f, Layers.EnemyMask, QueryTriggerInteraction.Ignore))
+        int n = Physics.OverlapSphereNonAlloc(transform.position, 1.6f, nearBuf, Layers.EnemyMask, QueryTriggerInteraction.Ignore);
+        for (int i = 0; i < n; i++)
         {
-            var other = c.GetComponentInParent<Enemy>();
+            var other = nearBuf[i].GetComponentInParent<Enemy>();
             if (!other || other == this || other.dead) continue;
             Vector3 away = transform.position - other.transform.position;
             away.y = 0f;

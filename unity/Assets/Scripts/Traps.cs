@@ -120,7 +120,8 @@ public class SpikeTrap : Trap
         cooldown -= Time.deltaTime;
         var p = PlayerController.Current;
         bool someone = (p && !p.dead && Inside(p.transform.position, radius) && p.Grounded);
-        foreach (var e in EnemiesNear(transform.position + Vector3.up * 0.5f, radius)) { someone = true; break; }
+        // Dead enemies have their controller switched off, so a plain overlap test is enough (and allocates nothing).
+        if (Physics.CheckSphere(transform.position + Vector3.up * 0.5f, radius, Layers.EnemyMask, QueryTriggerInteraction.Ignore)) someone = true;
         if (armT < 0f && upT <= 0f && cooldown <= 0f && someone)
         {
             armT = 0.4f;

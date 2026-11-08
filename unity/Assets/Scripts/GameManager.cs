@@ -1122,13 +1122,15 @@ public class GameManager : MonoBehaviour
         Check("碎冰 uses up the ice (next hit is normal)", frozen.hp == 70, $"hp={frozen.hp}");
 
         // 超载: lightning on a burning enemy blasts it and its neighbours.
-        var burning = Dummy(home + fwdDir * 4f + side * 2f);
-        var neighbour = Dummy(home + fwdDir * 4f + side * 3.4f);
-        yield return new WaitForSeconds(0.4f);
+        // Well inside the room (its corners hold braziers and its walls are 6 m out).
+        var burning = Dummy(home + fwdDir * 2f + side * 1.5f);
+        var neighbour = Dummy(home + fwdDir * 2f + side * 2.8f);
+        yield return new WaitForSeconds(0.5f);
         burning.ApplyBurn(3f);
         int overloads = Reactions.Overloads;
         Reactions.Shock(burning);
-        Check("超载: lightning on a burning enemy hits its neighbours", Reactions.Overloads == overloads + 1 && neighbour.hp < 100 && !burning.Burning, $"neighbour={neighbour.hp}");
+        Check("超载: lightning on a burning enemy hits its neighbours", Reactions.Overloads == overloads + 1 && neighbour.hp < 100 && !burning.Burning,
+            $"overloads={Reactions.Overloads - overloads} neighbour={neighbour.hp} apart={Vector3.Distance(burning.AimPoint, neighbour.AimPoint):F2} burningHp={burning.hp}");
 
         // 爆燃: a flame shot through a poison cloud blows it up.
         var cloud = PoisonCloud.Create(home - side * 4f);

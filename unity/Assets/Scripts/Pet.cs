@@ -91,9 +91,8 @@ public class Pet : MonoBehaviour
         // Look at and shoot the nearest enemy in sight.
         Enemy best = null;
         float bestD = 12f;
-        foreach (var c in Physics.OverlapSphere(transform.position, 12f, Layers.EnemyMask, QueryTriggerInteraction.Ignore))
+        foreach (var e in Enemy.Live)
         {
-            var e = c.GetComponentInParent<Enemy>();
             if (!e || e.dead) continue;
             float d = Vector3.Distance(e.AimPoint, transform.position);
             if (d < bestD && !Physics.Linecast(transform.position, e.AimPoint, Layers.WorldMask, QueryTriggerInteraction.Ignore))
