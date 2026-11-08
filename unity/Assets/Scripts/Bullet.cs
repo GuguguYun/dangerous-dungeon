@@ -88,10 +88,11 @@ public class Bullet : MonoBehaviour
 
     /// Per-projectile look: tracers and arrows stretch along their flight, frost is a crystal
     /// with a mist trail, flames are pure particles, rockets and missiles leave smoke.
-    /// Enemy shots are real things instead (see EnemyLook).
+    /// Enemy shots (and the player's arrows) are real things instead (see EnemyLook).
     void Style(GameObject go, MeshRenderer r, TrailRenderer tr)
     {
-        if (!hitsEnemies && EnemyLook(go, r, tr))
+        // The hunting bow's arrows are the same wooden arrows the skeleton archers loose (not a glowing needle).
+        if ((!hitsEnemies || mat == "bullet_arrow") && EnemyLook(go, r, tr))
         {
             Orient();
             return;
