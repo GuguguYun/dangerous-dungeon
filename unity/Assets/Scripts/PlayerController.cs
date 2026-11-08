@@ -858,39 +858,74 @@ public partial class PlayerController : MonoBehaviour
         return true;
     }
 
-    /// Thunder: instant hit at the crosshair, then arcs to up to three more enemies nearby.
+    /// Thunder: locks on to the enemy nearest the crosshair (35°, 20 m, in sight) so it needn't be dead
+    /// centre, strikes it, and the current conducts from enemy to enemy (see Conduct).
     void ChainLightning(WeaponDef w)
     {
         Vector3 from = muzzle.position;
         Vector3 dir = (AimPoint() - from).normalized;
+        Enemy first = LockOn(from, dir, 20f, 35f);
         Vector3 end = from + dir * 40f;
-        Enemy first = null;
-        if (Physics.Raycast(from, dir, out var rh, 40f, Layers.WorldMask | Layers.EnemyMask, QueryTriggerInteraction.Ignore))
-        {
-            end = rh.point;
-            first = rh.collider.GetComponentInParent<Enemy>();
-        }
+        if (first) end = first.AimPoint;
+        else if (Physics.Raycast(from, dir, out var rh, 40f, Layers.WorldMask | Layers.EnemyMask, QueryTriggerInteraction.Ignore)) end = rh.point;
         Fx.Lightning(from, end);
         Sfx.Play("laser", 0.7f, 0.2f);
         if (!first) return;
-        var struck = new System.Collections.Generic.List<Enemy> { first };
         Reactions.Shock(first);
-        first.TakeDamage(RollDamage(w.damage, out bool c0), dir, c0);
-        Enemy last = first;
-        for (int jump = 0; jump < 3; jump++)
+        first.TakeDamage(RollDamage(w.damage, out bool c0), (end - from).normalized, c0);
+        StartCoroutine(Conduct(w, first, 5, 9f, 0.85f));
+    }
+
+    /// The enemy a lock-on weapon takes: the one under the crosshair, else the one closest to it within
+    /// `cone` degrees and `range` metres that a wall doesn't hide.
+    Enemy LockOn(Vector3 from, Vector3 dir, float range, float cone)
+    {
+        if (Physics.Raycast(from, dir, out var rh, range, Layers.WorldMask | Layers.EnemyMask, QueryTriggerInteraction.Ignore))
         {
+            var under = rh.collider.GetComponentInParent<Enemy>();
+            if (under && !under.dead) return under;
+        }
+        Enemy best = null;
+        float score = float.MaxValue;
+        foreach (var e in Enemy.Live)
+        {
+            if (!e || e.dead) continue;
+            Vector3 to = e.AimPoint - from;
+            float d = to.magnitude, ang = Vector3.Angle(dir, to);
+            if (d > range || ang > cone) continue;
+            if (Physics.Linecast(from, e.AimPoint, Layers.WorldMask, QueryTriggerInteraction.Ignore)) continue;
+            float s = ang + d * 0.5f; // nearest the crosshair first, then nearest to you
+            if (s < score) { score = s; best = e; }
+        }
+        return best;
+    }
+
+    /// Conduction: from `start` the current jumps to the nearest enemy it hasn't touched within `reach`
+    /// metres, `hops` times, a beat apart so you see it travel, each jump a little weaker (`falloff`).
+    System.Collections.IEnumerator Conduct(WeaponDef w, Enemy start, int hops, float reach, float falloff)
+    {
+        var struck = new System.Collections.Generic.List<Enemy> { start };
+        Enemy last = start;
+        float scale = 1f;
+        for (int hop = 0; hop < hops; hop++)
+        {
+            yield return new WaitForSeconds(0.07f);
+            if (!last) break;
             Enemy next = null;
-            float best = 6f;
-            foreach (var e in FindObjectsByType<Enemy>(FindObjectsSortMode.None))
+            float best = reach;
+            foreach (var e in Enemy.Live)
             {
-                if (e.dead || struck.Contains(e)) continue;
+                if (!e || e.dead || struck.Contains(e)) continue;
                 float d = Vector3.Distance(e.transform.position, last.transform.position);
                 if (d < best) { best = d; next = e; }
             }
             if (!next) break;
-            Fx.Lightning(last.transform.position + Vector3.up, next.transform.position + Vector3.up);
+            scale *= falloff;
+            Fx.Lightning(last.AimPoint, next.AimPoint);
+            Sfx.Play("laser", 0.4f, 0.2f, 1.2f);
             Reactions.Shock(next);
-            next.TakeDamage(RollDamage(w.damage, out bool c1), (next.transform.position - last.transform.position).normalized, c1);
+            int dmg = Mathf.Max(1, Mathf.RoundToInt(RollDamage(w.damage, out bool crit) * scale));
+            next.TakeDamage(dmg, (next.transform.position - last.transform.position).normalized, crit);
             struck.Add(next);
             last = next;
         }

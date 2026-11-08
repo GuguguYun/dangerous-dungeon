@@ -537,8 +537,9 @@ public class GameManager : MonoBehaviour
         Check("room locks on entry", room.state == Room.State.Fighting && room.GatesClosed(), $"state={room.state}");
         Check("wave 1 spawned", room.alive == room.waves[0].Length, $"alive={room.alive}");
         int taken0 = player.damageTaken;
-        // Up to 8 s: with pillars or low walls in the room, enemies may first have to move to see you.
-        for (float u = 0; u < 8f && player.damageTaken == taken0; u += 0.25f) yield return new WaitForSeconds(0.25f);
+        // Up to 12 s: with pillars or low walls in the room, enemies may first have to move to see you,
+        // and a wave of slow shield guards or lobbing bombers takes a while to land a hit.
+        for (float u = 0; u < 12f && player.damageTaken == taken0; u += 0.25f) yield return new WaitForSeconds(0.25f);
         Check("enemies damage the player (armor or hp)", player.damageTaken > taken0, $"taken={player.damageTaken - taken0} hp={player.hp} armor={player.armor}");
         foreach (var e in FindObjectsByType<Enemy>(FindObjectsSortMode.None))
             Debug.Log($"AUTOTEST diag {e.kind} dist={Vector3.Distance(e.transform.position, player.transform.position):F1} pos={e.transform.position} scale={e.transform.localScale.x:F2}");
@@ -697,14 +698,14 @@ public class GameManager : MonoBehaviour
         Check("frost: slows the target", d.Slowed && d.hp < 100, $"slowed={d.Slowed} hp={d.hp} target={d.transform.position} aim={player.AimPoint()} player={player.transform.position}");
         Destroy(d.gameObject);
 
-        // Thunder chains to a second enemy nearby.
+        // Thunder locks on to an enemy off the crosshair and the current conducts to the next one.
         player.Equip(Weapons.Get("thunder"));
-        var a = Dummy(CrosshairGround());
-        var b = Dummy(CrosshairGround() + sideDir * 3f);
+        var a = Dummy(player.transform.position + Quaternion.Euler(0f, 20f, 0f) * fwdDir * 6f);
+        var b = Dummy(a.transform.position + sideDir * 4f);
         yield return new WaitForSeconds(0.4f);
         player.Attack();
-        yield return null;
-        Check("thunder: hits and chains", a.hp < 100 && b.hp < 100, $"a={a.hp} b={b.hp}");
+        yield return new WaitForSeconds(0.4f);
+        Check("thunder: locks on off the crosshair and conducts to the next enemy", a.hp < 100 && b.hp < 100, $"a={a.hp} b={b.hp}");
         Destroy(a.gameObject);
         Destroy(b.gameObject);
 

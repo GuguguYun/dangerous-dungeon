@@ -97,6 +97,9 @@ public partial class PlayerController
         }
         MeleeFx(w, origin, heavy);
         CameraShake.Add(landed > 0 ? 0.15f : 0.04f);
+        // The thunder hammer's blow conducts into two more enemies nearby.
+        if (w.id == "hammer" && landed > 0)
+            foreach (var e in hit) if (e && !e.dead) { StartCoroutine(Conduct(w, e, 2, 6f, 0.5f)); break; }
     }
 
     /// Where a blade connects: a burst of sparks on the enemy.
