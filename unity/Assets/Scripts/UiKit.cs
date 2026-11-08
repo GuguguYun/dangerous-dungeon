@@ -88,11 +88,12 @@ public static class UiKit
         return t;
     }
 
-    /// A capsule (a circle when w == h) along the longer side, filled, with an inner border; antialiased,
-    /// stored linear like Round. Drawn white-filled and tinted (Tinted), the border stays dark.
+    /// A capsule (a circle when w == h) along the longer side, filled, with an inner border; antialiased
+    /// and mipmapped (drawn a few pixels wide it would otherwise come out as a diamond), stored linear like
+    /// Round. Drawn white-filled and tinted (Tinted), the border stays dark.
     public static Texture2D Capsule(int w, int h, Color fill, Color border, float borderWidth)
     {
-        var t = new Texture2D(w, h, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+        var t = new Texture2D(w, h, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Trilinear };
         var px = new Color[w * h];
         float r = Mathf.Min(w, h) / 2f;
         Vector2 a = w < h ? new Vector2(w / 2f, r) : new Vector2(r, h / 2f);
@@ -110,7 +111,30 @@ public static class UiKit
                 px[y * w + x] = c;
             }
         t.SetPixels(px);
-        t.Apply();
+        t.Apply(true);
+        return t;
+    }
+
+    /// A ring whose outer edge touches the texture's edge, `thickness` pixels wide, filled, with a border
+    /// on both edges; antialiased and mipmapped (it is drawn smaller than it is made). Stored linear like Round.
+    public static Texture2D Ring(int size, float thickness, Color fill, Color border, float borderWidth)
+    {
+        var t = new Texture2D(size, size, TextureFormat.RGBA32, true) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Trilinear };
+        var px = new Color[size * size];
+        float half = size / 2f, mid = half - 1f - thickness / 2f;
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float r = new Vector2(x + 0.5f - half, y + 0.5f - half).magnitude;
+                float d = Mathf.Abs(r - mid) - thickness / 2f; // <0 inside the band
+                float inside = Mathf.Clamp01(0.5f - d);
+                float rim = Mathf.Clamp01(d + borderWidth + 0.5f);
+                var c = Lin(Color.Lerp(fill, border, rim));
+                c.a *= inside;
+                px[y * size + x] = c;
+            }
+        t.SetPixels(px);
+        t.Apply(true);
         return t;
     }
 
