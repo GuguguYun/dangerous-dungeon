@@ -1012,8 +1012,9 @@ public partial class PlayerController : MonoBehaviour
                 Sfx.Play("slash", 0.7f, 0.05f);
                 break;
             case "daggers":
+            case "raven_blade": // the assassin's blade: the same violet X, wider
             {
-                var c = new Color(0.75f, 0.45f, 1f);
+                var c = w.id == "raven_blade" ? new Color(0.6f, 0.3f, 1f) : new Color(0.75f, 0.45f, 1f);
                 for (int i = 0; i < 2; i++)
                 {
                     float tilt = (i % 2 == 0 ? 45f : -45f) + Random.Range(-15f, 15f);
@@ -1022,9 +1023,9 @@ public partial class PlayerController : MonoBehaviour
                 Sfx.Play("slash", 0.5f, 0.2f);
                 break;
             }
-            default: // sword
+            default: // sword (the knight's oath sword in gold)
             {
-                var c = new Color(0.55f, 0.85f, 1f);
+                var c = w.id == "oath_sword" ? new Color(1f, 0.8f, 0.35f) : new Color(0.55f, 0.85f, 1f);
                 if (heavy)
                 {
                     SlashFx.Spawn(origin, yaw, w.reach, 360f, c, 0f, 0f, 0.3f, 0.8f);

@@ -835,6 +835,7 @@ public class GameManager : MonoBehaviour
         Check("cutting does not end stealth", player.Stealthed);
         Destroy(g.gameObject);
         Destroy(mark.gameObject);
+        player.Teleport(start); // the blink carried us forward; later checks aim from the middle of the room
         yield return new WaitForSeconds(PlayerSkill.RavenTime);
         Check("stealth and the blade end together", !player.Stealthed && !player.HoldingSkillWeapon);
 
@@ -1290,6 +1291,28 @@ public class GameManager : MonoBehaviour
         guard.TakeDamage(10, fwdDir);
         Check("a heavy blow breaks its guard", !guard.Guarding && guard.hp < ghp - 3, $"guarding={guard.Guarding} hp={guard.hp}");
         Destroy(guard.gameObject);
+
+        // A mimic: the chest wakes when you come close, lunges to bite, and drops a rare weapon when beaten.
+        var fake = Props.Spawn("chest", home + fwdDir * 5f, Quaternion.LookRotation(-fwdDir), dungeon.transform, false);
+        var mc = fake.AddComponent<Chest>();
+        mc.dungeon = dungeon;
+        mc.mimic = true;
+        player.Teleport(home + fwdDir * 2.4f);
+        yield return new WaitForSeconds(0.3f);
+        Check("a mimic chest wakes when you come close", mc.woke != null && mc.woke.kind == EnemyKind.Mimic);
+        if (mc.woke)
+        {
+            var mimic = mc.woke;
+            for (float u = 0; u < 5f && mimic.lunges == 0; u += Time.deltaTime) yield return null;
+            Check("the mimic lunges to bite", mimic.lunges > 0, $"windups={mimic.windups} lunges={mimic.lunges}");
+            Vector3 at = mimic.transform.position;
+            mimic.TakeDamage(999, fwdDir);
+            yield return new WaitForSeconds(0.4f);
+            Check("a beaten mimic drops a rare-or-better weapon", Pickup.Live.Exists(x => x && x.kind == PickupKind.Weapon && x.weapon != null && x.weapon.rarity >= 2 && Vector3.Distance(x.transform.position, at) < 3f));
+            foreach (var x in Pickup.Live.ToArray()) if (x && x.kind == PickupKind.Weapon) Destroy(x.gameObject);
+        }
+        Destroy(fake);
+        player.Teleport(home);
         foreach (var b in FindObjectsByType<EnemyBomb>(FindObjectsSortMode.None)) Destroy(b.gameObject);
 
         player.hp = player.maxHp = RunState.maxHp;
@@ -1874,7 +1897,7 @@ public class GameManager : MonoBehaviour
             Vector3 nf = Quaternion.Euler(0f, player.yaw, 0f) * Vector3.forward, nr = Quaternion.Euler(0f, player.yaw + 90f, 0f) * Vector3.forward;
             var bomber = Dummy(np + nf * 4.5f - nr * 1.6f, EnemyKind.Bomber);
             var archer = Dummy(np + nf * 4.5f + nr * 1.6f, EnemyKind.Archer);
-            var guard = Dummy(np + nf * 6.5f, EnemyKind.Guard);
+            var guard = Dummy(np + nf * 4f, EnemyKind.Guard); // between the two, well inside any start room
             guard.speed = 0f;
             guard.target = player; // turns its shield to the camera
             yield return new WaitForSeconds(2.5f);
@@ -1886,6 +1909,12 @@ public class GameManager : MonoBehaviour
             Destroy(bomber.gameObject);
             Destroy(archer.gameObject);
             Destroy(guard.gameObject);
+            // A mimic, close up (standing still: no target).
+            var mimic = Dummy(np + nf * 3.5f, EnemyKind.Mimic);
+            mimic.TurnTo(-nf);
+            yield return new WaitForSeconds(0.4f);
+            yield return Shot("22b_mimic.png");
+            Destroy(mimic.gameObject);
         }
 
         // Loot: three drops of rising rarity with their light pillars.

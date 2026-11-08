@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public enum EnemyKind { Gunner, Charger, Spreader, Boss, Bomber, Archer, Guard }
+public enum EnemyKind { Gunner, Charger, Spreader, Boss, Bomber, Archer, Guard, Mimic }
 
 /// Placeholder enemies. Gunner keeps mid range and fires orbs; Charger rushes and hits on contact;
 /// Spreader fires fans; Boss cycles ring / burst / charge attacks and summons help.
@@ -111,6 +111,12 @@ public partial class Enemy : MonoBehaviour
             case EnemyKind.Guard:
                 maxHp = 12 + floor * 3; speed = 2.4f; bodyMat = "enemy_body";
                 break;
+            case EnemyKind.Mimic:
+                // A chest that was one all along: no spawn pop, it just starts moving.
+                maxHp = 30 + floor * 8; speed = 4.2f; bodyMat = "enemy_body";
+                spawnT = 1f;
+                transform.localScale = Vector3.one;
+                break;
             case EnemyKind.Boss:
                 bodyMat = "enemy_boss"; scale = 2.3f;
                 SetupBoss(floor);
@@ -125,6 +131,7 @@ public partial class Enemy : MonoBehaviour
 
     void BuildVisual(float scale)
     {
+        if (kind == EnemyKind.Mimic) { BuildMimicVisual(); return; }
         string id = kind == EnemyKind.Boss ? BossModel() : kind == EnemyKind.Guard ? GuardModel : kind.ToString().ToLower();
         // The denser second-round minion when it has been imported.
         if (kind != EnemyKind.Boss && Resources.Load<GameObject>($"Models/Chars/{id}_hq/rigged")) id += "_hq";
@@ -213,11 +220,11 @@ public partial class Enemy : MonoBehaviour
                 move = BossThink(to, dist, dt);
                 faceDir = chargeT > 0f ? chargeDir : leaping ? new Vector3(leapVel.x, 0f, leapVel.z) : (dist > 0.01f ? to / dist : faceDir);
             }
-            else move = kind == EnemyKind.Guard ? GuardThink(to, dist, dt) : MinionThink(to, dist, dt);
+            else move = kind == EnemyKind.Guard ? GuardThink(to, dist, dt) : kind == EnemyKind.Mimic ? MimicThink(to, dist, dt) : MinionThink(to, dist, dt);
 
             // Bodies only hurt when they mean to: bosses always, chargers during the lunge.
             float reach = cc.radius + 0.75f;
-            bool contact = kind == EnemyKind.Boss || ((kind == EnemyKind.Charger || kind == EnemyKind.Guard) && Lunging);
+            bool contact = kind == EnemyKind.Boss || ((kind == EnemyKind.Charger || kind == EnemyKind.Guard || kind == EnemyKind.Mimic) && Lunging);
             float realDist = Vector3.Distance(new Vector3(target.transform.position.x, 0f, target.transform.position.z), new Vector3(transform.position.x, 0f, transform.position.z));
             if (contact && contactCd <= 0f && realDist < reach)
             {
@@ -252,7 +259,7 @@ public partial class Enemy : MonoBehaviour
             flash -= dt;
             if (body)
             {
-                var fc = flash > 0f ? Color.white : (anim ? Color.white : Palette.ColorOf(bodyMat));
+                var fc = flash > 0f ? Color.white : (anim || kind == EnemyKind.Mimic ? Color.white : Palette.ColorOf(bodyMat));
                 mpb.SetColor("_Color", fc);
                 mpb.SetColor("_BaseColor", fc);
                 body.SetPropertyBlock(mpb);
@@ -346,12 +353,8 @@ public partial class Enemy : MonoBehaviour
         held = new GameObject("held_bomb").transform;
         held.SetParent(hand, false);
         held.localScale = Vector3.one * (transform.lossyScale.x / Mathf.Max(0.0001f, hand.lossyScale.x));
-        var bomb = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        DestroyImmediate(bomb.GetComponent<Collider>());
-        bomb.layer = Layers.Enemy;
-        bomb.transform.SetParent(held, false);
-        bomb.transform.localScale = Vector3.one * 0.3f;
-        bomb.GetComponent<Renderer>().sharedMaterial = Palette.Get("iron");
+        EnemyBomb.Model(held, 0.3f); // the same Meshy bomb it throws
+        foreach (var t in held.GetComponentsInChildren<Transform>()) t.gameObject.layer = Layers.Enemy;
         heldTip = Vector3.zero;
     }
 

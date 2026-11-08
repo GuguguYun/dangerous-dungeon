@@ -310,7 +310,9 @@ public class Dungeon : MonoBehaviour
                     var host = links.Find(l => l.b == info.cell).a - info.cell;
                     var face = Quaternion.LookRotation(new Vector3(host.x, 0f, host.y));
                     var chest = Props.Spawn("chest", info.Center, face, transform);
-                    chest.AddComponent<Chest>().dungeon = this;
+                    var real = chest.AddComponent<Chest>();
+                    real.dungeon = this;
+                    real.mimic = rng.NextDouble() < Chest.MimicChance;
                     break;
                 case Kind.Altar:
                     Altar.Create(info.Center, transform);
