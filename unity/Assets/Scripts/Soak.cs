@@ -50,6 +50,13 @@ public class Soak : MonoBehaviour
         fights.AddRange(dungeon.trialRooms);
         fights.AddRange(dungeon.combatRooms.FindAll(r => r.boss));
         Debug.Log($"SOAK floor start run={runsDone + 1} class={RunState.classId} floor={RunState.floor} seed={RunState.seed} fights={fights.Count}");
+        // Each floor starts from a fresh scene: anything that keeps growing from floor to floor here is
+        // a leak (runtime materials, textures, meshes kept alive by a static, or lists that never empty).
+        Debug.Log($"SOAK memory floor={RunState.floor} run={runsDone + 1} allocated={UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong() >> 20} MB"
+            + $" managed={System.GC.GetTotalMemory(false) >> 20} MB materials={Resources.FindObjectsOfTypeAll<Material>().Length}"
+            + $" textures={Resources.FindObjectsOfTypeAll<Texture>().Length} rendertextures={Resources.FindObjectsOfTypeAll<RenderTexture>().Length}"
+            + $" meshes={Resources.FindObjectsOfTypeAll<Mesh>().Length} gameobjects={Resources.FindObjectsOfTypeAll<GameObject>().Length}"
+            + $" enemies={Enemy.Live.Count} bullets={Bullet.Live.Count} pickups={Pickup.Live.Count} elites={Enemy.Elites.Count}");
         for (int i = 0; i < fights.Count; i++) yield return Fight(fights[i], i);
 
         if (!dungeon.portal)
