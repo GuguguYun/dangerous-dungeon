@@ -903,6 +903,12 @@ public class GameManager : MonoBehaviour
         player.energy = player.maxEnergy;
         for (int i = 0; i < 4; i++) { player.Attack(); yield return new WaitForSeconds(0.45f); }
         Check("bullets push physical crates", crate && Vector3.Distance(crate.transform.position, c0) > 0.15f, crate ? $"moved {Vector3.Distance(crate.transform.position, c0):F2} m, hits={crate.hits}" : "gone");
+        // Melee breaks crates too (it used to pass straight through them).
+        var box = PhysicsProp.Make(Kit.Spawn("crate", player.transform.position + fwdDir * 1.8f, Quaternion.identity, null), 18f, 6);
+        yield return new WaitForSeconds(0.4f);
+        player.Equip(Weapons.Get("sword"));
+        for (int i = 0; i < 3 && box && !box.broken; i++) { player.Attack(); yield return new WaitForSeconds(0.5f); }
+        Check("a sword breaks a crate", !box || box.broken, box ? $"hits={box.hits}" : "gone");
         if (crate) Destroy(crate.gameObject);
 
         // Explosive barrels chain and hurt enemies nearby.

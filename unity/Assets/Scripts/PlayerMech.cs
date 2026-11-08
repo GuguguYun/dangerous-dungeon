@@ -449,6 +449,7 @@ public partial class PlayerController
         }
         else
         {
+            HitProps(origin, fwd, reach, arc, baseDmg); // and chops crates and barrels
             // The plasma blade also cuts enemy shots out of the air.
             foreach (var b in Bullet.Live.ToArray())
             {

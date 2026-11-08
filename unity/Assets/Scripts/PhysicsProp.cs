@@ -13,7 +13,7 @@ public class PhysicsProp : MonoBehaviour
     public bool toxic;
     public int hits;
     public Rigidbody body;
-    bool broken;
+    public bool broken { get; private set; }
 
     public static PhysicsProp Make(GameObject go, float mass, int hp, bool explosive = false)
     {

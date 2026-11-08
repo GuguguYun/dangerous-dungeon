@@ -774,6 +774,7 @@ public partial class PlayerController : MonoBehaviour
         foreach (var col in Physics.OverlapSphere(transform.position, radius * 1.4f, ~0, QueryTriggerInteraction.Ignore))
             if (col.attachedRigidbody && !col.attachedRigidbody.isKinematic && col.attachedRigidbody != null)
                 col.attachedRigidbody.AddExplosionForce(6f, transform.position, radius * 1.4f, 0.5f, ForceMode.VelocityChange);
+        HitProps(transform.position + Vector3.up, transform.forward, radius, 360f, damage);
         Vfx.Ring(transform.position, radius, new Color(1f, 0.85f, 0.4f));
         MeleeFx(Weapon, transform.position + Vector3.up, true);
     }

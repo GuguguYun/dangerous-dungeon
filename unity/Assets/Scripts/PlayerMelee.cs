@@ -86,6 +86,7 @@ public partial class PlayerController
             Struck(e, w);
             landed++;
         }
+        HitProps(origin, fwd, w.reach, w.arc, Mathf.RoundToInt(w.damage * RunState.meleeMul));
         if (RunState.meleeMul > 1f || w.id == "sword" || w.id == "oath_sword")
         {
             foreach (var b in Bullet.Live.ToArray())
@@ -136,6 +137,7 @@ public partial class PlayerController
                 }
                 foreach (var b in Bullet.Live.ToArray())
                     if (!b.HitsEnemies && Vector3.Distance(b.transform.position, origin) <= reach + 0.5f) b.Cancel();
+                HitProps(origin, transform.forward, reach, 360f, Mathf.RoundToInt(damage * 0.45f * RunState.meleeMul));
                 Sfx.Play("slash", 0.6f, 0.15f);
                 CameraShake.Add(0.08f);
             }
@@ -161,7 +163,23 @@ public partial class PlayerController
             }
             yield return null;
         }
+        HitProps(start + Vector3.up, fwd, Vector3.Distance(start, transform.position) + 2.2f, 30f, Mathf.RoundToInt(damage * RunState.meleeMul));
         MeleeFx(w, transform.position + Vector3.up, true);
+    }
+
+    /// Crates, barrels and the explosive kegs in the swing's arc take the blow too (they used to shrug
+    /// melee off: only shots, blasts and the heavy mech's fist broke them).
+    static void HitProps(Vector3 origin, Vector3 fwd, float reach, float arc, int damage)
+    {
+        foreach (var prop in PhysicsProp.Live.ToArray())
+        {
+            if (!prop) continue;
+            Vector3 to = prop.transform.position - origin;
+            to.y = 0f;
+            if (to.magnitude > reach + 0.4f) continue;
+            if (arc < 360f && Vector3.Angle(fwd, to) > arc / 2f && to.magnitude > 1f) continue;
+            prop.Hit(Mathf.Max(1, damage), prop.transform.position + Vector3.up * 0.5f, to.sqrMagnitude > 0.01f ? to : fwd);
+        }
     }
 
     static readonly Collider[] aroundBuf = new Collider[32];
