@@ -3,11 +3,11 @@ using UnityEngine;
 
 /// Everything on screen, drawn with IMGUI: bars, weapon panel, crosshair and hit marker,
 /// damage numbers, minimap, boss bar, messages, and the modal screens (buff pick, pause, death, win).
-public class Hud : MonoBehaviour
+public partial class Hud : MonoBehaviour
 {
     public static Hud I;
 
-    public enum Screen { None, Title, ClassSelect, Buff, Pause, Dead, Won, Settings }
+    public enum Screen { None, Title, ClassSelect, Buff, Pause, Dead, Won, Settings, Codex }
 
     public PlayerController player;
     public Dungeon dungeon;
@@ -232,7 +232,7 @@ public class Hud : MonoBehaviour
         // scale rather than running off the bottom.
         float need = screen switch
         {
-            Screen.Settings => 780f, Screen.Dead => 740f, Screen.Won => 740f, Screen.Pause => 720f,
+            Screen.Settings => 780f, Screen.Codex => 760f, Screen.Dead => 740f, Screen.Won => 740f, Screen.Pause => 720f,
             Screen.Title => 700f, Screen.ClassSelect => 680f, _ => 620f,
         };
         guiScale = Mathf.Min(UnityEngine.Screen.height / 900f * GameSettings.uiScale, UnityEngine.Screen.height / need);
@@ -247,6 +247,11 @@ public class Hud : MonoBehaviour
         if (screen == Screen.Settings)
         {
             DrawSettings(w, h);
+            return;
+        }
+        if (screen == Screen.Codex)
+        {
+            DrawCodex(w, h);
             return;
         }
         if (screen == Screen.ClassSelect)
@@ -380,8 +385,9 @@ public class Hud : MonoBehaviour
         UiKit.Text(new Rect(0, h * 0.12f + 140, w, 30), "提示词铸成的迷城每晚都会重生 —— 带上武器，闯到最深处", new GUIStyle(small) { fontSize = 20 });
         float bw = 320, bx = w / 2 - bw / 2, by = h * 0.45f;
         if (Btn(new Rect(bx, by, bw, 66), "开始冒险", button)) Begin?.Invoke();
-        if (Btn(new Rect(bx, by + 80, bw, 54), "设置 · 防晕 3D", button)) OpenSettings();
-        if (Btn(new Rect(bx, by + 148, bw, 54), "退出游戏", button)) Quit?.Invoke();
+        if (Btn(new Rect(bx, by + 80, bw, 54), "武器图鉴", button)) OpenCodex();
+        if (Btn(new Rect(bx, by + 148, bw, 54), "设置 · 防晕 3D", button)) OpenSettings();
+        if (Btn(new Rect(bx, by + 216, bw, 54), "退出游戏", button)) Quit?.Invoke();
         // Controls in a small panel at the bottom.
         var cr = new Rect(w / 2 - 430, h - 170, 860, 112);
         UiKit.DrawPanel(cr);
@@ -392,7 +398,7 @@ public class Hud : MonoBehaviour
         {
             int bt = PlayerPrefs.GetInt("best_time");
             string result = PlayerPrefs.GetInt("best_won") == 1 ? "通关" : $"到达第 {PlayerPrefs.GetInt("best_floor")} 层";
-            UiKit.Text(new Rect(0, by + 216, w, 28), $"<color=#F7CC75>最佳纪录</color>  {PlayerPrefs.GetString("best_class")} · {result} · 用时 {bt / 60}:{bt % 60:00} · 击杀 {PlayerPrefs.GetInt("best_kills")}",
+            UiKit.Text(new Rect(0, by + 280, w, 28), $"<color=#F7CC75>最佳纪录</color>  {PlayerPrefs.GetString("best_class")} · {result} · 用时 {bt / 60}:{bt % 60:00} · 击杀 {PlayerPrefs.GetInt("best_kills")}",
                 new GUIStyle(small) { fontSize = 18 });
         }
         UiKit.Text(new Rect(0, h - 40, w, 30), "角色、敌人、武器、道具：Meshy 生成 · 场景：Blender · 音效：Kenney 等（CC0）· 音乐：OpenGameArt（CC0）", small);
@@ -1051,7 +1057,8 @@ public class Hud : MonoBehaviour
             y = Mathf.Max(y, pr.yMax + 24);
         }
         if (Btn(new Rect(w / 2 - 140, y, 280, 56), primary, button)) primaryAction?.Invoke();
-        if (screen == Screen.Pause && Btn(new Rect(w / 2 - 140, y + 70, 280, 56), "重新开始", button)) Restart?.Invoke();
+        if (screen == Screen.Pause && Btn(new Rect(w / 2 - 140, y + 70, 136, 56), "重新开始", button)) Restart?.Invoke();
+        if (screen == Screen.Pause && Btn(new Rect(w / 2 + 4, y + 70, 136, 56), "武器图鉴", button)) OpenCodex();
         if (screen == Screen.Pause && Btn(new Rect(w / 2 - 140, y + 140, 280, 56), "设置 · 防晕 3D", button)) OpenSettings();
         if (Btn(new Rect(w / 2 - 140, y + (screen == Screen.Pause ? 210 : 70), 280, 56), "退出游戏", button)) Quit?.Invoke();
     }

@@ -38,7 +38,23 @@ public static class RunState
     public static void SawWeapon(string id)
     {
         if (id != null && !weaponsSeen.Contains(id)) weaponsSeen.Add(id);
+        if (id == null || Known(id)) return;
+        if (!SaveProgress)
+        {
+            codexScratch += id + ",";
+            return;
+        }
+        UnityEngine.PlayerPrefs.SetString("codex", UnityEngine.PlayerPrefs.GetString("codex", ",") + id + ",");
+        UnityEngine.PlayerPrefs.Save();
     }
+
+    /// The weapon handbook (武器图鉴): every weapon held in any run so far, kept between runs.
+    public static bool Known(string id) => (SaveProgress ? UnityEngine.PlayerPrefs.GetString("codex", ",") : codexScratch).Contains("," + id + ",");
+
+    /// Off for the self-test and screenshot runs: they share the player's saved data (same app id), so
+    /// what they "find" stays in memory instead of filling in the player's handbook.
+    public static bool SaveProgress = true;
+    static string codexScratch = ",";
 
     // Self-test bookkeeping that must survive the floor change.
     public static int testPass, testFail;

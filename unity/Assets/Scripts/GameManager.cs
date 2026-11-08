@@ -42,6 +42,7 @@ public class GameManager : MonoBehaviour
         ParseArgs();
         // A player window launched from a script may never get focus; keep running for self-checks.
         if (Scripted) Application.runInBackground = true;
+        RunState.SaveProgress = !Scripted;
         argsApplied = true;
         // Self-checks run at a normal game frame rate; real play follows the display.
         if (Scripted) Application.targetFrameRate = 60;
@@ -866,6 +867,8 @@ public class GameManager : MonoBehaviour
         }
         Check("every weapon's numbers sit in its rarity band (designed DPS within 10%)", modelOff.Count == 0, string.Join(", ", modelOff));
         Check("every weapon really deals its band's DPS (measured within 15%)", measuredOff.Count == 0, string.Join(", ", measuredOff));
+        RunState.SawWeapon("missile");
+        Check("the weapon handbook remembers what you have held, between runs", RunState.Known("missile") && RunState.Known("pistol") && !RunState.Known("no_such_weapon"));
         Check("enemy health grows 30% a floor", Balance.EnemyHp(EnemyKind.Gunner, 1) == 24 && Balance.EnemyHp(EnemyKind.Gunner, 4) == Mathf.RoundToInt(24 * 1.9f));
 
         // A beam's ticks on one enemy add up into one damage number; a crit still gets its own.
@@ -2223,6 +2226,11 @@ public class GameManager : MonoBehaviour
         hud.screen = Hud.Screen.Pause;
         yield return new WaitForSeconds(0.2f);
         yield return Shot("27_pause.png");
+        // The weapon handbook opened from it (a few weapons known, the rest silhouettes).
+        foreach (var id in new[] { "pistol", "sword", "smg", "hammer", "thunder", "launcher" }) RunState.SawWeapon(id);
+        hud.OpenCodex();
+        yield return new WaitForSeconds(0.2f);
+        yield return Shot("28_codex.png");
         hud.screen = Hud.Screen.None;
 
         // The end-of-run summary card.

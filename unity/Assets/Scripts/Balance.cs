@@ -34,6 +34,24 @@ public static class Balance
         _ => 1f,
     };
 
+    /// What RoleMul pays for, in a word or two (the 图鉴 shows it).
+    public static string RoleName(WeaponDef w) => w.id switch
+    {
+        "pistol" => "免费无限",
+        "sword" or "daggers" => "近战",
+        "spear" => "近战·一线长",
+        "hammer" => "近战·横扫传导",
+        "shotgun" => "近距离",
+        "flamer" => "近距离·范围",
+        "frost" => "减速",
+        "boomerang" => "穿透往返",
+        "laser" => "瞬间命中",
+        "launcher" or "grenade" => "爆炸范围",
+        "missile" => "爆炸·追踪",
+        "thunder" => "锁定·传导",
+        _ => "标准",
+    };
+
     /// The DPS a weapon is meant to have (class skill weapons sit above the orange band, see SkillDps).
     public static float TargetDps(WeaponDef w) => w.IsSkillWeapon ? SkillDps(w) : RarityDps[w.rarity] * RoleMul(w);
 
