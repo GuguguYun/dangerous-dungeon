@@ -168,6 +168,21 @@ public static class LootFx
         return go;
     }
 
+    /// A thin glowing edge over a pickup model: an additive fresnel shell a few percent larger than its
+    /// mesh, so the outline and the facets turned away from the camera light up and the shape reads
+    /// from afar, without a glowing ball around it.
+    public static void Rim(GameObject model, Color c, float intensity)
+    {
+        var mat = Vfx.Fresnel(c * intensity, 2.2f, 0f, 0f);
+        foreach (var mf in model.GetComponentsInChildren<MeshFilter>())
+        {
+            if (!mf.sharedMesh) continue;
+            var r = NewRenderer("rim", mf.transform, mf.sharedMesh, mat);
+            r.transform.localScale = Vector3.one * 1.04f;
+            r.transform.localPosition = -mf.sharedMesh.bounds.center * 0.04f; // grow about the middle
+        }
+    }
+
     /// The model's own material with its texture as emission (BuildScript saves it as VFX/glow_<id> so
     /// the emissive variant ships; made at runtime if missing).
     static Material GlowMaterial(string id, Material src)

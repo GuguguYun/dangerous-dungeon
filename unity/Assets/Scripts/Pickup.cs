@@ -32,7 +32,7 @@ public class Pickup : MonoBehaviour
             // Drops pop out and bounce around before they home in on the player.
             go.layer = Layers.Debris;
             var col = go.AddComponent<SphereCollider>();
-            col.radius = 0.25f;
+            col.radius = kind == PickupKind.Energy ? 0.3f : 0.25f; // the crystal stands a little taller
             col.center = Vector3.up * 0.0f;
             p.body = go.AddComponent<Rigidbody>();
             p.body.mass = 0.2f;
@@ -47,18 +47,24 @@ public class Pickup : MonoBehaviour
         switch (kind)
         {
             case PickupKind.Energy:
-                // A chunk of blue energy crystal (Meshy), self-lit; many drop at once, so no light of its own.
-                if (!LootFx.PickupModel(LootFx.CrystalModel, holder, 1f, false)) Ball(holder, 0.22f, "pickup_energy");
-                LootFx.Halo(holder, LootFx.EnergyColor, 0.8f, 0.85f);
+            {
+                // A chunk of blue energy crystal (Meshy), self-lit, big enough to read from the play camera,
+                // with glowing facet edges and a ring on the floor (no glowing ball). Many drop at once,
+                // so no light of its own.
+                var crystal = LootFx.PickupModel(LootFx.CrystalModel, holder, 1.45f, false);
+                if (crystal) LootFx.Rim(crystal, LootFx.EnergyColor, 1.1f);
+                else Ball(holder, 0.22f, "pickup_energy");
+                LootFx.Halo(holder, LootFx.EnergyColor, 0.55f, 1.0f);
                 p.spin = 75f;
-                p.AddFloorGlow(LootFx.EnergyColor, 0.7f, 0.9f);
+                p.AddFloorGlow(LootFx.EnergyColor, 0.8f, 1.3f, 1.1f);
                 break;
+            }
             case PickupKind.Health:
                 // A red potion bottle (Meshy) with a small warm light, so it reads across a dark room.
                 if (!LootFx.PickupModel(LootFx.PotionModel, holder, 1f, true)) Ball(holder, 0.4f, "pickup_health");
                 LootFx.Halo(holder, LootFx.HealthColor, 0.35f, 0.95f);
                 p.spin = 55f;
-                p.AddFloorGlow(LootFx.HealthColor, 0.75f, 1.3f);
+                p.AddFloorGlow(LootFx.HealthColor, 0.75f, 1.3f, 0.5f);
                 var hl = new GameObject("glow").AddComponent<Light>();
                 hl.transform.SetParent(holder, false);
                 hl.type = LightType.Point;
@@ -112,9 +118,9 @@ public class Pickup : MonoBehaviour
     }
 
     /// A glow on the floor under a potion or crystal; it stays on the floor while the pickup bounces.
-    void AddFloorGlow(Color c, float intensity, float diameter)
+    void AddFloorGlow(Color c, float intensity, float diameter, float ring)
     {
-        floorGlow = LootFx.Glow(transform, c, intensity, diameter, 0.5f, 0f).transform;
+        floorGlow = LootFx.Glow(transform, c, intensity, diameter, ring, 0f).transform;
         glowSize = diameter;
     }
 
