@@ -773,9 +773,12 @@ public partial class PlayerController : MonoBehaviour
         }
         chargeLight.enabled = true;
         chargeLight.transform.position = muzzle.position;
-        chargeLight.color = charge >= 1f ? new Color(1f, 0.8f, 0.3f) : Weapons.RarityColors[w.rarity];
+        // The darts glow the shadow's violet, and only faintly: a gold pool of light at your feet gave the
+        // hidden assassin away.
+        bool darts = w.fan > 0;
+        chargeLight.color = darts ? RavenViolet : charge >= 1f ? new Color(1f, 0.8f, 0.3f) : Weapons.RarityColors[w.rarity];
         // Fully charged: a slow swell (about once a second), never a flicker.
-        chargeLight.intensity = 1f + charge * 4f + (charge >= 1f ? 0.8f * (1f + Mathf.Sin(Time.time * 6f)) : 0f);
+        chargeLight.intensity = (1f + charge * 4f + (charge >= 1f ? 0.8f * (1f + Mathf.Sin(Time.time * 6f)) : 0f)) * (darts ? 0.4f : 1f);
     }
 
     /// The heavy version of each chargeable weapon, scaled by how long it was charged (0.25..1).

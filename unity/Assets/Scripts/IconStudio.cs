@@ -99,6 +99,9 @@ public class IconStudio : MonoBehaviour
             // Lay it on its side, muzzle to the right, a little tilted towards the camera.
             holder.rotation = Quaternion.Euler(0f, -90f, 0f) * Quaternion.Euler(-15f, 0f, 0f);
             if (w.grip == WeaponGrip.Staff || w.id == "spear") holder.rotation *= Quaternion.Euler(-35f, 0f, 0f);
+            // The kunai lies flat (its blade faces up, the way it flies): roll it so the icon shows the
+            // blade, ring and feathers, not a thin silver edge.
+            if (w.id == "raven_darts") holder.rotation *= Quaternion.Euler(0f, 0f, 90f);
             var b = new Bounds(spot, Vector3.zero);
             bool any = false;
             foreach (var r in v.GetComponentsInChildren<Renderer>())

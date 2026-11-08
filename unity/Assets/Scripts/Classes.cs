@@ -40,7 +40,7 @@ public static class Classes
             stamina = 5, speed = 6.8f, crit = 0.2f, meleeMul = 1.3f, dashCooldownMul = 0.5f, dashMul = 1.35f, staminaRegen = 1.5f, dashShadows = true,
             trait = "影步：冲刺更远、留下残影，体力恢复快 50%；近战伤害 ×1.3",
             skill = SkillKind.Stealth, skillName = "鸦影遁", cooldown = 14f,
-            skillDesc = "隐身 5 秒：无敌，敌人无法锁定；手持鸦羽镖，蓄力越久一次掷出越多（最多 7 枚）" },
+            skillDesc = "隐身 5 秒：无敌、不被锁定；手持鸦羽镖，蓄力越久掷出越多（最多 7 枚）" },
         new ClassDef { id = "mage", name = "焚星法师", model = "mage", desc = "脆皮，但法术覆盖全场",
             maxHp = 4, maxArmor = 3, maxEnergy = 260, weapons = new[] { "pistol", "frost" },
             stamina = 3, speed = 6f, energyRegen = 2f, trait = "每秒自动回复 2 点能量",
@@ -50,7 +50,7 @@ public static class Classes
             maxHp = 6, maxArmor = 4, maxEnergy = 220, weapons = new[] { "pistol", "spear" },
             stamina = 4, speed = 6f, hpRegenEvery = 15f, trait = "每 15 秒自动回复 1 点生命",
             skill = SkillKind.Sanctuary, skillName = "晨光圣域", cooldown = 16f,
-            skillDesc = "脚下光圈 5 秒回血回甲，并握住晨曦权杖 6 秒：圣光光束照射敌人每满 1 秒回 1 护甲" },
+            skillDesc = "脚下光圈 5 秒回血回甲，并握住晨曦权杖 6 秒：光束照射敌人每满 1 秒回 1 护甲" },
     };
 
     public static ClassDef Get(string id) => All.Find(c => c.id == id) ?? All[0];
