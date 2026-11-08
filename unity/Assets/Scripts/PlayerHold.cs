@@ -9,6 +9,7 @@ public partial class PlayerController
 {
     Dictionary<string, Transform> bones;
     float aimBlend;
+    float staffLift; // 0 = staff at the side, 1 = raised overhead to cast
     float twist;                                   // chest turned right for long guns (degrees)
     Quaternion chestSet, chestBase, neckSet, neckBase;
     GameObject offhandVisual;
@@ -119,6 +120,31 @@ public partial class PlayerController
         return bones.TryGetValue(name, out var b) ? b : null;
     }
 
+    /// The knight's oath shield, carried on the left arm in front of the chest (PoseWeapon places it).
+    GameObject OathShield()
+    {
+        var holder = new GameObject("oath_shield").transform;
+        holder.SetParent(model, false);
+        if (Props.Has("oath_shield"))
+        {
+            // The prop is 0.75 m tall with its origin at the bottom middle.
+            var s = Props.Spawn("oath_shield", holder.position, holder.rotation, holder, false);
+            s.transform.localPosition = Vector3.down * 0.3f;
+            s.transform.localScale = Vector3.one * 0.8f;
+            foreach (var t in s.GetComponentsInChildren<Transform>()) t.gameObject.layer = Layers.Player;
+        }
+        else
+        {
+            var slab = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Destroy(slab.GetComponent<Collider>());
+            slab.layer = Layers.Player;
+            slab.transform.SetParent(holder, false);
+            slab.transform.localScale = new Vector3(0.45f, 0.6f, 0.06f);
+            slab.GetComponent<Renderer>().sharedMaterial = Palette.Get("trim");
+        }
+        return holder.gameObject;
+    }
+
     /// Re-attach the weapon for the current grip (called when the weapon changes).
     void SetupGrip()
     {
@@ -126,7 +152,7 @@ public partial class PlayerController
         handsOnWeapon = body && Bone("RightHand") && Bone("LeftHand") && Bone("RightArm") && Bone("LeftArm");
         if (!handsOnWeapon) return;
         var w = Weapon;
-        if (w.grip == WeaponGrip.TwoHandMelee || w.grip == WeaponGrip.Dual)
+        if (w.grip == WeaponGrip.TwoHandMelee || w.grip == WeaponGrip.Dual || w.grip == WeaponGrip.OneHandMelee)
         {
             // Melee sits in the right palm and follows the animated hand (the slash clip swings it).
             SeatInHand(weaponPivot, "Right");
@@ -138,6 +164,7 @@ public partial class PlayerController
                 Weapons.MakeVisual(w, off, Layers.Player);
                 offhandVisual = off.gameObject;
             }
+            if (w.id == "oath_sword" && guardCharges > 0) offhandVisual = OathShield();
         }
         else
         {
@@ -178,6 +205,19 @@ public partial class PlayerController
 
         switch (w.grip)
         {
+            case WeaponGrip.OneHandMelee:
+                // The sword is in the right palm (animated); the oath shield rides the left forearm,
+                // square in front of the left shoulder, and the left fist holds its strap.
+                if (offhandVisual)
+                {
+                    var shield = offhandVisual.transform;
+                    shield.position = ls.position + fwd * 0.34f + right * 0.02f - up * 0.12f;
+                    shield.rotation = Quaternion.LookRotation(fwd, up);
+                    Vector3 strap = shield.position - fwd * 0.07f;
+                    Reach("Left", WristFor("Left", strap, up, right), ls.position - right * 0.4f - up * 0.4f - fwd * 0.2f);
+                    OrientHand("Left", up, right);
+                }
+                return;
             case WeaponGrip.TwoHandMelee:
             case WeaponGrip.Dual:
                 // The right hand carries the blade; the left hand closes on the hilt for two-handers.
@@ -209,17 +249,34 @@ public partial class PlayerController
             }
             case WeaponGrip.Staff:
             {
-                // A staff stands upright at the right side like a walking staff. Casting lifts it a little and
-                // tips the head forward, but it never levels out like a gun.
-                Vector3 dir = Vector3.Slerp((up + fwd * 0.1f).normalized, (up + fwd * 0.35f).normalized, aimBlend);
-                Vector3 grip = rs.position + right * 0.16f + fwd * (0.12f + 0.1f * aimBlend) - up * (0.3f - 0.12f * aimBlend);
+                // At rest a staff stands upright at the right side like a walking staff. Each cast lifts it
+                // high overhead, its head tipped towards the crosshair, while the left hand opens towards
+                // the target; it sinks back down when the casting stops. (No gun pose: the body keeps
+                // its own idle/run, see PlayerController.)
+                float liftTo = Time.time - lastShot < 0.4f ? 1f : 0f;
+                staffLift = Mathf.MoveTowards(staffLift, liftTo, dt * (liftTo > 0f ? 9f : 2.5f));
+                float k = staffLift * staffLift * (3f - 2f * staffLift);
+                float arm = ArmLength("Right");
+                Vector3 flatAim = Vector3.ProjectOnPlane(aimDir, up).normalized;
+                Vector3 dir = Vector3.Slerp((up + fwd * 0.1f).normalized, (up + flatAim * 0.55f).normalized, k);
+                Vector3 rest = rs.position + right * 0.16f + fwd * 0.12f - up * 0.3f;
+                Vector3 raised = rs.position + up * arm * 0.85f + flatAim * 0.12f + right * 0.06f;
+                Vector3 grip = Vector3.Lerp(rest, raised, k);
                 weaponPivot.position = grip;
                 weaponPivot.rotation = Quaternion.LookRotation(dir, -fwd);
                 // Fist round the shaft: fingers forward around it, palm facing in, thumb up along the shaft.
                 Vector3 wrapF = Vector3.ProjectOnPlane(fwd, dir).normalized;
                 Vector3 wrapP = Vector3.ProjectOnPlane(-right, dir).normalized;
-                Reach("Right", WristFor("Right", grip, wrapF, wrapP), rs.position + right * 0.4f - up * 0.4f - fwd * 0.4f);
+                Reach("Right", WristFor("Right", grip, wrapF, wrapP), rs.position + right * 0.4f - up * (0.4f - 0.5f * k) - fwd * 0.4f);
                 OrientHand("Right", wrapF, wrapP);
+                if (k > 0.05f)
+                {
+                    // Left hand out towards the target, palm forward, fingers up.
+                    Vector3 palmAt = ls.position + flatAim * ArmLength("Left") * 0.85f + up * 0.05f;
+                    Vector3 cast = Vector3.Lerp(ls.position - up * ArmLength("Left") * 0.9f, palmAt, k);
+                    Reach("Left", WristFor("Left", cast, up, flatAim), ls.position - right * 0.4f - up * 0.4f - fwd * 0.4f);
+                    OrientHand("Left", up, flatAim);
+                }
                 return;
             }
             default:

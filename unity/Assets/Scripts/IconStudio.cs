@@ -85,7 +85,9 @@ public class IconStudio : MonoBehaviour
         var holder = new GameObject("icon_holder").transform;
         holder.SetParent(transform, false);
         holder.position = spot;
-        foreach (var w in Weapons.All)
+        var icons = new List<WeaponDef>(Weapons.All);
+        icons.AddRange(Weapons.SkillWeapons); // the class skills' own weapons show on the HUD too
+        foreach (var w in icons)
         {
             var v = Weapons.MakeVisual(w, holder, Layer);
             // Lay it on its side, muzzle to the right, a little tilted towards the camera.

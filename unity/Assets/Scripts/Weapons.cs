@@ -1,10 +1,10 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum WeaponKind { Gun, Melee, Charge, Beam, Flame, Grenade, Homing, Chain, Frost, Boomerang, Thrust }
+public enum WeaponKind { Gun, Melee, Charge, Beam, Flame, Grenade, Homing, Chain, Frost, Boomerang, Thrust, Meteor }
 
 /// How the character holds the weapon (hand IK targets, see PlayerHold).
-public enum WeaponGrip { OneHand, TwoHand, Shoulder, Staff, Bow, TwoHandMelee, Dual }
+public enum WeaponGrip { OneHand, TwoHand, Shoulder, Staff, Bow, TwoHandMelee, Dual, OneHandMelee }
 
 /// One weapon's numbers and placeholder look. A Meshy model at Resources/Models/Weapons/<id>
 /// replaces the placeholder box when it exists.
@@ -31,6 +31,11 @@ public class WeaponDef
     public Vector3 size = new Vector3(0.12f, 0.16f, 0.7f);
     public string look = "gun";
     public string desc = "";
+    public float damageMul = 1f; // class skill weapons: their own boost on top of everything else
+    public string owner;         // class skill weapons: the class whose skill summons it
+
+    /// Summoned by a class skill for a few seconds; never dropped, found, sold or swapped.
+    public bool IsSkillWeapon => owner != null;
 
     public bool melee => kind == WeaponKind.Melee || kind == WeaponKind.Thrust;
 
@@ -40,7 +45,8 @@ public class WeaponDef
     {
         "pistol" or "boomerang" => WeaponGrip.OneHand,
         "launcher" => WeaponGrip.Shoulder, // a slim tube rides the shoulder; the bulky missile box is carried at the hip
-        "thunder" or "frost" => WeaponGrip.Staff,
+        "thunder" or "frost" or "star_staff" or "dawn_scepter" => WeaponGrip.Staff,
+        "raven_blade" or "oath_sword" => WeaponGrip.OneHandMelee,
         "bow" => WeaponGrip.Bow,
         "daggers" => WeaponGrip.Dual,
         "sword" or "hammer" or "spear" => WeaponGrip.TwoHandMelee,
@@ -83,7 +89,17 @@ public static class Weapons
         new WeaponDef { id = "daggers", name = "影牙", type = "双匕首", kind = WeaponKind.Melee, rarity = 1, damage = 3, interval = 0.15f, reach = 2.3f, arc = 100f, size = new Vector3(0.05f, 0.05f, 0.5f), look = "blade", desc = "极快的连斩" },
     };
 
-    public static WeaponDef Get(string id) => All.Find(w => w.id == id);
+    /// The class skills' own weapons (see PlayerSkill): held only while the skill lasts, so they are
+    /// kept out of All (drops, chests, the shop and the random pools never see them).
+    public static readonly List<WeaponDef> SkillWeapons = new List<WeaponDef>
+    {
+        new WeaponDef { id = "oath_sword", owner = "knight", name = "誓约圣剑", type = "骑士专属", kind = WeaponKind.Melee, rarity = 4, damage = 5, damageMul = 1.2f, interval = 0.38f, reach = 4.3f, arc = 150f, look = "blade", desc = "剑气更长，伤害 +20%；左手圣盾自动挡 3 次伤害" },
+        new WeaponDef { id = "raven_blade", owner = "assassin", name = "鸦羽刃", type = "刺客专属", kind = WeaponKind.Melee, rarity = 4, damage = 4, damageMul = 2f, interval = 0.24f, reach = 2.6f, arc = 130f, look = "blade", desc = "每一刀闪到准星前方的敌人身边，伤害 ×2" },
+        new WeaponDef { id = "star_staff", owner = "mage", name = "焚星杖", type = "法师专属", kind = WeaponKind.Meteor, rarity = 4, damage = 6, interval = 0.5f, radius = 0.35f, explode = 2.4f, mat = "bullet_fire", look = "blade", desc = "每次施法在准星处落下一颗陨石，点燃敌人" },
+        new WeaponDef { id = "dawn_scepter", owner = "priest", name = "晨曦权杖", type = "牧师专属", kind = WeaponKind.Beam, rarity = 4, damage = 2, interval = 0.1f, mat = "bullet_gold", look = "blade", desc = "金色圣光光束；照射敌人每满 1 秒回 1 点护甲" },
+    };
+
+    public static WeaponDef Get(string id) => All.Find(w => w.id == id) ?? SkillWeapons.Find(w => w.id == id);
 
     /// The weapon as the player holds it: a copy with this run's shop upgrades (+1 damage per level).
     public static WeaponDef Held(string id)

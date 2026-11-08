@@ -50,7 +50,18 @@ public partial class PlayerController : MonoBehaviour
     float poisonTick;
     public bool Stealthed => stealthed;
     public PlayerSkill skill;
-    bool stealthStrike;
+    // A class skill's own weapon (Weapons.SkillWeapons) sits in the current slot for a few seconds;
+    // the weapon it replaced comes back after. No swapping or picking up meanwhile.
+    WeaponDef skillWeaponSaved;
+    float skillWeaponLeft, skillWeaponTotal;
+    public float SkillWeaponLeft => skillWeaponLeft;
+    public float SkillWeaponTotal => skillWeaponTotal;
+    public bool HoldingSkillWeapon => skillWeaponLeft > 0f;
+    /// The knight's oath shield: each hit that would hurt uses one up instead.
+    public int guardCharges;
+    public const int GuardMax = 3;
+    bool ambushUsed;  // stealth: only the first strike is the ×3 ambush
+    float holyT;      // the priest's scepter: seconds of light on enemies towards the next armour point
     public System.Action Died;
 
     CharacterController cc;
@@ -210,6 +221,7 @@ public partial class PlayerController : MonoBehaviour
 
     public void Swap()
     {
+        if (HoldingSkillWeapon) { Hud.I?.Show("技能武器还在手上，结束后才能换", 0.8f); return; }
         if (weapons[1 - slot] == null) return;
         slot = 1 - slot;
         fireCd = Mathf.Max(fireCd, 0.15f);
@@ -219,6 +231,7 @@ public partial class PlayerController : MonoBehaviour
 
     public void PickUp(Pickup p)
     {
+        if (HoldingSkillWeapon) { Hud.I?.Show("技能武器还在手上，结束后才能捡", 0.8f); return; }
         var old = Weapon;
         int target = weapons[1 - slot] == null ? 1 - slot : slot;
         if (target == slot)
@@ -310,6 +323,7 @@ public partial class PlayerController : MonoBehaviour
         perfectCd -= dt;
         noEnergyMsgCd -= dt;
         sinceHit += dt;
+        if (skillWeaponLeft > 0f && (skillWeaponLeft -= dt) <= 0f) EndSkillWeapon();
         bool active = controlEnabled && !dead;
         if (active) RunState.runTime += dt;
 
@@ -465,7 +479,8 @@ public partial class PlayerController : MonoBehaviour
                 float speed01 = h.magnitude / Speed;
                 string moving = HeavyMech && body.Has("walk") ? "walk" : "run"; // the heavy mech stomps
                 if (speed01 < 0.15f) body.SetBase("idle");
-                else body.SetBase(aiming && (InMech || !Weapon.melee) && body.Has("shoot") ? "shoot" : moving, Mathf.Lerp(0.8f, 1.15f, speed01));
+                // Guns use the run-and-shoot clip while firing; a staff is raised by the arms alone (PlayerHold).
+                else body.SetBase(aiming && (InMech || (!Weapon.melee && Weapon.grip != WeaponGrip.Staff)) && body.Has("shoot") ? "shoot" : moving, Mathf.Lerp(0.8f, 1.15f, speed01));
             }
             if (active && InMech)
             {
@@ -498,11 +513,6 @@ public partial class PlayerController : MonoBehaviour
             }
             else HandleWeapon(trigger, dt);
             prevTrigger = trigger;
-            if (stealthStrike)
-            {
-                stealthStrike = false;
-                skill?.BreakStealth();
-            }
         }
         else
         {
@@ -587,11 +597,13 @@ public partial class PlayerController : MonoBehaviour
 
     int RollDamage(int baseDamage, out bool crit)
     {
-        crit = nextCrit || stealthed || Random.value < RunState.critChance;
-        int d = Mathf.RoundToInt((baseDamage + RunState.bonusDamage) * (1f + Combo.Bonus)); // the hit streak adds up to +30%
-        if (stealthed)
+        bool ambush = stealthed && !ambushUsed;
+        crit = nextCrit || ambush || Random.value < RunState.critChance;
+        // The hit streak adds up to +30%; a class skill weapon adds its own boost.
+        int d = Mathf.RoundToInt((baseDamage + RunState.bonusDamage) * (1f + Combo.Bonus) * Weapon.damageMul);
+        if (ambush)
         {
-            stealthStrike = true; // any damage dealt from stealth ends it (see Update)
+            ambushUsed = true; // the first strike out of the shadows; stealth itself lasts its time
             return d * 3;
         }
         return crit ? d * 2 : d;
@@ -648,6 +660,7 @@ public partial class PlayerController : MonoBehaviour
 
     bool DrainEnergy(WeaponDef w, float dt)
     {
+        if (w.energyPerSec <= 0f) return true;
         energyAcc += w.energyPerSec * dt;
         while (energyAcc >= 1f && energy > 0)
         {
@@ -791,6 +804,7 @@ public partial class PlayerController : MonoBehaviour
             end = rh.point;
             beamTick -= dt;
             var e = rh.collider.GetComponentInParent<Enemy>();
+            if (e && !e.dead && w.id == "dawn_scepter") HolyLight(dt);
             if (e && beamTick <= 0f)
             {
                 beamTick = w.interval / RunState.fireRateMul;
@@ -800,7 +814,7 @@ public partial class PlayerController : MonoBehaviour
         }
         beam.SetPosition(0, from);
         beam.SetPosition(1, end);
-        beam.startColor = beam.endColor = new Color(3f, 2.4f, 2.4f);
+        beam.startColor = beam.endColor = w.id == "dawn_scepter" ? new Color(3f, 2.7f, 1.8f) : new Color(3f, 2.4f, 2.4f);
         beam.widthMultiplier = 0.05f + Mathf.PingPong(Time.time * 2f, 0.03f);
         // Outer red glow, sparks and a light where the beam lands.
         if (!beamGlow)
@@ -819,6 +833,7 @@ public partial class PlayerController : MonoBehaviour
         beamGlow.widthMultiplier = 0.22f + Mathf.PingPong(Time.time * 3f, 0.08f);
         beamGlow.SetPosition(0, from);
         beamGlow.SetPosition(1, end);
+        beamLight.color = Palette.ColorOf(w.mat);
         beamLight.transform.position = end - dir * 0.3f;
         beamLight.intensity = 3f + Random.value;
         beamSparkT -= dt;
@@ -885,10 +900,10 @@ public partial class PlayerController : MonoBehaviour
         energy -= w.energy;
         fireCd = w.interval / RunState.fireRateMul;
         lastShot = Time.time;
-        if (w.melee) Melee(w);
+        if (w.id == "raven_blade" && RavenBlink(w)) { } // the cut lands on arrival
+        else if (w.melee) Melee(w);
         else Shoot(w);
         nextCrit = false;
-        if (stealthed && skill) skill.BreakStealth();
     }
 
     void Shoot(WeaponDef w)
@@ -899,6 +914,9 @@ public partial class PlayerController : MonoBehaviour
         {
             case WeaponKind.Chain:
                 ChainLightning(w);
+                return;
+            case WeaponKind.Meteor:
+                StartCoroutine(StaffMeteor(w));
                 return;
             case WeaponKind.Flame:
                 for (int i = 0; i < 2; i++)
@@ -1046,7 +1064,7 @@ public partial class PlayerController : MonoBehaviour
             int dmg = Mathf.RoundToInt(RollDamage(w.damage, out bool crit) * RunState.meleeMul);
             e.TakeDamage(dmg, to.normalized, crit);
         }
-        if (RunState.meleeMul > 1f || w.id == "sword")
+        if (RunState.meleeMul > 1f || w.id == "sword" || w.id == "oath_sword")
         {
             foreach (var b in Bullet.Live.ToArray())
             {
@@ -1109,6 +1127,11 @@ public partial class PlayerController : MonoBehaviour
     public void TakeDamage(int amount)
     {
         if (dead || shielded || invuln > 0f || dashInvuln > 0f) return;
+        if (guardCharges > 0 && amount > 0 && !InMech)
+        {
+            GuardBlock();
+            return;
+        }
         if (InMech)
         {
             MechDamage(amount); // the mech's durability goes first

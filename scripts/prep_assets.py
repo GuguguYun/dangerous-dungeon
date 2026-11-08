@@ -19,6 +19,7 @@ ROTATION = {
     "sword": "x90", "hammer": "z-90",
     "laser": "z90", "flamer": "z90", "grenade": "z90", "missile": "z90", "boomerang": "z90",
     "thunder": "x90", "frost": "x90", "daggers": "x90", "spear": "y45,x90", "bow": "z90",
+    "raven_blade": "z90", "oath_sword": "x90", "star_staff": "x90", "dawn_scepter": "x90",
 }
 state = json.loads((ROOT / "assets/meshy/state.json").read_text())
 names = sys.argv[1:] or [n for n, a in ASSETS.items() if a["kind"] in ("weapon", "prop")]

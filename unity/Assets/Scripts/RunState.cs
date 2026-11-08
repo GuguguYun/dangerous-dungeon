@@ -91,7 +91,7 @@ public static class RunState
     {
         hp = p.hp;
         energy = p.energy;
-        weapons = new[] { p.weapons[0]?.id, p.weapons[1]?.id };
+        weapons = new[] { p.KeptWeapon(0)?.id, p.KeptWeapon(1)?.id }; // not a skill's summoned weapon
         slot = p.slot;
         mechId = p.InMech ? p.mechDef.id : null;
         mechHp = p.mechHp;

@@ -1,8 +1,10 @@
 using System.Collections;
 using UnityEngine;
 
-/// The class skill on right mouse / F: knight shield, assassin stealth, mage meteor storm,
-/// priest sanctuary. Cooldowns and durations come from the ClassDef.
+/// The class skill on right mouse / F. Each one also puts the class's own weapon in hand for a few
+/// seconds (Weapons.SkillWeapons, see PlayerSkillWeapon): knight oath sword and shield (with a
+/// knock-back), assassin stealth with the raven blade, mage meteor storm and the star staff, priest
+/// sanctuary and the dawn scepter. Cooldowns come from the ClassDef.
 public class PlayerSkill : MonoBehaviour
 {
     public ClassDef def;
@@ -12,24 +14,22 @@ public class PlayerSkill : MonoBehaviour
 
     PlayerController p;
     CharacterController body;
-    ShieldFx shield;
-    float shieldFloor;
     Renderer[] ghosted;
     Material[][] saved;
     Material ghostMat;
     float ghostFade;
     ParticleSystem motes, wisps, feathers;
 
-    // The knight's dome: a sphere sitting a little above the floor, cut by it (see ShieldFx). HeadRoom:
-    // the clearance kept over the head when a jump lifts the dome.
-    const float ShieldRadius = 2.05f, ShieldLift = 0.3f, HeadRoom = 0.3f;
-    public static readonly Color ShieldGold = new Color(1f, 0.84f, 0.42f), ShieldBlue = new Color(0.45f, 0.75f, 1f);
+    public static readonly Color ShieldGold = new Color(1f, 0.84f, 0.42f);
+    // How long each class holds its skill weapon.
+    public const float OathTime = 6f, RavenTime = 5f, StaffTime = 6f, ScepterTime = 6f;
 
     public bool Active => activeLeft > 0f;
 
     public void Setup(PlayerController owner, ClassDef d)
     {
         End();
+        if (owner) owner.EndSkillWeapon();
         p = owner;
         body = owner ? owner.GetComponent<CharacterController>() : null;
         def = d;
@@ -46,8 +46,14 @@ public class PlayerSkill : MonoBehaviour
         {
             case SkillKind.Shield: StartShield(); break;
             case SkillKind.Stealth: StartStealth(); break;
-            case SkillKind.Meteor: StartCoroutine(Meteors(p.AimPoint())); break;
-            case SkillKind.Sanctuary: StartCoroutine(Sanctuary(transform.position)); break;
+            case SkillKind.Meteor:
+                StartCoroutine(Meteors(p.AimPoint()));
+                p.GrantSkillWeapon("star_staff", StaffTime);
+                break;
+            case SkillKind.Sanctuary:
+                StartCoroutine(Sanctuary(transform.position));
+                p.GrantSkillWeapon("dawn_scepter", ScepterTime);
+                break;
         }
         Hud.I?.Show(def.skillName, 0.8f);
         Sfx.Play("buff", 0.8f, 0f);
@@ -72,48 +78,16 @@ public class PlayerSkill : MonoBehaviour
             ghostMat.SetFloat("_FeetY", transform.position.y);
             ghostMat.SetFloat("_Height", body ? body.height : 1.6f);
         }
-        if (shield)
-        {
-            // The dome stays on the floor and follows the knight across it. A jump goes up inside it; near
-            // the top the dome rises just enough to keep the head inside (a double jump floats it off
-            // the floor as a whole bubble), and settles back as the knight comes down.
-            if (p && p.Grounded) shieldFloor = transform.position.y;
-            shield.transform.position = new Vector3(transform.position.x, shieldFloor, transform.position.z);
-            float top = (body ? body.bounds.max.y : transform.position.y + 1.6f) + HeadRoom;
-            shield.Lift = Mathf.Max(ShieldLift, top - ShieldRadius - shieldFloor);
-            if (p && p.shielded)
-            {
-                Vector3 centre = shield.Centre;
-                float r2 = (ShieldRadius + 0.1f) * (ShieldRadius + 0.1f);
-                var live = Bullet.Live;
-                for (int i = live.Count - 1; i >= 0; i--)
-                {
-                    var b = live[i];
-                    if (!b || b.HitsEnemies || (b.transform.position - centre).sqrMagnitude > r2) continue;
-                    // A ripple runs out from where the shot struck the dome.
-                    Vector3 at = shield.SurfaceToward(b.transform.position);
-                    shield.Hit(at);
-                    Vfx.Sparks(at, ShieldGold, 6, 3f);
-                    Sfx.Play("clank", 0.4f, 0.1f, 1.4f);
-                    b.Cancel();
-                }
-            }
-        }
     }
 
     // ---------- knight: shield ----------
 
     void StartShield()
     {
-        activeLeft = 3.5f;
-        p.shielded = true;
-        // A golden hex-cell dome (blue ripples where it is struck), clear in the middle so the knight shows.
-        if (!shield) shield = ShieldFx.Create("shield", ShieldGold, 1.0f, ShieldBlue, 1.6f, ShieldRadius, ShieldLift, true, null);
-        shieldFloor = transform.position.y;
-        if (!p.Grounded && Physics.Raycast(transform.position + Vector3.up * 0.2f, Vector3.down, out var ground, 6f, Layers.WorldMask, QueryTriggerInteraction.Ignore))
-            shieldFloor = ground.point.y; // cast mid-jump: the dome still stands on the floor
-        shield.transform.position = new Vector3(transform.position.x, shieldFloor, transform.position.z);
-        shield.Show(0.3f);
+        // 誓约壁垒: the oath sword in the right hand and the oath shield on the left arm, which takes
+        // the next three hits (PlayerSkillWeapon); calling them knocks nearby enemies back.
+        activeLeft = OathTime;
+        p.GrantSkillWeapon("oath_sword", OathTime);
         // Bash: knock nearby enemies back.
         foreach (var c in Physics.OverlapSphere(transform.position, 3.5f, Layers.EnemyMask, QueryTriggerInteraction.Ignore))
         {
@@ -131,7 +105,9 @@ public class PlayerSkill : MonoBehaviour
 
     void StartStealth()
     {
-        activeLeft = 4f;
+        // 鸦影遁: hidden for the whole time, attacks included (only the first strike is the ×3 ambush),
+        // with the raven blade in hand.
+        activeLeft = RavenTime;
         p.stealthed = true;
         float h = body ? body.height : 1.6f;
         Vfx.Puff(transform.position + Vector3.up * h * 0.55f, new Color(0.2f, 0.11f, 0.32f, 0.65f), 1.1f, 14);
@@ -162,9 +138,10 @@ public class PlayerSkill : MonoBehaviour
         }
         wisps = Vfx.ShadowWisps(transform, h);
         feathers = Vfx.Feathers(transform, h);
+        p.GrantSkillWeapon("raven_blade", RavenTime); // after the body swap: the blade keeps its own look
     }
 
-    /// The first attack out of stealth ends it.
+    /// Stealth ends early (climbing into a mech).
     public void BreakStealth()
     {
         if (def != null && def.skill == SkillKind.Stealth && Active)
@@ -181,7 +158,6 @@ public class PlayerSkill : MonoBehaviour
             p.shielded = false;
             p.stealthed = false;
         }
-        if (shield) shield.Hide(0.4f);
         if (ghosted != null)
         {
             for (int i = 0; i < ghosted.Length; i++)
