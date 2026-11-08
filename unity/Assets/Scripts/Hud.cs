@@ -17,6 +17,7 @@ public class Hud : MonoBehaviour
     public System.Action Resume, Restart, Quit, Begin, SettingsChanged;
     public System.Action<string> ChooseClass;
     Screen settingsReturn;
+    float uiDraft = 1.2f;
     readonly float[] frameTimes = new float[240];
     int frameIndex;
 
@@ -50,6 +51,11 @@ public class Hud : MonoBehaviour
     GUIStyle left, center, small, title, button, number;
 
     void Awake() => I = this;
+
+    float guiScale = 1f;
+
+    /// A WorldToScreenPoint result in the scaled UI's units (top-left origin).
+    Vector2 ToGui(Vector3 sp) => new Vector2(sp.x, UnityEngine.Screen.height - sp.y) / guiScale;
 
     /// seconds <= 0 keeps the message until replaced.
     public void Show(string text, float seconds)
@@ -101,8 +107,10 @@ public class Hud : MonoBehaviour
 
     void Init()
     {
-        // Bundled Noto Sans SC (SIL OFL); Unity cannot resolve macOS system CJK fonts by name.
-        font = Resources.Load<Font>("Fonts/NotoSansSC-Regular");
+        // The game's own 模境体 (scripts/build_font.py: ZCOOL KuaiLe with Noto Sans SC fill-ins, both OFL);
+        // Noto Sans SC alone if it is missing. Unity cannot resolve macOS system CJK fonts by name.
+        font = Resources.Load<Font>("Fonts/MoJingTi");
+        if (!font) font = Resources.Load<Font>("Fonts/NotoSansSC-Regular");
         left = new GUIStyle { font = font, fontSize = 22, alignment = TextAnchor.MiddleLeft };
         left.normal.textColor = Color.white;
         center = new GUIStyle(left) { fontSize = 40, alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
@@ -184,8 +192,8 @@ public class Hud : MonoBehaviour
     {
         var s = new GUIStyle(style);
         s.normal.textColor = new Color(0f, 0f, 0f, 0.7f);
-        GUI.Label(new Rect(r.x + 2, r.y + 2, r.width, r.height), text, s);
-        GUI.Label(r, text, style);
+        UiKit.Label(new Rect(r.x + 2, r.y + 2, r.width, r.height), text, s);
+        UiKit.Label(r, text, style);
     }
 
     void Bar(float y, string name, int v, int max, Color c)
@@ -198,7 +206,18 @@ public class Hud : MonoBehaviour
     void OnGUI()
     {
         if (font == null) Init();
-        float w = UnityEngine.Screen.width, h = UnityEngine.Screen.height;
+        // Laid out for a screen 900 units tall and scaled to the real one (times the player's UI size),
+        // so it keeps its size on large and Retina screens. Pages that need more height get a smaller
+        // scale rather than running off the bottom.
+        float need = screen switch
+        {
+            Screen.Settings => 780f, Screen.Dead => 740f, Screen.Won => 740f, Screen.Pause => 720f,
+            Screen.Title => 700f, Screen.ClassSelect => 680f, _ => 620f,
+        };
+        guiScale = Mathf.Min(UnityEngine.Screen.height / 900f * GameSettings.uiScale, UnityEngine.Screen.height / need);
+        UiKit.Scale = guiScale;
+        GUI.matrix = Matrix4x4.Scale(new Vector3(guiScale, guiScale, 1f));
+        float w = UnityEngine.Screen.width / guiScale, h = UnityEngine.Screen.height / guiScale;
         if (screen == Screen.Title)
         {
             DrawTitle(w, h);
@@ -333,7 +352,7 @@ public class Hud : MonoBehaviour
         if (swatch) DrawSwatches();
         UiKit.Vignette(w, h);
         var t = new GUIStyle(title) { fontSize = 96 };
-        UiKit.Text(new Rect(0, h * 0.12f, w, 110), "模境迷城", t, UiKit.Gold);
+        UiKit.Title(new Rect(0, h * 0.12f, w, 110), "模境迷城", t);
         UiKit.Text(new Rect(0, h * 0.12f + 104, w, 30), "M E S H Y   D U N G E O N", new GUIStyle(small) { fontSize = 18 }, new Color(0.85f, 0.85f, 0.95f, 0.85f));
         UiKit.Text(new Rect(0, h * 0.12f + 140, w, 30), "提示词铸成的迷城每晚都会重生 —— 带上武器，闯到最深处", new GUIStyle(small) { fontSize = 20 });
         float bw = 320, bx = w / 2 - bw / 2, by = h * 0.45f;
@@ -467,7 +486,7 @@ public class Hud : MonoBehaviour
         var st = new GUIStyle(style);
         st.normal.textColor = color;
         float hgt = st.CalcHeight(new GUIContent(text), r.width);
-        GUI.Label(new Rect(r.x, r.y, r.width, Mathf.Min(hgt, Mathf.Max(r.height, 1f))), text, st);
+        UiKit.Label(new Rect(r.x, r.y, r.width, Mathf.Min(hgt, Mathf.Max(r.height, 1f))), text, st);
         return r.y + hgt;
     }
 
@@ -575,6 +594,7 @@ public class Hud : MonoBehaviour
     {
         settingsReturn = screen;
         screen = Screen.Settings;
+        uiDraft = GameSettings.uiScale;
     }
 
     void DrawFps(float w)
@@ -670,8 +690,8 @@ public class Hud : MonoBehaviour
         var panel = new Rect(w / 2 - 370, 78, 740, h - 158);
         UiKit.DrawPanel(panel);
         UiKit.DrawBanner(new Rect(w / 2 - 300, 4, 600, 92), "设置 · 防晕 3D", new GUIStyle(title) { fontSize = 34 });
-        // Sixteen rows plus the note; squeeze the rows on short windows.
-        float x = w / 2 - 330, y = 104, row = Mathf.Clamp((panel.height - 120f) / 16f, 26f, 38f);
+        // Seventeen rows plus the note; squeeze the rows on short windows.
+        float x = w / 2 - 330, y = 104, row = Mathf.Clamp((panel.height - 120f) / 17f, 26f, 38f);
         GameSettings.fov = Mathf.Round(SliderRow(y, x, "视野 FOV（大一些更不晕）", GameSettings.fov, 55f, 90f, $"{GameSettings.fov:0}°")); y += row;
         GameSettings.sensitivity = SliderRow(y, x, "鼠标灵敏度", GameSettings.sensitivity, 0.3f, 3f, $"{GameSettings.sensitivity:0.0}×"); y += row;
         GameSettings.invertX = ToggleRow(y, x, "水平反转（像拖动画布）", GameSettings.invertX); y += row;
@@ -687,6 +707,8 @@ public class Hud : MonoBehaviour
         GameSettings.vignette = ToggleRow(y, x, "暗角", GameSettings.vignette); y += row;
         GameSettings.showFps = ToggleRow(y, x, "显示帧率（目标 ≥ 80）", GameSettings.showFps); y += row;
         GameSettings.music = SliderRow(y, x, "音乐音量", GameSettings.music, 0f, 1f, $"{GameSettings.music * 100f:0}%"); y += row;
+        uiDraft = Mathf.Round(SliderRow(y, x, "界面大小", uiDraft, 0.8f, 1.5f, $"{uiDraft * 100f:0}%") * 20f) / 20f; y += row;
+        if (GUIUtility.hotControl == 0) GameSettings.uiScale = uiDraft;
         int win = ChoiceRow(y, x, "窗口大小", GameSettings.window, GameSettings.WindowNames);
         if (win != GameSettings.window) { GameSettings.window = win; GameSettings.ApplyWindow(); }
         y += row + 6;
@@ -716,10 +738,25 @@ public class Hud : MonoBehaviour
         float tx = r.x + 170;
         string tag = cur.chargeable || cur.kind == WeaponKind.Charge ? "  <size=14><color=#FFD27A>可蓄力</color></size>" : "";
         UiKit.Text(new Rect(tx, r.y + 12, 260, 34), $"{cur.Title}{tag}", new GUIStyle(left) { fontSize = 26 }, rc);
-        UiKit.Text(new Rect(tx, r.y + 46, 260, 20), $"{cur.type} · {Weapons.RarityNames[cur.rarity]}", new GUIStyle(left) { fontSize = 14 }, UiKit.Dim);
+        UiKit.Text(new Rect(tx, r.y + 46, 260, 20), cur.IsSkillWeapon ? $"{cur.type} · 技能期间" : $"{cur.type} · {Weapons.RarityNames[cur.rarity]}", new GUIStyle(left) { fontSize = 14 }, UiKit.Dim);
         UiKit.Text(new Rect(tx, r.y + 66, 260, 20), cur.desc, new GUIStyle(left) { fontSize = 14, clipping = TextClipping.Clip });
         string cost = cur.energyPerSec > 0f ? $"每秒 {cur.energyPerSec:0} 能量" : cur.energy > 0 ? $"每次 {cur.energy} 能量" : "不耗能量";
-        UiKit.Text(new Rect(tx, r.y + 86, 260, 20), $"伤害 {cur.damage} · {cost}", new GUIStyle(left) { fontSize = 14 }, UiKit.Dim);
+        string mul = cur.damageMul != 1f ? $" ×{cur.damageMul:0.#}" : "";
+        UiKit.Text(new Rect(tx, r.y + 86, 260, 20), $"伤害 {cur.damage}{mul} · {cost}", new GUIStyle(left) { fontSize = 14 }, UiKit.Dim);
+        if (cur.IsSkillWeapon)
+        {
+            // A class skill's weapon: the time it has left along the bottom of its picture, and the
+            // oath shield's remaining blocks in the corner.
+            float k = player.SkillWeaponTotal > 0f ? player.SkillWeaponLeft / player.SkillWeaponTotal : 0f;
+            UiKit.Bar(new Rect(r.x + 26, r.y + 96, 124, 8), k, 1f, rc);
+            for (int i = 0; i < PlayerController.GuardMax && cur.id == "oath_sword"; i++)
+            {
+                var prev = GUI.color;
+                GUI.color = new Color(1f, 1f, 1f, i < player.guardCharges ? 1f : 0.22f);
+                UiKit.Icon(new Rect(r.xMax - 108 + i * 28, r.y + 14, 26, 26), "glyph_armor");
+                GUI.color = prev;
+            }
+        }
         if (other != null)
         {
             var q = new Rect(w - 320, h - 200, 300, 42);
@@ -835,7 +872,8 @@ public class Hud : MonoBehaviour
             // White text just above the floating weapon (the beam behind is already the rarity colour).
             Vector3 sp = cam.WorldToScreenPoint(p.transform.position + Vector3.up * 1.15f);
             if (sp.z < 0.5f) continue;
-            UiKit.Text(new Rect(sp.x - 80, UnityEngine.Screen.height - sp.y - 12, 160, 24),
+            var g = ToGui(sp);
+            UiKit.Text(new Rect(g.x - 80, g.y - 12, 160, 24),
                 $"<color=#{ColorUtility.ToHtmlStringRGB(Weapons.RarityColors[p.weapon.rarity])}>●</color> {p.weapon.name}", st, Color.white);
         }
     }
@@ -852,7 +890,8 @@ public class Hud : MonoBehaviour
             Vector3 head = e.transform.position + Vector3.up * (e.AimPoint.y - e.transform.position.y) * 2.1f;
             Vector3 sp = cam.WorldToScreenPoint(head);
             if (sp.z < 0.5f || sp.z > 40f) continue;
-            float x = sp.x, y = UnityEngine.Screen.height - sp.y;
+            var g = ToGui(sp);
+            float x = g.x, y = g.y;
             // Outlined so the affix colour reads on any floor (blue on the frost floor was lost).
             UiKit.Text(new Rect(x - 110, y - 50, 220, 22), e.EliteName, tag, Color.Lerp(e.EliteColor, Color.white, 0.25f));
             UiKit.Text(new Rect(x - 110, y - 30, 220, 20), e.KindName, new GUIStyle(tag) { fontSize = 14 }, Color.white);
@@ -875,7 +914,8 @@ public class Hud : MonoBehaviour
             float pop = n.crit ? 1f + 0.5f * Mathf.Clamp01(1f - n.t / 0.15f) : 1f;
             var st = new GUIStyle(number) { fontSize = Mathf.RoundToInt((n.crit ? 36 : 26) * pop) };
             var baseCol = n.color ?? (n.crit ? new Color(1f, 0.82f, 0.25f) : Color.white);
-            UiKit.Text(new Rect(sp.x - 90, UnityEngine.Screen.height - sp.y - 24, 180, 48), n.text, st, new Color(baseCol.r, baseCol.g, baseCol.b, 1f - n.t / 0.8f));
+            var g = ToGui(sp);
+            UiKit.Text(new Rect(g.x - 90, g.y - 24, 180, 48), n.text, st, new Color(baseCol.r, baseCol.g, baseCol.b, 1f - n.t / 0.8f));
         }
     }
 
@@ -883,7 +923,8 @@ public class Hud : MonoBehaviour
     {
         var b = Enemy.ActiveBoss;
         if (!b || b.dead) return;
-        var panel = new Rect(w / 2 - 330, 14, 660, 64);
+        float bw = Mathf.Min(660f, w - 820f);
+        var panel = new Rect(w / 2 - bw / 2, 14, bw, 64);
         UiKit.DrawPanel(panel);
         string state = b.Stunned ? "  <color=#7FE8FF>眩晕 · 伤害翻倍</color>" : b.Enraged ? "  <color=#FF6A5A>狂暴</color>" : "";
         UiKit.Text(new Rect(panel.x, panel.y + 4, panel.width, 28), b.displayName + state, new GUIStyle(center) { fontSize = 20 }, new Color(1f, 0.55f, 0.5f));
@@ -917,12 +958,12 @@ public class Hud : MonoBehaviour
             var body = new Rect(text.x + text.width * 0.08f, text.y + text.height * 0.12f, text.width * 0.84f, text.height * 0.76f);
             var rule = new GUIStyle(center) { fontSize = Mathf.RoundToInt(cw * 0.055f), fontStyle = FontStyle.Normal, wordWrap = true, alignment = TextAnchor.MiddleCenter };
             rule.normal.textColor = InkColor;
-            GUI.Label(body, b.desc, rule);
+            UiKit.Label(body, b.desc, rule);
             if (b.stackable)
             {
                 var fine = new GUIStyle(rule) { fontSize = Mathf.RoundToInt(cw * 0.045f), alignment = TextAnchor.LowerCenter, fontStyle = FontStyle.Italic };
                 fine.normal.textColor = new Color(0.4f, 0.28f, 0.16f);
-                GUI.Label(new Rect(body.x, body.y, body.width, body.height + text.height * 0.08f), "可叠加", fine);
+                UiKit.Label(new Rect(body.x, body.y, body.width, body.height + text.height * 0.08f), "可叠加", fine);
             }
             var kr = new Rect(r.x + r.width * 0.06f, ribbonY - cw * 0.05f, cw * 0.1f, cw * 0.1f);
             GUI.DrawTexture(kr, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, new Color(0.06f, 0.05f, 0.04f, 0.9f).linear, 0f, kr.width / 2f);

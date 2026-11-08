@@ -174,6 +174,46 @@ public static class UiKit
         GUI.color = prev;
     }
 
+    /// Big gold lettering in the Hearthstone manner: a dark outline and drop shadow, the fill light
+    /// gold at the top, deeper gold in the middle and amber at the bottom. Drawn unscaled at the real
+    /// pixel size (see Label), the bands clipped in screen space.
+    public static void Title(Rect r, string text, GUIStyle style, Color? tint = null)
+    {
+        var keep = GUI.matrix;
+        GUI.matrix = Matrix4x4.identity;
+        var sr = new Rect(r.x * Scale, r.y * Scale, r.width * Scale, r.height * Scale);
+        var s = new GUIStyle(style) { richText = false, fontSize = Mathf.RoundToInt((style.fontSize > 0 ? style.fontSize : 13) * Scale) };
+        string plain = StripColor(text);
+        var dark = new GUIStyle(s);
+        dark.normal.textColor = new Color(0.16f, 0.07f, 0.02f, 0.95f);
+        float o = Mathf.Max(1.5f, s.fontSize * 0.045f);
+        GUI.Label(new Rect(sr.x + o * 0.6f, sr.y + o * 2.2f, sr.width, sr.height), plain, dark); // drop shadow
+        for (int i = 0; i < 8; i++)
+        {
+            float a = i * Mathf.PI / 4f;
+            GUI.Label(new Rect(sr.x + Mathf.Cos(a) * o, sr.y + Mathf.Sin(a) * o, sr.width, sr.height), plain, dark);
+        }
+        Color t = tint ?? new Color(1f, 0.82f, 0.42f);
+        var bands = new[]
+        {
+            (0f, 0.47f, Color.Lerp(t, Color.white, 0.55f)),
+            (0.47f, 0.6f, t),
+            (0.6f, 1f, new Color(t.r * 0.92f, t.g * 0.68f, t.b * 0.45f)),
+        };
+        // The glyphs sit around the middle of the rect; the bands split that middle stretch.
+        float gy = sr.center.y - s.fontSize * 0.55f, gh = s.fontSize * 1.1f;
+        foreach (var (from, to, c) in bands)
+        {
+            float y0 = from == 0f ? sr.y : gy + gh * from, y1 = to >= 1f ? sr.yMax : gy + gh * to;
+            GUI.BeginGroup(new Rect(sr.x, y0, sr.width, y1 - y0));
+            var f = new GUIStyle(s);
+            f.normal.textColor = c;
+            GUI.Label(new Rect(0f, sr.y - y0, sr.width, sr.height), plain, f);
+            GUI.EndGroup();
+        }
+        GUI.matrix = keep;
+    }
+
     /// A red ribbon banner with a title on it.
     public static void DrawBanner(Rect r, string text, GUIStyle style)
     {
@@ -182,7 +222,7 @@ public static class UiKit
         {
             float cap = t.width * 0.2f, half = t.height * 0.5f;
             Nine(r, t, cap, half, cap, half, r.height / t.height);
-            Text(new Rect(r.x, r.y + r.height * 0.06f, r.width, r.height * 0.62f), text, style, Paper);
+            Title(new Rect(r.x, r.y + r.height * 0.06f, r.width, r.height * 0.62f), text, style);
         }
         else Text(r, text, style, Gold);
     }
@@ -402,6 +442,33 @@ public static class UiKit
         GUI.DrawTexture(new Rect(0, 0, w, h), vignette);
     }
 
+    /// How much the UI is scaled up (Hud sets it with GUI.matrix each frame). Text is not stretched
+    /// with the matrix (it would blur): Label draws it unscaled at the real pixel size instead.
+    public static float Scale = 1f;
+
+    public static void Label(Rect r, string text, GUIStyle style)
+    {
+        if (Mathf.Abs(Scale - 1f) < 0.01f) { GUI.Label(r, text, style); return; }
+        var keep = GUI.matrix;
+        GUI.matrix = Matrix4x4.identity;
+        var s = new GUIStyle(style) { fontSize = Mathf.RoundToInt((style.fontSize > 0 ? style.fontSize : 13) * Scale) };
+        GUI.Label(new Rect(r.x * Scale, r.y * Scale, r.width * Scale, r.height * Scale), ScaleSizeTags(text), s);
+        GUI.matrix = keep;
+    }
+
+    // <size=N> in rich text is in pixels: scale it with the rest (remembered, texts repeat every frame).
+    static readonly Dictionary<string, string> sized = new Dictionary<string, string>();
+    static float sizedFor;
+
+    static string ScaleSizeTags(string t)
+    {
+        if (t == null || t.IndexOf("<size=", System.StringComparison.Ordinal) < 0) return t;
+        if (sizedFor != Scale || sized.Count > 2000) { sized.Clear(); sizedFor = Scale; }
+        if (sized.TryGetValue(t, out var s)) return s;
+        return sized[t] = System.Text.RegularExpressions.Regex.Replace(t, @"<size=(\d+)>",
+            m => $"<size={Mathf.RoundToInt(int.Parse(m.Groups[1].Value) * Scale)}>");
+    }
+
     /// A label with a soft dark outline (reads on any background).
     public static void Text(Rect r, string text, GUIStyle style, Color? color = null)
     {
@@ -409,10 +476,10 @@ public static class UiKit
         var shadow = new GUIStyle(s);
         shadow.normal.textColor = new Color(0f, 0f, 0f, 0.75f * (color.HasValue ? color.Value.a : 1f)); // fades with the text
         string plain = StripColor(text);
-        GUI.Label(new Rect(r.x + 2, r.y + 2, r.width, r.height), plain, shadow);
-        GUI.Label(new Rect(r.x - 1, r.y + 1, r.width, r.height), plain, shadow);
+        Label(new Rect(r.x + 2, r.y + 2, r.width, r.height), plain, shadow);
+        Label(new Rect(r.x - 1, r.y + 1, r.width, r.height), plain, shadow);
         if (color.HasValue) s.normal.textColor = color.Value;
-        GUI.Label(r, text, s);
+        Label(r, text, s);
     }
 
     // The shadow copy has no colour tags; texts repeat every frame, so remember the stripped versions.

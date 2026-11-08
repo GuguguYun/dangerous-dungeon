@@ -19,13 +19,16 @@ public static class GameSettings
     public static bool bloom = true, vignette = true;
     public static bool showFps;
     public static float music = 0.45f;
-    public static int window = 1; // index into Windows
+    public static float uiScale = 1.2f; // on top of fitting the UI to the window height
+    public static int window; // index into Windows
 
     public static readonly int[] FpsCaps = { 0, 60, 90, 120, 144, -1 };
     public static readonly string[] FpsCapNames = { "跟随显示器", "60", "90", "120", "144", "不限" };
-    public static readonly Vector2Int[] Windows =
-        { new Vector2Int(1280, 800), new Vector2Int(1440, 900), new Vector2Int(1600, 900), new Vector2Int(1920, 1080), Vector2Int.zero };
-    public static readonly string[] WindowNames = { "1280×800", "1440×900（推荐）", "1600×900", "1920×1080", "全屏" };
+    // Window sizes as a share of the screen (fixed pixel sizes come out a quarter of the screen on a
+    // Retina Mac, where a point is two pixels); 0 = full screen. The big window leaves room for the
+    // menu bar and the Dock.
+    public static readonly Vector2[] Windows = { new Vector2(0.96f, 0.86f), Vector2.zero, new Vector2(0.8f, 0.75f), new Vector2(0.62f, 0.6f) };
+    public static readonly string[] WindowNames = { "大窗口（推荐）", "全屏", "中窗口", "小窗口" };
 
     static bool loaded;
 
@@ -46,8 +49,9 @@ public static class GameSettings
         bloom = PlayerPrefs.GetInt("bloom", 1) == 1;
         vignette = PlayerPrefs.GetInt("vignette", 1) == 1;
         showFps = PlayerPrefs.GetInt("fps", 0) == 1;
-        window = PlayerPrefs.GetInt("window", window);
+        window = PlayerPrefs.GetInt("window2", window); // "window" held the old pixel-size list
         music = PlayerPrefs.GetFloat("music", music);
+        uiScale = PlayerPrefs.GetFloat("ui", uiScale);
     }
 
     public static void Save()
@@ -65,8 +69,9 @@ public static class GameSettings
         PlayerPrefs.SetInt("bloom", bloom ? 1 : 0);
         PlayerPrefs.SetInt("vignette", vignette ? 1 : 0);
         PlayerPrefs.SetInt("fps", showFps ? 1 : 0);
-        PlayerPrefs.SetInt("window", window);
+        PlayerPrefs.SetInt("window2", window);
         PlayerPrefs.SetFloat("music", music);
+        PlayerPrefs.SetFloat("ui", uiScale);
         PlayerPrefs.Save();
     }
 
@@ -97,9 +102,10 @@ public static class GameSettings
     public static void ApplyWindow()
     {
         var w = Windows[Mathf.Clamp(window, 0, Windows.Length - 1)];
-        if (w == Vector2Int.zero)
-            Screen.SetResolution(Screen.currentResolution.width, Screen.currentResolution.height, FullScreenMode.FullScreenWindow);
+        var screen = Screen.currentResolution;
+        if (w == Vector2.zero)
+            Screen.SetResolution(screen.width, screen.height, FullScreenMode.FullScreenWindow);
         else
-            Screen.SetResolution(w.x, w.y, FullScreenMode.Windowed);
+            Screen.SetResolution(Mathf.RoundToInt(screen.width * w.x), Mathf.RoundToInt(screen.height * w.y), FullScreenMode.Windowed);
     }
 }
