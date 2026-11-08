@@ -897,17 +897,21 @@ public partial class Hud : MonoBehaviour
         if (!player) return;
         if (player.Charge > 0f)
         {
-            // Charging (the bow, a charged swing or shot): beads light up clockwise from the top.
-            const int beads = 16;
+            // Charging (the bow, a charged swing or shot): beads light up clockwise from the top. The
+            // assassin's darts show one bead per dart the throw would loose.
+            var cw = player.Weapon;
+            bool darts = cw != null && cw.fan > 0;
+            int beads = darts ? cw.fan : 16;
+            float count = darts ? Weapons.DartsFor(cw, player.Charge) : player.Charge * beads;
             const float at = 18f;
             bool full = player.Charge >= 0.95f;
             for (int i = 0; i < beads; i++)
             {
                 float a = (i + 0.5f) / beads * 2f * Mathf.PI;
-                float lit = Mathf.Clamp01(player.Charge * beads - i);
+                float lit = Mathf.Clamp01(count - i);
                 var col = lit > 0f ? new Color(full ? 1f : UiKit.Gold.r, full ? 0.9f : UiKit.Gold.g, full ? 0.6f : UiKit.Gold.b, 0.45f + 0.55f * lit)
                                     : new Color(0.25f, 0.25f, 0.3f, 0.5f);
-                UiKit.Tinted(Around(c + new Vector2(Mathf.Sin(a), -Mathf.Cos(a)) * at, full ? 2.75f : 2.25f), reticleDot, col);
+                UiKit.Tinted(Around(c + new Vector2(Mathf.Sin(a), -Mathf.Cos(a)) * at, (darts ? 1.35f : 1f) * (full ? 2.75f : 2.25f)), reticleDot, col);
             }
         }
         // Light mech: the cannon's heat under the crosshair, red when it has overheated.

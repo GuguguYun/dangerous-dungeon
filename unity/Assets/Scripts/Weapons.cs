@@ -33,6 +33,7 @@ public class WeaponDef
     public string desc = "";
     public float damageMul = 1f; // class skill weapons: their own boost on top of everything else
     public string owner;         // class skill weapons: the class whose skill summons it
+    public int fan;              // charged throws: how many darts a full charge looses at once (0 = one shot)
 
     /// Summoned by a class skill for a few seconds; never dropped, found, sold or swapped.
     public bool IsSkillWeapon => owner != null;
@@ -48,7 +49,7 @@ public class WeaponDef
             float hit = damage * damageMul * Balance.LevelMul(level);
             return kind switch
             {
-                WeaponKind.Charge => hit * Weapons.FullCharge / (interval + Weapons.ChargeTime), // charged in full each time
+                WeaponKind.Charge => hit * (fan > 0 ? fan : Weapons.FullCharge) / (interval + Weapons.ChargeTime), // charged in full each time
                 WeaponKind.Flame or WeaponKind.Meteor => hit / interval + Balance.BurnTick / 0.5f, // and it keeps them burning
                 WeaponKind.Homing => hit * 2f / interval, // two missiles a shot
                 WeaponKind.Boomerang => hit * 2f / interval, // out and back once per throw
@@ -68,7 +69,7 @@ public class WeaponDef
         "pistol" or "boomerang" => WeaponGrip.OneHand,
         "launcher" => WeaponGrip.Shoulder, // a slim tube rides the shoulder; the bulky missile box is carried at the hip
         "thunder" or "frost" or "star_staff" or "dawn_scepter" => WeaponGrip.Staff,
-        "raven_blade" or "oath_sword" => WeaponGrip.OneHandMelee,
+        "raven_darts" or "oath_sword" => WeaponGrip.OneHandMelee, // a dart rides in the palm like a blade
         "bow" => WeaponGrip.Bow,
         "daggers" => WeaponGrip.Dual,
         "sword" or "hammer" or "spear" => WeaponGrip.TwoHandMelee,
@@ -117,7 +118,7 @@ public static class Weapons
     public static readonly List<WeaponDef> SkillWeapons = new List<WeaponDef>
     {
         new WeaponDef { id = "oath_sword", owner = "knight", name = "誓约圣剑", type = "骑士专属", kind = WeaponKind.Melee, rarity = 4, damage = 16, damageMul = 1.2f, interval = 0.38f, reach = 4.3f, arc = 150f, look = "blade", desc = "剑气更长，伤害 +20%" },
-        new WeaponDef { id = "raven_blade", owner = "assassin", name = "鸦羽刃", type = "刺客专属", kind = WeaponKind.Melee, rarity = 4, damage = 6, damageMul = 2f, interval = 0.24f, reach = 2.6f, arc = 130f, look = "blade", desc = "闪到敌人身边斩击，伤害 ×2" },
+        new WeaponDef { id = "raven_darts", owner = "assassin", name = "鸦羽镖", type = "刺客专属", kind = WeaponKind.Charge, rarity = 4, damage = 7, interval = 0.25f, speed = 38f, radius = 0.06f, fan = 7, mat = "bullet_dart", look = "blade", desc = "蓄力越久，掷出越多（最多 7 枚）" },
         new WeaponDef { id = "star_staff", owner = "mage", name = "焚星杖", type = "法师专属", kind = WeaponKind.Meteor, rarity = 4, damage = 15, interval = 0.5f, radius = 0.35f, explode = 2.4f, mat = "bullet_fire", look = "blade", desc = "准星处落陨石，爆炸并点燃" },
         new WeaponDef { id = "dawn_scepter", owner = "priest", name = "晨曦权杖", type = "牧师专属", kind = WeaponKind.Beam, rarity = 4, damage = 4, interval = 0.1f, mat = "bullet_gold", look = "blade", desc = "圣光光束，照到敌人回护甲" },
     };
@@ -125,6 +126,12 @@ public static class Weapons
     /// The bow: seconds to a full charge, and what a full charge multiplies the damage by.
     public const float ChargeTime = 0.8f, FullCharge = 5f;
     public const float FullDrawRadius = 0.5f; // how wide a fully drawn arrow hits (metres either side of its line)
+
+    /// 鸦羽镖: darts thrown for a charge of c (0..1): one on a tap, one more for each sixth of the charge,
+    /// `fan` in full; DartSpread degrees apart, a tight fan so a full volley still lands on one enemy at
+    /// a few metres and spreads over a group further off.
+    public static int DartsFor(WeaponDef w, float c) => 1 + Mathf.FloorToInt(Mathf.Clamp01(c) * (w.fan - 1) + 0.001f);
+    public const float DartSpread = 2f;
 
     public static WeaponDef Get(string id) => All.Find(w => w.id == id) ?? SkillWeapons.Find(w => w.id == id);
 
@@ -172,7 +179,6 @@ public static class Weapons
         "sword" => 0.21f,       // grip 10-26 %, guard 28-35 %: the right hand under the guard, the left below it
         "oath_sword" => 0.23f,  // grip 15-32 %
         "daggers" => 0.21f,     // grip 10-32 %
-        "raven_blade" => 0.15f, // grip 5-24 %
         _ => -1f,
     };
 

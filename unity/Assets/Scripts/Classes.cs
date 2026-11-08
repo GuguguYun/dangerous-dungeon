@@ -40,7 +40,7 @@ public static class Classes
             stamina = 5, speed = 6.8f, crit = 0.2f, meleeMul = 1.3f, dashCooldownMul = 0.5f, dashMul = 1.35f, staminaRegen = 1.5f, dashShadows = true,
             trait = "影步：冲刺更远、留下残影，体力恢复快 50%；近战伤害 ×1.3",
             skill = SkillKind.Stealth, skillName = "鸦影遁", cooldown = 14f,
-            skillDesc = "隐身 5 秒并握住鸦羽刃：每一刀闪到敌人身边、伤害 ×2；出手不现形，首击 ×3" },
+            skillDesc = "隐身 5 秒：无敌，敌人无法锁定；手持鸦羽镖，蓄力越久一次掷出越多（最多 7 枚）" },
         new ClassDef { id = "mage", name = "焚星法师", model = "mage", desc = "脆皮，但法术覆盖全场",
             maxHp = 4, maxArmor = 3, maxEnergy = 260, weapons = new[] { "pistol", "frost" },
             stamina = 3, speed = 6f, energyRegen = 2f, trait = "每秒自动回复 2 点能量",

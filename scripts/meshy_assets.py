@@ -208,6 +208,11 @@ ASSETS = {
         "A long elegant curved shadow sabre made of overlapping black raven feathers, the single-edged blade "
         "glowing deep violet along its edge with wisps of purple smoke, a small silver raven-skull guard, "
         "a short black leather grip. ")),
+    # round 54: the assassin's darts (鸦羽镖), thrown during 鸦影遁 (they replace the raven blade)
+    "raven_darts": dict(kind="weapon", length=0.45, polycount=2500, prompt=(
+        "A single stylized throwing dart in the shape of a kunai for a shadow assassin: a slim black steel "
+        "diamond-shaped blade with a softly glowing violet edge, a short grip wrapped in black cord, a round "
+        "ring at the end, and a small tuft of dark violet raven feathers tied to the ring. ")),
     # round 14: the knight's oath sword and shield, only drawn during 誓约壁垒
     "oath_sword": dict(kind="weapon", length=1.05, polycount=3000, prompt=(
         "A heroic one-handed knight's arming sword, straight polished silver blade with a glowing golden rune "

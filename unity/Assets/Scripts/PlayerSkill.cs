@@ -3,7 +3,7 @@ using UnityEngine;
 
 /// The class skill on right mouse / F. Each one also puts the class's own weapon in hand for a few
 /// seconds (Weapons.SkillWeapons, see PlayerSkillWeapon): knight oath sword and shield (with a
-/// knock-back), assassin stealth with the raven blade, mage meteor storm and the star staff, priest
+/// knock-back), assassin stealth with the raven darts, mage meteor storm and the star staff, priest
 /// sanctuary and the dawn scepter. Cooldowns come from the ClassDef.
 public class PlayerSkill : MonoBehaviour
 {
@@ -105,8 +105,8 @@ public class PlayerSkill : MonoBehaviour
 
     void StartStealth()
     {
-        // 鸦影遁: hidden for the whole time, attacks included (only the first strike is the ×3 ambush),
-        // with the raven blade in hand.
+        // 鸦影遁: hidden for the whole time, throwing included: enemies lose the lock (they hunt a decoy,
+        // see Enemy.TargetPos) and nothing lands (PlayerController.TakeDamage); the raven darts in hand.
         activeLeft = RavenTime;
         p.stealthed = true;
         float h = body ? body.height : 1.6f;
@@ -138,7 +138,7 @@ public class PlayerSkill : MonoBehaviour
         }
         wisps = Vfx.ShadowWisps(transform, h);
         feathers = Vfx.Feathers(transform, h);
-        p.GrantSkillWeapon("raven_blade", RavenTime); // after the body swap: the blade keeps its own look
+        p.GrantSkillWeapon("raven_darts", RavenTime); // after the body swap: the darts keep their own look
     }
 
     /// Stealth ends early (climbing into a mech).

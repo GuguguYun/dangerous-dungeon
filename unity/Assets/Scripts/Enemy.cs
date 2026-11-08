@@ -235,7 +235,8 @@ public partial class Enemy : MonoBehaviour
 
             // Bodies only hurt when they mean to: bosses always, chargers during the lunge, slimes mid-hop.
             float reach = cc.radius + 0.75f;
-            bool contact = kind == EnemyKind.Boss || ((kind == EnemyKind.Charger || kind == EnemyKind.Guard || kind == EnemyKind.Mimic || kind == EnemyKind.Slime) && Lunging);
+            bool contact = !target.Stealthed // a hidden player isn't where they lunge (and takes nothing anyway)
+                && (kind == EnemyKind.Boss || ((kind == EnemyKind.Charger || kind == EnemyKind.Guard || kind == EnemyKind.Mimic || kind == EnemyKind.Slime) && Lunging));
             float realDist = Vector3.Distance(new Vector3(target.transform.position.x, 0f, target.transform.position.z), new Vector3(transform.position.x, 0f, transform.position.z));
             if (contact && contactCd <= 0f && realDist < reach)
             {

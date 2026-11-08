@@ -975,30 +975,37 @@ public class GameManager : MonoBehaviour
         yield return new WaitForSeconds(PlayerSkill.OathTime - 1f);
         Check("the old weapon comes back when the skill ends", player.Weapon.id == before && !player.HoldingSkillWeapon, $"weapon={player.Weapon.id}");
 
-        // Assassin: enemies lose track and swing at a decoy; the raven blade blinks to its target and
-        // cutting does not end stealth.
+        // Assassin: hidden, enemies lose the lock and nothing lands; the darts fly in a fan, more the
+        // longer they were charged, and throwing does not end stealth.
         skill.Setup(player, Classes.Get("assassin"));
         var g = Dummy(player.transform.position + fwdDir * 7f, EnemyKind.Gunner);
         g.target = player;
         yield return new WaitForSeconds(0.4f);
         skill.TryUse();
-        Check("stealth puts the raven blade in hand", player.Weapon.id == "raven_blade");
+        Check("stealth puts the raven darts in hand", player.Weapon.id == "raven_darts");
         yield return new WaitForSeconds(1.2f);
         float off = Vector3.Distance(g.TargetPos, player.transform.position);
-        Check("stealth: enemies aim at a decoy, not the player", player.Stealthed && off > 0.5f, $"decoy {off:F1} m away");
-        Destroy(g.gameObject); // it wanders: the blink must go for the still target, the nearest one ahead
-        var mark = Dummy(player.transform.position + fwdDir * 5f); // no target: it stands still
-        Vector3 start = player.transform.position;
-        yield return new WaitForSeconds(0.1f);
-        player.Attack();
+        Check("stealth: enemies lose the lock (they hunt a decoy, not the player)", player.Stealthed && off > 0.5f, $"decoy {off:F1} m away");
+        int hpWas = player.hp, armorWas = player.armor;
+        player.TakeDamage(3);
+        Check("stealth: nothing lands (invincible)", player.hp == hpWas && player.armor == armorWas, $"hp {hpWas}->{player.hp} armor {armorWas}->{player.armor}");
+        Destroy(g.gameObject);
+        yield return AimAt(4f);
+        var mark = Dummy(CrosshairGround()); // no target: it stands still
+        yield return new WaitForSeconds(0.3f);
+        int thrown0 = player.DartsThrown;
+        yield return Hold(0.05f);
+        yield return new WaitForSeconds(0.35f);
+        int tapDarts = player.DartsThrown - thrown0;
+        yield return Hold(Weapons.ChargeTime + 0.1f);
         yield return new WaitForSeconds(0.4f);
-        float moved = Vector3.Distance(player.transform.position, start);
-        Check("the raven blade blinks to the enemy and cuts it", moved > 2f && mark.hp < 100, $"moved {moved:F1} m, hp={mark.hp}");
-        Check("cutting does not end stealth", player.Stealthed);
+        int fullDarts = player.DartsThrown - thrown0 - tapDarts;
+        Check("darts: a tap throws one, a full charge a fan of seven", tapDarts == 1 && fullDarts == 7, $"tap={tapDarts} full={fullDarts}");
+        Check("the darts hit", mark.hp < 100, $"hp={mark.hp}");
+        Check("throwing does not end stealth", player.Stealthed);
         Destroy(mark.gameObject);
-        player.Teleport(start); // the blink carried us forward; later checks aim from the middle of the room
         yield return new WaitForSeconds(PlayerSkill.RavenTime);
-        Check("stealth and the blade end together", !player.Stealthed && !player.HoldingSkillWeapon);
+        Check("stealth and the darts end together", !player.Stealthed && !player.HoldingSkillWeapon);
 
         // Mage: meteors fall on the crosshair area.
         skill.Setup(player, Classes.Get("mage"));
@@ -1142,7 +1149,7 @@ public class GameManager : MonoBehaviour
                 Vector3.Distance(rh.position, pv.position) < 0.25f && Vector3.Distance(lh.position, fore) < 0.3f,
                 $"right {Vector3.Distance(rh.position, pv.position):F2} m, left {Vector3.Distance(lh.position, fore):F2} m | ik {player.ikDebugLeft} now={Time.frameCount}");
             // Blades are held by the grip: the hand sat on the crossguard once and vanished inside it.
-            foreach (var (id, from, to) in new[] { ("sword", 0.1f, 0.27f), ("oath_sword", 0.15f, 0.32f), ("daggers", 0.1f, 0.32f), ("raven_blade", 0.05f, 0.24f) })
+            foreach (var (id, from, to) in new[] { ("sword", 0.1f, 0.27f), ("oath_sword", 0.15f, 0.32f), ("daggers", 0.1f, 0.32f) })
             {
                 player.Equip(Weapons.Get(id).Clone());
                 yield return null;
@@ -2106,6 +2113,23 @@ public class GameManager : MonoBehaviour
         yield return null;
         yield return Shot("06c_bow_arrow.png");
         yield return new WaitForSeconds(0.8f);
+        // The assassin's 鸦影遁: hidden, the darts charged in full (seven beads), then the fan in flight.
+        var skillWas = player.skill.def;
+        player.skill.Setup(player, Classes.Get("assassin"));
+        player.skill.TryUse();
+        yield return new WaitForSeconds(0.4f);
+        player.testTrigger = true;
+        yield return new WaitForSeconds(Weapons.ChargeTime + 0.15f);
+        yield return Shot("06d_darts_drawn.png");
+        player.testTrigger = false;
+        yield return null;
+        yield return null;
+        yield return null;
+        yield return Shot("06e_darts_fan.png");
+        yield return new WaitForSeconds(0.5f);
+        player.skill.BreakStealth();
+        player.EndSkillWeapon();
+        player.skill.Setup(player, skillWas);
         // Physics: an explosive barrel line goes up and throws the enemies standing by it.
         foreach (var e in FindObjectsByType<Enemy>(FindObjectsSortMode.None)) Destroy(e.gameObject);
         Vector3 fw = Vector3.forward, sd = Vector3.right;

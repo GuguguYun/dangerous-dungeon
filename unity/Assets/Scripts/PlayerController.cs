@@ -60,7 +60,6 @@ public partial class PlayerController : MonoBehaviour
     /// The knight's oath shield: each hit that would hurt uses one up instead.
     public int guardCharges;
     public const int GuardMax = 3;
-    bool ambushUsed;  // stealth: only the first strike is the ×3 ambush
     float holyT;      // the priest's scepter: seconds of light on enemies towards the next armour point
     public System.Action Died;
 
@@ -607,19 +606,13 @@ public partial class PlayerController : MonoBehaviour
 
     int RollDamage(int baseDamage, out bool crit)
     {
-        bool ambush = stealthed && !ambushUsed;
-        crit = nextCrit || ambush || Random.value < RunState.critChance;
+        crit = nextCrit || Random.value < RunState.critChance;
         // Every bonus is a percentage (Balance): blessings, the hit streak (up to +30%), and for hand
         // weapons the shop upgrades and a class skill weapon's own boost.
         float mul = (1f + RunState.damageBonus) * (1f + Combo.Bonus);
         if (!InMech) mul *= Weapon.damageMul * Balance.LevelMul(Weapon.level);
         else mul *= Balance.FloorMul(RunState.floor); // a mech keeps pace with the floor's enemies
         int d = Mathf.Max(1, Mathf.RoundToInt(baseDamage * mul));
-        if (ambush)
-        {
-            ambushUsed = true; // the first strike out of the shadows; stealth itself lasts its time
-            return d * 3;
-        }
         return crit ? d * 2 : d;
     }
 
@@ -741,7 +734,7 @@ public partial class PlayerController : MonoBehaviour
     /// The bow at full draw: a puff of gold at the arrow and a soft chime.
     void FullyDrawn()
     {
-        Vfx.Sparks(muzzle.position, Bullet.ArrowGold, 10, 2.5f);
+        Vfx.Sparks(muzzle.position, Weapon.fan > 0 ? RavenViolet : Bullet.ArrowGold, 10, 2.5f);
         Sfx.Play("pickup", 0.35f, 0f);
     }
 
@@ -750,7 +743,15 @@ public partial class PlayerController : MonoBehaviour
         // Gold motes drawn in to the arrow as the bow is drawn (more the further it is drawn).
         if (w.kind == WeaponKind.Charge && charge > 0f)
         {
-            if (!gather) gather = Vfx.Trail(muzzle, "gather");
+            if (!gather)
+            {
+                gather = Vfx.Trail(muzzle, "gather");
+                if (w.fan > 0)
+                {
+                    var main = gather.main; // the assassin's darts gather shadow, not gold
+                    main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.8f, 0.6f, 1f, 0.8f), new Color(0.55f, 0.3f, 1f, 0.7f));
+                }
+            }
             var em = gather.emission;
             em.rateOverTime = 10f + 40f * charge;
         }
@@ -851,6 +852,11 @@ public partial class PlayerController : MonoBehaviour
     /// Bow: damage x1..x5 with the charge; a full charge also pierces three enemies.
     void FireCharged(WeaponDef w, float c)
     {
+        if (w.fan > 0)
+        {
+            ThrowDarts(w, c);
+            return;
+        }
         if (!SpendEnergy(w.energy)) return;
         fireCd = w.interval / RunState.fireRateMul;
         lastShot = Time.time;
@@ -1032,8 +1038,7 @@ public partial class PlayerController : MonoBehaviour
         // at its stated rate whatever the frame rate (resetting it lost up to a frame a shot: -10% on the SMG).
         fireCd = (fireCd > -0.05f ? fireCd : 0f) + w.interval / RunState.fireRateMul;
         lastShot = Time.time;
-        if (w.id == "raven_blade" && RavenBlink(w)) { } // the cut lands on arrival
-        else if (w.melee) Melee(w);
+        if (w.melee) Melee(w);
         else Shoot(w);
         nextCrit = false;
     }
@@ -1212,6 +1217,12 @@ public partial class PlayerController : MonoBehaviour
     public void TakeDamage(int amount)
     {
         if (dead || shielded || invuln > 0f || dashInvuln > 0f) return;
+        if (stealthed)
+        {
+            // 鸦影遁: nothing lands while hidden; a wisp of shadow shows it passed through.
+            if (amount > 0) Vfx.Puff(transform.position + Vector3.up, new Color(0.2f, 0.11f, 0.32f, 0.5f), 0.5f, 4);
+            return;
+        }
         if (guardCharges > 0 && amount > 0 && !InMech)
         {
             GuardBlock();

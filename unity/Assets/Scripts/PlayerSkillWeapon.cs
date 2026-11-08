@@ -3,7 +3,7 @@ using UnityEngine;
 
 /// Class skill weapons (Weapons.SkillWeapons), summoned by PlayerSkill for a few seconds:
 /// - 誓约圣剑 (knight): long reach, +20%, with the oath shield on the left arm blocking three hits;
-/// - 鸦羽刃 (assassin): each cut blinks to the enemy in front of the crosshair, ×2;
+/// - 鸦羽镖 (assassin): hold to charge, let go to throw a fan of darts, more the longer it was held;
 /// - 焚星杖 (mage): every cast drops a meteor on the crosshair;
 /// - 晨曦权杖 (priest): a golden beam; each second of it on enemies restores one armour.
 public partial class PlayerController
@@ -19,7 +19,6 @@ public partial class PlayerController
         weapons[slot] = w.Clone();
         skillWeaponLeft = skillWeaponTotal = seconds;
         guardCharges = id == "oath_sword" ? GuardMax : 0;
-        ambushUsed = false;
         holyT = 0f;
         charge = 0f;
         fireCd = 0f;
@@ -57,43 +56,34 @@ public partial class PlayerController
         _ => new Color(1f, 0.9f, 0.55f),
     };
 
-    // ---------- 鸦羽刃: blink and cut ----------
+    // ---------- 鸦羽镖: a fan of darts ----------
 
-    /// The nearest enemy ahead of the crosshair (within 7.5 m, 35°): dash to it, then cut.
-    bool RavenBlink(WeaponDef w)
+    /// Throw the darts a charge of `c` has earned (Weapons.DartsFor) in a tight fan at the crosshair, with a
+    /// flick of the throwing arm. Each dart rolls its own damage (and crit).
+    void ThrowDarts(WeaponDef w, float c)
     {
-        Vector3 fwd = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
-        Enemy best = null;
-        float bestD = 7.5f;
-        foreach (var e in Enemy.Live)
+        if (!SpendEnergy(w.energy)) return;
+        fireCd = w.interval / RunState.fireRateMul;
+        lastShot = Time.time;
+        int n = Weapons.DartsFor(w, c);
+        Vector3 from = muzzle.position;
+        Vector3 aim = (AimPoint() - from).normalized;
+        for (int i = 0; i < n; i++)
         {
-            if (!e || e.dead) continue;
-            Vector3 to = e.transform.position - transform.position;
-            to.y = 0f;
-            float d = to.magnitude;
-            if (d < 2.2f || d > bestD || Vector3.Angle(fwd, to) > 35f) continue;
-            best = e;
-            bestD = d;
+            Vector3 dir = Quaternion.AngleAxis((i - (n - 1) / 2f) * Weapons.DartSpread, Vector3.up) * aim;
+            int dmg = RollDamage(w.damage, out bool crit);
+            Bullet.Fire(from, dir * w.speed, true, w.radius, w.mat, 1.5f, dmg, 0f, crit);
         }
-        if (!best) return false;
-        StartCoroutine(Blink(w, best));
-        return true;
+        nextCrit = false;
+        if (body) body.Trigger("slash", body.Length("slash") / 0.35f, 0.1f); // a quick overarm flick
+        Vfx.Sparks(from, RavenViolet, 4 + 2 * n, 3f);
+        Sfx.Play("slash", 0.4f + 0.06f * n, 0.1f, 0.9f);
+        CameraShake.Add(0.03f + 0.012f * n);
+        DartsThrown += n;
     }
 
-    IEnumerator Blink(WeaponDef w, Enemy e)
-    {
-        Vector3 to = e.transform.position - transform.position;
-        to.y = 0f;
-        dashDir = to.normalized;
-        dashSpeed = 30f;
-        dashT = Mathf.Clamp((to.magnitude - 1.3f) / dashSpeed, 0.04f, 0.2f);
-        dashInvuln = dashT + 0.08f;
-        if (body) Afterimage.Spawn(body.transform, RavenViolet);
-        Vfx.Puff(transform.position + Vector3.up, new Color(0.25f, 0.15f, 0.35f, 0.6f), 0.6f, 6);
-        Sfx.Play("swap_melee", 0.5f, 0.1f, 1.3f);
-        yield return new WaitForSeconds(dashT);
-        if (!dead && Weapon != null && Weapon.id == w.id) Melee(Weapon);
-    }
+    /// Darts thrown so far (self-tests).
+    public int DartsThrown;
 
     // ---------- 焚星杖: a meteor on the crosshair ----------
 

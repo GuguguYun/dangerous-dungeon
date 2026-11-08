@@ -100,7 +100,7 @@ public class Bullet : MonoBehaviour
     }
 
     /// Palette entry of a shot id (the Goblin King's jade coins are green like every low shot).
-    static string Base(string mat) => mat == "bullet_jade" ? "bullet_low" : mat;
+    static string Base(string mat) => mat == "bullet_jade" ? "bullet_low" : mat == "bullet_dart" ? "bullet_hex" : mat;
 
     /// Low shots skim the floor (jump them): the shaman's ghost-fire skulls, the Goblin King's jade coins.
     public static bool IsLow(string mat) => mat == "bullet_low" || mat == "bullet_jade";
@@ -110,6 +110,12 @@ public class Bullet : MonoBehaviour
     /// Enemy shots (and the player's arrows) are real things instead (see EnemyLook).
     void Style(GameObject go, MeshRenderer r, TrailRenderer tr)
     {
+        if (mat == "bullet_dart")
+        {
+            DartLook(go, r, tr);
+            Orient();
+            return;
+        }
         // The hunting bow's arrows are the same wooden arrows the skeleton archers loose (not a glowing needle).
         if ((!hitsEnemies || mat == "bullet_arrow") && EnemyLook(go, r, tr))
         {
@@ -227,6 +233,27 @@ public class Bullet : MonoBehaviour
         r.enabled = false; // the sphere was only ever the glowing ball
         tr.enabled = mat == "bullet_arrow";
         return true;
+    }
+
+    /// The assassin's dart: the same kunai held in the hand (Meshy model, point first), a faint violet
+    /// streak behind it; a dark steel sliver if the model is missing.
+    void DartLook(GameObject go, MeshRenderer r, TrailRenderer tr)
+    {
+        go.transform.localScale = Vector3.one; // sized in metres below
+        var spin = Pivot("dart");
+        var dart = Weapons.Get("raven_darts");
+        if (dart != null && Resources.Load<GameObject>("Models/Weapons/raven_darts"))
+            Weapons.MakeVisual(dart, spin, go.layer);
+        else
+            AddMesh(spin, Vfx.Crystal(), Look("steel"), new Vector3(0f, 0f, 0.1f), new Vector3(0.05f, 0.025f, 0.3f), Quaternion.identity);
+        model = spin;
+        farSize = 0.08f;
+        r.enabled = false;
+        tr.sharedMaterial = Palette.Trail("bullet_hex");
+        tr.time = 0.09f;
+        tr.startWidth = 0.08f;
+        tr.startColor = new Color(0.75f, 0.5f, 1f, 0.45f);
+        tr.endColor = new Color(0.5f, 0.25f, 1f, 0f);
     }
 
     enum Fit { AsIs, ThinZ }
@@ -566,7 +593,7 @@ public class Bullet : MonoBehaviour
         if (!hitsEnemies)
         {
             var p = PlayerController.Current;
-            if (!p || p.dead) return;
+            if (!p || p.dead || p.Stealthed) return; // a hidden player can't be locked onto: it flies on straight
             Vector3 aim = p.transform.position + Vector3.up * 1f - transform.position;
             aim.y = 0f; // stay at their readable height
             velocity = Vector3.RotateTowards(velocity, aim.normalized * velocity.magnitude, homing * Mathf.Deg2Rad * dt, 0f);

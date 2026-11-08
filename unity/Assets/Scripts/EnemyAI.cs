@@ -124,7 +124,7 @@ public partial class Enemy
             case EnemyKind.Bomber:
             {
                 // Lob at where the player is heading, a little ahead.
-                Vector3 lead = target ? target.transform.position + Vector3.ProjectOnPlane(target.Velocity, Vector3.up) * 0.5f : TargetPos;
+                Vector3 lead = target && !target.Stealthed ? target.transform.position + Vector3.ProjectOnPlane(target.Velocity, Vector3.up) * 0.5f : TargetPos;
                 Vector3 hand = held ? held.position : transform.position + Vector3.up * 1.4f;
                 EnemyBomb.Throw(hand, lead, 1.0f, 2.2f);
                 if (held) { held.gameObject.SetActive(false); Invoke(nameof(ShowHeld), 0.9f); }

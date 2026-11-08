@@ -38,7 +38,6 @@ public partial class PlayerController
     static Color SmearColor(WeaponDef w) => w.id switch
     {
         "oath_sword" => new Color(1f, 0.88f, 0.55f, 0.6f),
-        "raven_blade" => new Color(0.55f, 0.35f, 0.9f, 0.6f),
         "daggers" => new Color(0.78f, 0.62f, 1f, 0.5f),
         "hammer" => new Color(1f, 0.9f, 0.72f, 0.45f),
         "spear" => new Color(0.95f, 0.95f, 1f, 0.45f),
@@ -70,7 +69,7 @@ public partial class PlayerController
         {
             case "hammer": break;
             case "spear": Sfx.Play("slash", 0.7f, 0.05f); break;
-            case "daggers": case "raven_blade": Sfx.Play("slash", 0.5f, 0.2f); break;
+            case "daggers": Sfx.Play("slash", 0.5f, 0.2f); break;
             default: Sfx.Play("slash", 0.8f); break;
         }
         Later(HitDelay("slash", swing), () => MeleeHit(w, heavy, atYaw));
