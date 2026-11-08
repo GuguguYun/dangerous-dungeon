@@ -232,6 +232,8 @@
 
 ## 素材不进 git
 
+代码仓库（2026-11-09 起）：https://github.com/meshy-dev/meshy-dungeon （公司组织 meshy-dev 下的私有仓库，默认分支 dev；每轮提交后 `git push`）。公司 SSH 证书只允许推到 Meshy 企业名下的仓库，推不到个人账号 tianyaoguan-lab。
+
 磁盘只剩约 14 GB，Meshy 模型（unity/Assets/Resources/Models，2.6 GB）和原始下载（assets/meshy，4.6 GB）不进 git。重建：`python3 scripts/install_chars.py`（角色）、`python3 scripts/prep_assets.py`（武器/道具，Blender）；原始下载丢了需要用 `assets/meshy/state.json` 里的任务号重新下载。
 
 ## 待用户
