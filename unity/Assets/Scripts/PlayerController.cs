@@ -69,6 +69,7 @@ public partial class PlayerController : MonoBehaviour
     Vector3 velocity;
     Vector3 dashDir;
     float fireCd, dashT, dashCd, invuln, dashInvuln, sinceHit = 99f, armorTimer, swingT, noEnergyMsgCd;
+    float dashSpeed = DashSpeed;
     float groundT, perfectCd, energyRegenAcc, hpRegenT;
     ClassDef cls;
     bool airJumped, nextCrit;
@@ -258,6 +259,8 @@ public partial class PlayerController : MonoBehaviour
         groundT = 0f;
         dashDir = direction;
         dashT = DashTime;
+        dashSpeed = DashSpeed * (cls != null && !InMech ? cls.dashMul : 1f);
+        afterimageT = 0f;
         dashCd = DashCooldown * RunState.dashCooldownMul;
         dashInvuln = DashTime + 0.05f;
         if (body) body.Trigger("dodge", body.Length("dodge") / 0.45f, 0.4f);
@@ -314,7 +317,7 @@ public partial class PlayerController : MonoBehaviour
         {
             groundT += dt;
             airJumped = false;
-            if (groundT > StaminaDelay) stamina = Mathf.Min(maxStamina, stamina + StaminaRegen * dt);
+            if (groundT > StaminaDelay) stamina = Mathf.Min(maxStamina, stamina + StaminaRegen * (cls != null && !InMech ? cls.staminaRegen : 1f) * dt);
         }
         else groundT = 0f;
 
@@ -393,7 +396,13 @@ public partial class PlayerController : MonoBehaviour
         if (dashT > 0f)
         {
             dashT -= dt;
-            h = dashDir * (ramming ? 12f : DashSpeed);
+            // The assassin's shadow step leaves fading copies behind.
+            if (!InMech && cls != null && cls.dashShadows && body && (afterimageT -= dt) <= 0f)
+            {
+                afterimageT = 0.045f;
+                Afterimage.Spawn(body.transform, new Color(0.55f, 0.3f, 1f));
+            }
+            h = dashDir * (ramming ? 12f : dashSpeed);
         }
         else
         {
@@ -447,7 +456,8 @@ public partial class PlayerController : MonoBehaviour
         {
             bool aiming = Time.time - lastShot < 0.6f;
             if (!faceInit) { faceDir = fwd; faceInit = true; model.rotation = Quaternion.LookRotation(fwd); }
-            if (aiming || !body) faceDir = fwd;
+            // A light mech boosting keeps facing the crosshair (no spinning round to dash backwards).
+            if (aiming || !body || (InMech && !HeavyMech && dashT > 0f)) faceDir = fwd;
             else if (h.sqrMagnitude > 0.5f) faceDir = h.normalized;
             model.rotation = Quaternion.Slerp(model.rotation, Quaternion.LookRotation(faceDir), 1f - Mathf.Exp(-15f * dt));
             if (body)
@@ -459,8 +469,10 @@ public partial class PlayerController : MonoBehaviour
             }
             if (active && InMech)
             {
-                // In a mech: right button is its melee arm, F its special, E climbs out.
+                // In a mech: right button is its melee arm, Q swaps the left button between gun and
+                // melee arm, F its special, E climbs out.
                 if (Input.GetMouseButton(1)) MechMelee();
+                if (Input.GetKeyDown(KeyCode.Q)) MechSwapMode();
                 if (Input.GetKeyDown(KeyCode.F)) MechSpecial();
                 if (Input.GetKeyDown(KeyCode.E)) Dismount(false);
             }
@@ -481,7 +493,8 @@ public partial class PlayerController : MonoBehaviour
             if (InMech)
             {
                 MechTick(dt);
-                MechFire(trigger);
+                if (mechBlade) { if (trigger) MechMelee(); }
+                else MechFire(trigger);
             }
             else HandleWeapon(trigger, dt);
             prevTrigger = trigger;

@@ -340,7 +340,7 @@ public class GameManager : MonoBehaviour
         var cls = Classes.Get(RunState.classId);
         Check("starting weapons follow the class", player.weapons[0]?.id == cls.weapons[0] && player.weapons[1]?.id == cls.weapons[1], $"{RunState.classId}: {player.weapons[0]?.id}+{player.weapons[1]?.id}");
         Check("class base stats applied", player.maxStamina == cls.stamina + (RunState.buffs.Contains("light") ? 1 : 0) && Mathf.Approximately(RunState.dashCooldownMul, cls.dashCooldownMul * (RunState.buffs.Contains("dash") ? 0.5f : 1f)), $"{RunState.classId}: stamina={player.maxStamina}");
-        Check("assassin has five dodges", Classes.Get("assassin").stamina == 5);
+        Check("assassin has five dodges, a longer shadow-step dash and faster stamina", Classes.Get("assassin").stamina == 5 && Classes.Get("assassin").dashMul > 1.2f && Classes.Get("assassin").staminaRegen > 1.2f);
 
         // Aim -> bullet -> damage: put a dummy where the crosshair points, fire, expect a hit.
         player.pitch = 12f;
@@ -1414,6 +1414,36 @@ public class GameManager : MonoBehaviour
         Check("the plasma blade hits in front", near.hp < 100, $"hp={near.hp}");
         Check("the plasma blade cuts enemy shots", orb == null);
         Destroy(near.gameObject);
+
+        // Melee mode: Q puts the blade on the left button; three swings chain, the third lunges in.
+        player.MechSwapMode();
+        Check("Q switches the mech to melee mode and shows the blade", player.mechBlade && player.MechArmShown);
+        var lungeAt = Dummy(Ahead(5f));
+        yield return new WaitForSeconds(0.9f);
+        Vector3 beforeLunge = player.transform.position;
+        int swings = player.mechSwings;
+        player.testTrigger = true;
+        for (float u = 0; u < 2.5f && player.mechSwings < swings + 3; u += Time.deltaTime) yield return null;
+        player.testTrigger = false;
+        yield return new WaitForSeconds(0.3f);
+        float lunged = Vector3.Distance(beforeLunge, player.transform.position);
+        Check("melee mode: the left button chains swings and the third lunges into the target", player.mechSwings >= swings + 3 && lungeAt.hp < 100 && lunged > 1.5f,
+            $"swings={player.mechSwings - swings} hp={lungeAt.hp} moved={lunged:F1}");
+        player.MechSwapMode();
+        Check("Q again: back to the gun, blade away", !player.mechBlade && !player.MechArmShown);
+        Destroy(lungeAt.gameObject);
+        player.Teleport(home);
+        yield return new WaitForSeconds(0.3f);
+
+        // Light boost: farther than a pilot's dodge.
+        Vector3 boostDir = Physics.Raycast(player.transform.position + Vector3.up, side, 7f, Layers.WorldMask) ? -side : side;
+        Vector3 boostFrom = player.transform.position;
+        player.MechDash(boostDir);
+        yield return new WaitForSeconds(0.45f);
+        float boosted = Vector3.Distance(boostFrom, player.transform.position);
+        Check("light mech boost covers more ground than a pilot's dodge", boosted > 4f, $"moved={boosted:F1}");
+        player.Teleport(home);
+        yield return new WaitForSeconds(0.2f);
 
         // Climb out: the mech stays parked with its durability; climbing back in keeps it.
         player.TakeDamage(5);
