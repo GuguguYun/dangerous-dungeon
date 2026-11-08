@@ -104,7 +104,8 @@ public static class RunState
         NewRun();
     }
 
-    public static void NextFloor(PlayerController p)
+    /// What the hero has on them now (for the next floor, or the save).
+    public static void Keep(PlayerController p)
     {
         hp = p.hp;
         energy = p.energy;
@@ -112,6 +113,11 @@ public static class RunState
         slot = p.slot;
         mechId = p.InMech ? p.mechDef.id : null;
         mechHp = p.mechHp;
+    }
+
+    public static void NextFloor(PlayerController p)
+    {
+        Keep(p);
         floor++;
         seed = NewSeed();
         buffTaken = false;

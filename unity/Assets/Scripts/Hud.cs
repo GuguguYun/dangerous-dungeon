@@ -14,7 +14,7 @@ public partial class Hud : MonoBehaviour
     public int enemiesLeft = -1;
     public string themeName = "";
     public Screen screen = Screen.None;
-    public System.Action Resume, Restart, Quit, Begin, SettingsChanged;
+    public System.Action Resume, Restart, Quit, Begin, Continue, SettingsChanged;
     public System.Action<string> ChooseClass;
     Screen settingsReturn;
     float uiDraft = 1.2f;
@@ -238,8 +238,8 @@ public partial class Hud : MonoBehaviour
         // scale rather than running off the bottom.
         float need = screen switch
         {
-            Screen.Settings => 780f, Screen.Codex => 760f, Screen.Dead => 740f, Screen.Won => 740f, Screen.Pause => 720f,
-            Screen.Title => 700f, Screen.ClassSelect => 680f, _ => 620f,
+            Screen.Settings => 780f, Screen.Codex => 760f, Screen.Dead => 740f, Screen.Won => 740f, Screen.Pause => 745f,
+            Screen.Title => 750f, Screen.ClassSelect => 680f, _ => 620f,
         };
         guiScale = Mathf.Min(UnityEngine.Screen.height / 900f * GameSettings.uiScale, UnityEngine.Screen.height / need);
         UiKit.Scale = guiScale;
@@ -389,24 +389,35 @@ public partial class Hud : MonoBehaviour
         UiKit.Title(new Rect(0, h * 0.12f, w, 110), "模境迷城", t);
         UiKit.Text(new Rect(0, h * 0.12f + 104, w, 30), "M E S H Y   D U N G E O N", new GUIStyle(small) { fontSize = 18 }, new Color(0.85f, 0.85f, 0.95f, 0.85f));
         UiKit.Text(new Rect(0, h * 0.12f + 140, w, 30), "提示词铸成的迷城每晚都会重生 —— 带上武器，闯到最深处", new GUIStyle(small) { fontSize = 20 });
-        float bw = 320, bx = w / 2 - bw / 2, by = h * 0.45f;
-        if (Btn(new Rect(bx, by, bw, 66), "开始冒险", button)) Begin?.Invoke();
-        if (Btn(new Rect(bx, by + 80, bw, 54), "武器图鉴", button)) OpenCodex();
-        if (Btn(new Rect(bx, by + 148, bw, 54), "设置 · 防晕 3D", button)) OpenSettings();
-        if (Btn(new Rect(bx, by + 216, bw, 54), "退出游戏", button)) Quit?.Invoke();
-        // Controls in a small panel at the bottom.
-        var cr = new Rect(w / 2 - 430, h - 170, 860, 112);
-        UiKit.DrawPanel(cr);
-        var cs = new GUIStyle(left) { fontSize = 16, wordWrap = true, alignment = TextAnchor.UpperLeft };
-        UiKit.Text(new Rect(cr.x + 22, cr.y + 12, 400, 90), "<color=#F7CC75>操作</color>\nWASD 移动 · 鼠标瞄准 · 左键攻击\nQ 换武器 · E 拾取/购买/搭乘 · 右键或 F 技能", cs);
-        UiKit.Text(new Rect(cr.x + 440, cr.y + 12, 400, 90), "<color=#F7CC75>闪避</color>\n空格跳：时机对了子弹从脚下穿过\nShift 冲刺躲子弹 · 贴身躲开触发「完美闪避」", cs);
+        // The buttons sit between the tagline and the controls panel (laid out for a page 750 tall):
+        // a run left unfinished comes first.
+        float bw = 320, bx = w / 2 - bw / 2, by = h * 0.12f + 180f;
+        if (RunSave.Has)
+        {
+            var (floor, cls) = RunSave.Peek();
+            if (Btn(new Rect(bx, by, bw, 60), $"继续冒险 · 第 {floor} 层", button)) Continue?.Invoke();
+            // Outlined, so the class colour reads against the stone wall behind the menu.
+            UiKit.Title(new Rect(bx + bw + 14, by, 260, 60), Classes.Get(cls).name, new GUIStyle(left) { fontSize = 22 }, ClassColor(cls));
+            by += 70f;
+        }
+        if (Btn(new Rect(bx, by, bw, RunSave.Has ? 48 : 60), RunSave.Has ? "新的冒险" : "开始冒险", button)) Begin?.Invoke();
+        by += RunSave.Has ? 58f : 70f;
+        if (Btn(new Rect(bx, by, bw, 48), "武器图鉴", button)) OpenCodex();
+        if (Btn(new Rect(bx, by + 58, bw, 48), "设置 · 防晕 3D", button)) OpenSettings();
+        if (Btn(new Rect(bx, by + 116, bw, 48), "退出游戏", button)) Quit?.Invoke();
         if (PlayerPrefs.HasKey("best_floor"))
         {
             int bt = PlayerPrefs.GetInt("best_time");
             string result = PlayerPrefs.GetInt("best_won") == 1 ? "通关" : $"到达第 {PlayerPrefs.GetInt("best_floor")} 层";
-            UiKit.Text(new Rect(0, by + 280, w, 28), $"<color=#F7CC75>最佳纪录</color>  {PlayerPrefs.GetString("best_class")} · {result} · 用时 {bt / 60}:{bt % 60:00} · 击杀 {PlayerPrefs.GetInt("best_kills")}",
+            UiKit.Text(new Rect(0, by + 168, w, 28), $"<color=#F7CC75>最佳纪录</color>  {PlayerPrefs.GetString("best_class")} · {result} · 用时 {bt / 60}:{bt % 60:00} · 击杀 {PlayerPrefs.GetInt("best_kills")}",
                 new GUIStyle(small) { fontSize = 18 });
         }
+        // Controls in a small panel at the bottom (text kept clear of the gold frame's corners).
+        var cr = new Rect(w / 2 - 430, h - 146, 860, 100);
+        UiKit.DrawPanel(cr);
+        var cs = new GUIStyle(left) { fontSize = 16, wordWrap = true, alignment = TextAnchor.UpperLeft };
+        UiKit.Text(new Rect(cr.x + 44, cr.y + 18, 390, 70), "<color=#F7CC75>操作</color>\nWASD 移动 · 鼠标瞄准 · 左键攻击\nQ 换武器 · E 拾取/购买/搭乘 · 右键或 F 技能", cs);
+        UiKit.Text(new Rect(cr.x + 450, cr.y + 18, 390, 70), "<color=#F7CC75>闪避</color>\n空格跳：时机对了子弹从脚下穿过\nShift 冲刺躲子弹 · 贴身躲开触发「完美闪避」", cs);
         UiKit.Text(new Rect(0, h - 40, w, 30), "角色、敌人、武器、道具：Meshy 生成 · 场景：Blender · 音效：Kenney 等（CC0）· 音乐：OpenGameArt（CC0）", small);
     }
 
@@ -1099,7 +1110,7 @@ public partial class Hud : MonoBehaviour
         {
             // What you are carrying: where you are, kills and gold; both weapons (with upgrades) and
             // the blessings so far as pictures.
-            var pr = new Rect(w / 2 - 330, top + 84, 660, 172);
+            var pr = new Rect(w / 2 - 330, top + 84, 660, 194);
             UiKit.DrawPanel(pr);
             var ss = new GUIStyle(left) { fontSize = 17 };
             UiKit.Text(new Rect(pr.x + 30, pr.y + 16, 300, 28), $"第 {RunState.floor}/{RunState.Floors} 层 · {themeName}", ss, UiKit.Paper);
@@ -1112,6 +1123,8 @@ public partial class Hud : MonoBehaviour
             WeaponRow(pr.x + 30, pr.y + 68, 190, new List<WeaponDef> { player.weapons[0], player.weapons[1] });
             UiKit.Text(new Rect(pr.x + 240, pr.y + 46, 100, 20), "祝福", head, UiKit.Gold);
             BlessingRow(pr.x + 240, pr.y + 68, pr.width - 270, RunState.buffs);
+            // The run is saved as this floor began: say what quitting now keeps.
+            UiKit.Text(new Rect(pr.x + 30, pr.yMax - 40, pr.width - 60, 22), "退出后，下次在标题页「继续冒险」：从这一层开头再来", new GUIStyle(left) { fontSize = 14 }, UiKit.Dim);
             y = Mathf.Max(y, pr.yMax + 24);
         }
         if (Btn(new Rect(w / 2 - 140, y, 280, 56), primary, button)) primaryAction?.Invoke();

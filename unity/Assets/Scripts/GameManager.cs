@@ -69,6 +69,12 @@ public class GameManager : MonoBehaviour
         hud.Restart = NewRun;
         hud.Quit = Application.Quit;
         hud.Begin = () => hud.screen = Hud.Screen.ClassSelect;
+        hud.Continue = () =>
+        {
+            if (!RunSave.Load()) return;
+            showTitle = false;
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        };
         hud.ChooseClass = id =>
         {
             // New run as that class; reload so the player is rebuilt with its model and skill.
@@ -108,11 +114,13 @@ public class GameManager : MonoBehaviour
         Vfx.Ambient(theme.particles, player.transform);
         player.Died += () =>
         {
+            RunSave.Clear();
             hud.screen = Hud.Screen.Dead;
             PlayerController.LockCursor(false);
             RecordRun(false);
         };
         dungeon.PortalEntered += OnPortal;
+        if (!showTitle) RunSave.Write(player); // this floor is where 继续冒险 picks up (not the title's backdrop)
 
         Tips.Enabled = !Scripted; // test and screenshot runs must not use up the player's first-time hints
         TimeControl.Scripted = Scripted;
@@ -153,6 +161,7 @@ public class GameManager : MonoBehaviour
         {
             Buffs.Take(b, player);
             RunState.buffTaken = true;
+            RunSave.Write(player); // with the blessing: quitting now and continuing must not offer another
             Sfx.Play("buff", 0.8f, 0f);
             TimeControl.paused = false;
             PlayerController.LockCursor(true);
@@ -196,6 +205,7 @@ public class GameManager : MonoBehaviour
         if (RunState.floor >= RunState.Floors)
         {
             RunState.won = true;
+            RunSave.Clear();
             player.controlEnabled = false;
             hud.screen = Hud.Screen.Won;
             RecordRun(true);
@@ -507,6 +517,24 @@ public class GameManager : MonoBehaviour
         Check("braziers play the soft fire recording (3D, heard up close)", fires > 0 && crackling == fires, $"braziers={fires} playing={crackling}");
         Check("run summary tracks the numbers", RunState.damageDealt > 0 && RunState.weaponsSeen.Count >= 2 && RunState.runTime > 1f && RunState.mechsPiloted >= 1,
             $"dealt={RunState.damageDealt} weapons={RunState.weaponsSeen.Count} time={RunState.runTime:F0} mechs={RunState.mechsPiloted}");
+
+        // 继续冒险: a captured run comes back field for field, after a new run has replaced it (in
+        // memory only: the self-test never writes the player's save).
+        string realRun = RunSave.Capture();
+        RunState.floor = 3;
+        RunState.gold = 42;
+        RunState.weapons = new[] { "bow", null };
+        RunState.weaponLevels["bow"] = 2;
+        RunState.buffs.Add("light");
+        string saved = RunSave.Capture();
+        RunState.ChooseClass("mage");
+        bool restored = RunSave.Restore(saved);
+        Check("a saved run comes back exactly (floor, gold, weapons, upgrades, blessings, class)",
+            restored && RunSave.Capture() == saved && RunState.floor == 3 && RunState.gold == 42 && RunState.weapons[0] == "bow" && RunState.weapons[1] == null
+            && RunState.LevelOf("bow") == 2 && RunState.buffs.Contains("light") && RunState.classId == cls.id,
+            $"restored={restored} floor={RunState.floor} class={RunState.classId}");
+        Check("a broken save is refused, not half applied", !RunSave.Restore("floor=2\ngold=x") && RunState.floor == 3);
+        RunSave.Restore(realRun);
 
         // Evasion: stamina limits, jumping over chest-height orbs, shockwaves need a jump.
         yield return new WaitForSeconds(1.5f);
@@ -2039,6 +2067,10 @@ public class GameManager : MonoBehaviour
         player.pitch = 18f;
         yield return new WaitForSeconds(0.5f);
         yield return Shot("00_title.png");
+        RunSave.Showcase = (3, "assassin"); // how the title looks with an unfinished run (no real save is touched)
+        yield return new WaitForSeconds(0.2f);
+        yield return Shot("00e_title_continue.png");
+        RunSave.Showcase = null;
         hud.OpenSettings();
         yield return new WaitForSeconds(0.3f);
         yield return Shot("00c_settings.png");
