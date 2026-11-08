@@ -48,7 +48,8 @@ public static class BuildScript
         var options = new BuildPlayerOptions
         {
             scenes = new[] { ScenePath },
-            locationPathName = AppPath,
+            // MESHY_APP_PATH: self-checks build elsewhere so a game the user has open is never replaced under them.
+            locationPathName = System.Environment.GetEnvironmentVariable("MESHY_APP_PATH") is string other && other.Length > 0 ? other : AppPath,
             target = BuildTarget.StandaloneOSX,
             options = BuildOptions.None,
         };
