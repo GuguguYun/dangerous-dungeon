@@ -6,7 +6,7 @@ using UnityEngine.Rendering;
 /// BuildScript saves the materials under Resources/VFX so the URP particle shader is kept in builds.
 public static class Vfx
 {
-    static Material add, alpha, fire, fresnelBase;
+    static Material add, alpha, fire, fresnelBase, wispMat, featherMat;
     static Mesh crystal;
     static readonly System.Collections.Generic.Dictionary<Color, Material> fresnels = new System.Collections.Generic.Dictionary<Color, Material>();
 
@@ -504,6 +504,144 @@ public static class Vfx
         return ps;
     }
 
+    // ---------- shadow (the assassin's stealth) ----------
+
+    /// A fresh Meshy/Stealth material (dark see-through body, faint violet edge, slow smoke): one per
+    /// wearer, since it carries their feet height and fade-in.
+    public static Material Stealth()
+    {
+        var src = Resources.Load<Material>("VFX/vfx_stealth");
+        var m = src ? new Material(src) : new Material(Fresnel(new Color(0.6f, 0.35f, 1.4f), 1.6f, 0.02f, 0.4f));
+        m.name = "stealth";
+        return m;
+    }
+
+    /// Dark violet smoke curling slowly up off a hidden body, from just outside its outline (world
+    /// space, so it trails behind a move).
+    public static ParticleSystem ShadowWisps(Transform body, float height)
+    {
+        if (!wispMat)
+        {
+            wispMat = new Material(AlphaBlend) { name = "shadow_wisp" };
+            var tex = Fire.mainTexture;
+            if (tex) { wispMat.mainTexture = tex; if (wispMat.HasProperty("_BaseMap")) wispMat.SetTexture("_BaseMap", tex); }
+        }
+        var ps = Make("shadow_wisps", body.position, wispMat, 5f, body);
+        ps.transform.localPosition = Vector3.up * height * 0.5f;
+        var m = ps.main;
+        m.loop = true;
+        m.maxParticles = 48;
+        m.startLifetime = new ParticleSystem.MinMaxCurve(1.2f, 1.8f);
+        m.startSpeed = new ParticleSystem.MinMaxCurve(0.05f, 0.15f);
+        m.startSize = new ParticleSystem.MinMaxCurve(0.45f, 0.75f); // the texture's blob fills about half of it
+        m.startRotation = new ParticleSystem.MinMaxCurve(-0.4f, 0.4f);
+        m.startColor = Grad(new Color(0.3f, 0.12f, 0.5f, 0.5f), new Color(0.17f, 0.07f, 0.3f, 0.42f));
+        m.gravityModifier = -0.04f; // drifts up, slowly
+        var em = ps.emission;
+        em.rateOverTime = 9f;
+        var sh = ps.shape;
+        sh.shapeType = ParticleSystemShapeType.Sphere;
+        sh.radius = 0.4f;
+        sh.radiusThickness = 0.3f; // a shell around the body, so the smoke shows at its edges
+        sh.scale = new Vector3(1f, height / 0.8f * 0.75f, 1f); // a tall ellipsoid wrapping the body
+        var noise = ps.noise;
+        noise.enabled = true;
+        noise.strength = 0.15f;
+        noise.frequency = 0.5f;
+        noise.scrollSpeed = 0.2f;
+        var size = ps.sizeOverLifetime;
+        size.enabled = true;
+        size.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 0.7f, 1f, 1.4f));
+        var rot = ps.rotationOverLifetime;
+        rot.enabled = true;
+        rot.z = new ParticleSystem.MinMaxCurve(-0.4f, 0.4f);
+        SoftFade(ps, 0.25f);
+        ps.Play();
+        return ps;
+    }
+
+    /// A few dark crow feathers shed from the shoulders, rocking gently as they drift down and fade.
+    public static ParticleSystem Feathers(Transform body, float height)
+    {
+        if (!featherMat)
+        {
+            featherMat = new Material(AlphaBlend) { name = "shadow_feather" };
+            var tex = FeatherTexture();
+            featherMat.mainTexture = tex;
+            if (featherMat.HasProperty("_BaseMap")) featherMat.SetTexture("_BaseMap", tex);
+        }
+        var ps = Make("shadow_feathers", body.position, featherMat, 5f, body);
+        ps.transform.localPosition = Vector3.up * height * 0.7f;
+        var m = ps.main;
+        m.loop = true;
+        m.maxParticles = 12;
+        m.startLifetime = new ParticleSystem.MinMaxCurve(1.8f, 2.4f);
+        m.startSpeed = new ParticleSystem.MinMaxCurve(0.3f, 0.55f);
+        m.startSize = new ParticleSystem.MinMaxCurve(0.24f, 0.32f);
+        m.startRotation = new ParticleSystem.MinMaxCurve(-Mathf.PI, Mathf.PI);
+        m.startColor = Grad(new Color(0.4f, 0.28f, 0.58f, 1f), new Color(0.22f, 0.14f, 0.36f, 1f));
+        m.gravityModifier = 0.03f; // a feather falls slowly
+        var em = ps.emission;
+        em.rateOverTime = 4f;
+        var sh = ps.shape;
+        sh.shapeType = ParticleSystemShapeType.Sphere;
+        sh.radius = 0.42f;
+        sh.radiusThickness = 0.15f; // from just outside the shoulders, outward
+        var drag = ps.limitVelocityOverLifetime;
+        drag.enabled = true;
+        drag.limit = 0.35f;
+        drag.dampen = 0.06f;
+        var noise = ps.noise;
+        noise.enabled = true;
+        noise.strength = 0.25f;
+        noise.frequency = 0.45f;
+        noise.scrollSpeed = 0.15f;
+        var rot = ps.rotationOverLifetime;
+        rot.enabled = true;
+        rot.z = new ParticleSystem.MinMaxCurve(-1.1f, 1.1f); // a slow rocking spin, under 65°/s
+        SoftFade(ps, 0.15f);
+        ps.Play();
+        return ps;
+    }
+
+    /// A soft-edged feather: a curved quill down the middle, a vane wider on one side, faint barbs.
+    /// Grey levels (the particle colour tints it): the quill is the lightest part.
+    public static Texture2D FeatherTexture()
+    {
+        const int w = 32, h = 64;
+        var t = new Texture2D(w, h, TextureFormat.RGBA32, false) { name = "vfx_feather", wrapMode = TextureWrapMode.Clamp };
+        for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++)
+        {
+            float v = (y + 0.5f) / h, u = (x + 0.5f) / w;
+            float quill = 0.5f + 0.07f * Mathf.Sin(v * Mathf.PI) - 0.03f; // slightly bent
+            float side = u - quill;
+            // Vane width along the feather: a stub of bare quill at the bottom, a rounded tip.
+            float along = Mathf.Clamp01((v - 0.12f) / 0.86f);
+            float width = Mathf.Pow(Mathf.Sin(along * Mathf.PI), 0.55f) * (side < 0f ? 0.3f : 0.4f) * (1f - 0.25f * along);
+            float vane = Mathf.Clamp01((width - Mathf.Abs(side)) * 30f);
+            // Barbs: faint diagonal grooves sweeping toward the tip.
+            float barbs = 0.8f + 0.2f * Mathf.Sin((v * 2.6f - Mathf.Abs(side) * 1.4f) * 60f);
+            float shaft = Mathf.Clamp01(1f - Mathf.Abs(side) * w / 1.2f) * (v < 0.97f ? 1f : 0f);
+            float a = Mathf.Max(vane * barbs * 0.9f, shaft);
+            float grey = Mathf.Lerp(0.6f, 1f, shaft);
+            t.SetPixel(x, y, new Color(grey, grey, grey, a));
+        }
+        t.Apply();
+        return t;
+    }
+
+    /// Fade in, hold, fade out over each particle's life (nothing pops on or off).
+    static void SoftFade(ParticleSystem ps, float fadeIn)
+    {
+        var col = ps.colorOverLifetime;
+        col.enabled = true;
+        var g = new Gradient();
+        g.SetKeys(new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+            new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(1f, fadeIn), new GradientAlphaKey(0.75f, 0.6f), new GradientAlphaKey(0f, 1f) });
+        col.color = g;
+    }
+
     /// Floor-theme ambience around the player: drifting dust, rising embers or falling snow.
     public static ParticleSystem Ambient(string kind, Transform follow)
     {
@@ -557,12 +695,12 @@ public static class Vfx
         return ps;
     }
 
-    /// Stop an attached emitter and let its particles finish where they are.
-    public static void Detach(ParticleSystem ps)
+    /// Stop an attached emitter and let its particles finish where they are (linger: their longest life).
+    public static void Detach(ParticleSystem ps, float linger = 1.5f)
     {
         if (!ps) return;
         ps.transform.SetParent(null, true);
         ps.Stop(true, ParticleSystemStopBehavior.StopEmitting);
-        Object.Destroy(ps.gameObject, 1.5f);
+        Object.Destroy(ps.gameObject, linger);
     }
 }

@@ -17,7 +17,8 @@ public class PlayerSkill : MonoBehaviour
     Renderer[] ghosted;
     Material[][] saved;
     Material ghostMat;
-    ParticleSystem motes;
+    float ghostFade;
+    ParticleSystem motes, wisps, feathers;
 
     // The knight's dome: a sphere sitting a little above the floor, cut by it (see ShieldFx). HeadRoom:
     // the clearance kept over the head when a jump lifts the dome.
@@ -62,6 +63,14 @@ public class PlayerSkill : MonoBehaviour
         {
             activeLeft -= dt;
             if (activeLeft <= 0f) End();
+        }
+        if (ghosted != null && ghostMat)
+        {
+            // The shadow settles in over a third of a second; its smoke and glint follow the body.
+            ghostFade = Mathf.Min(1f, ghostFade + dt / 0.3f);
+            ghostMat.SetFloat("_Fade", ghostFade);
+            ghostMat.SetFloat("_FeetY", transform.position.y);
+            ghostMat.SetFloat("_Height", body ? body.height : 1.6f);
         }
         if (shield)
         {
@@ -117,14 +126,32 @@ public class PlayerSkill : MonoBehaviour
 
     // ---------- assassin: stealth ----------
 
+    // Shadow colours: the see-through body (linear, alpha = opacity) and its faint edge.
+    static readonly Color ShadowBody = new Color(0.025f, 0.008f, 0.055f, 0.68f), ShadowEdge = new Color(0.78f, 0.45f, 1f);
+
     void StartStealth()
     {
         activeLeft = 4f;
         p.stealthed = true;
-        Vfx.Puff(transform.position + Vector3.up, new Color(0.5f, 0.3f, 0.7f, 0.6f), 1.2f, 12);
-        // Stealth: the body becomes a faint glowing purple outline.
-        if (!ghostMat) ghostMat = Vfx.Fresnel(new Color(0.6f, 0.35f, 1.4f), 1.6f, 0.02f, 0.4f);
-        ghosted = p.GetComponentsInChildren<Renderer>();
+        float h = body ? body.height : 1.6f;
+        Vfx.Puff(transform.position + Vector3.up * h * 0.55f, new Color(0.2f, 0.11f, 0.32f, 0.65f), 1.1f, 14);
+        // 鸦影遁: the body turns into a dark violet shadow you can half see through, with a faint edge
+        // and slow smoke inside (Meshy/Stealth); wisps of shadow curl up off it and now and then a dark
+        // feather drifts away. Readable, clearly hidden, nothing flickers.
+        if (!ghostMat)
+        {
+            ghostMat = Vfx.Stealth();
+            ghostMat.SetVector("_Shadow", (Vector4)ShadowBody);
+            ghostMat.SetVector("_Edge", (Vector4)(ShadowEdge.linear * 0.6f));
+            ghostMat.SetFloat("_Smoke", 0.35f);
+        }
+        ghostFade = 0f;
+        ghostMat.SetFloat("_Fade", 0f);
+        // Only the body and what it holds: particles and lines keep their own look.
+        var list = new System.Collections.Generic.List<Renderer>();
+        foreach (var r in p.GetComponentsInChildren<Renderer>())
+            if (r is SkinnedMeshRenderer || r is MeshRenderer) list.Add(r);
+        ghosted = list.ToArray();
         saved = new Material[ghosted.Length][];
         for (int i = 0; i < ghosted.Length; i++)
         {
@@ -133,6 +160,8 @@ public class PlayerSkill : MonoBehaviour
             for (int k = 0; k < mats.Length; k++) mats[k] = ghostMat;
             ghosted[i].sharedMaterials = mats;
         }
+        wisps = Vfx.ShadowWisps(transform, h);
+        feathers = Vfx.Feathers(transform, h);
     }
 
     /// The first attack out of stealth ends it.
@@ -158,7 +187,12 @@ public class PlayerSkill : MonoBehaviour
             for (int i = 0; i < ghosted.Length; i++)
                 if (ghosted[i]) ghosted[i].sharedMaterials = saved[i];
             ghosted = null;
+            // Out of the shadow: a last soft puff, and the wisps and feathers drift off and fade.
+            Vfx.Puff(transform.position + Vector3.up * 0.9f, new Color(0.2f, 0.11f, 0.32f, 0.5f), 0.9f, 8);
         }
+        Vfx.Detach(wisps, 2f);
+        Vfx.Detach(feathers, 2.5f);
+        wisps = feathers = null;
     }
 
     // ---------- mage: meteor storm ----------
