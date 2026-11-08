@@ -241,6 +241,90 @@ public static class UiKit
         if (t) GUI.DrawTexture(r, t, ScaleMode.ScaleToFit, true);
     }
 
+    // ---- settings controls and thumbnails (drawn here; Hud does the clicking) ----
+
+    /// A dark inset with a thin coloured rim (stat tiles, thumbnails).
+    public static void Inset(Rect r, Color rim, float rimWidth = 1.5f)
+    {
+        float rad = Mathf.Min(8f, r.height / 2f);
+        GUI.DrawTexture(r, white, ScaleMode.StretchToFill, true, 0f, Lin(new Color(0.03f, 0.03f, 0.05f, 0.85f)), 0f, rad);
+        GUI.DrawTexture(r, white, ScaleMode.StretchToFill, true, 0f, Lin(rim), rimWidth, rad);
+    }
+
+    /// A picture with rounded corners in a rimmed inset (weapon icons, blessing art).
+    public static void Thumb(Rect r, Texture pic, Color rim, ScaleMode mode)
+    {
+        Inset(r, rim, 2f);
+        if (!pic) return;
+        var p = new Rect(r.x + 3, r.y + 3, r.width - 6, r.height - 6);
+        GUI.DrawTexture(p, pic, mode, true, 0f, Color.white, 0f, Mathf.Min(6f, p.height / 2f));
+    }
+
+    /// A gold-rimmed groove filled up to k, with a round gold knob.
+    public static void DrawSlider(Rect r, float k, bool hot)
+    {
+        k = Mathf.Clamp01(k);
+        float rad = r.height / 2f;
+        GUI.DrawTexture(r, white, ScaleMode.StretchToFill, true, 0f, Lin(new Color(0.03f, 0.025f, 0.02f, 0.95f)), 0f, rad);
+        var fill = new Rect(r.x + 2, r.y + 2, Mathf.Max(r.height - 4, (r.width - 4) * k), r.height - 4);
+        GUI.DrawTexture(fill, white, ScaleMode.StretchToFill, true, 0f, Lin(new Color(0.85f, 0.62f, 0.25f)), 0f, fill.height / 2f);
+        GUI.DrawTexture(new Rect(fill.x + 2, fill.y + 1, fill.width - 4, fill.height * 0.4f), white, ScaleMode.StretchToFill, true, 0f, Lin(new Color(1f, 1f, 1f, 0.3f)), 0f, fill.height * 0.2f);
+        GUI.DrawTexture(r, white, ScaleMode.StretchToFill, true, 0f, Lin(new Color(0.75f, 0.58f, 0.3f, 0.9f)), 1.5f, rad);
+        Knob(new Vector2(r.x + r.width * k, r.center.y), r.height + 10f, hot);
+    }
+
+    /// A pill switch: the knob sits right and the groove lights up when on.
+    public static void DrawSwitch(Rect r, bool on, bool hot)
+    {
+        float rad = r.height / 2f;
+        var groove = on ? new Color(0.22f, 0.55f, 0.42f, 0.95f) : new Color(0.05f, 0.045f, 0.04f, 0.95f);
+        GUI.DrawTexture(r, white, ScaleMode.StretchToFill, true, 0f, Lin(groove), 0f, rad);
+        if (on) GUI.DrawTexture(new Rect(r.x + 4, r.y + 2, r.width - 8, r.height * 0.38f), white, ScaleMode.StretchToFill, true, 0f, Lin(new Color(1f, 1f, 1f, 0.22f)), 0f, r.height * 0.19f);
+        GUI.DrawTexture(r, white, ScaleMode.StretchToFill, true, 0f, Lin(new Color(0.75f, 0.58f, 0.3f, 0.9f)), 1.5f, rad);
+        Knob(new Vector2(on ? r.xMax - rad : r.x + rad, r.center.y), r.height - 2f, hot);
+    }
+
+    /// A round gold knob with a dark rim and a highlight; brighter when hovered or held.
+    static void Knob(Vector2 c, float d, bool hot)
+    {
+        var o = new Rect(c.x - d / 2f, c.y - d / 2f, d, d);
+        if (hot) Spot(new Rect(o.x - d * 0.5f, o.y - d * 0.5f, d * 2f, d * 2f), new Color(1f, 0.8f, 0.35f, 0.7f));
+        GUI.DrawTexture(o, white, ScaleMode.StretchToFill, true, 0f, Lin(new Color(0.18f, 0.11f, 0.05f)), 0f, d / 2f);
+        var i = new Rect(o.x + 2.5f, o.y + 2.5f, d - 5f, d - 5f);
+        GUI.DrawTexture(i, white, ScaleMode.StretchToFill, true, 0f, Lin(hot ? new Color(1f, 0.86f, 0.5f) : new Color(0.9f, 0.7f, 0.35f)), 0f, i.width / 2f);
+        var hi = new Rect(i.x + i.width * 0.22f, i.y + i.height * 0.12f, i.width * 0.56f, i.height * 0.36f);
+        GUI.DrawTexture(hi, white, ScaleMode.StretchToFill, true, 0f, Lin(new Color(1f, 1f, 1f, 0.45f)), 0f, hi.height / 2f);
+    }
+
+    static Texture2D arrow;
+
+    /// A chunky gold arrow (left or right), for stepping through choices.
+    public static void DrawArrow(Rect r, bool right, bool hot)
+    {
+        if (!arrow)
+        {
+            // A rounded triangle pointing right, antialiased by its distance to the edges.
+            const int n = 48;
+            arrow = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+            var a = new Vector2(10, 6); var b = new Vector2(42, 24); var c = new Vector2(10, 42);
+            float Edge(Vector2 p, Vector2 u, Vector2 v) { var e = (v - u).normalized; return (p.x - u.x) * e.y - (p.y - u.y) * e.x; }
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                {
+                    var p = new Vector2(x + 0.5f, y + 0.5f);
+                    float d = Mathf.Min(Edge(p, b, a), Mathf.Min(Edge(p, c, b), Edge(p, a, c))); // >0 inside
+                    float body = Mathf.Clamp01(d + 0.5f), core = Mathf.Clamp01(d - 3f + 0.5f);
+                    // Dark outline, gold inside, lighter towards the top.
+                    var col = Color.Lerp(new Color(0.18f, 0.11f, 0.05f), Color.Lerp(new Color(0.85f, 0.6f, 0.25f), new Color(1f, 0.9f, 0.6f), y / (float)n), core);
+                    col.a = body;
+                    arrow.SetPixel(x, y, Lin(col));
+                }
+            arrow.Apply();
+        }
+        if (hot) Spot(new Rect(r.x - r.width * 0.4f, r.y - r.height * 0.4f, r.width * 1.8f, r.height * 1.8f), new Color(1f, 0.8f, 0.35f, 0.6f));
+        GUI.DrawTextureWithTexCoords(r, arrow, right ? new Rect(0f, 0f, 1f, 1f) : new Rect(1f, 0f, -1f, 1f), true);
+    }
+
     /// A soft rounded-rectangle halo, opaque inside and fading out over `fade` pixels.
     static Texture2D Glow(int size, int fade)
     {
