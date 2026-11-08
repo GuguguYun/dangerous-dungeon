@@ -828,6 +828,7 @@ public class GameManager : MonoBehaviour
         yield return new WaitForSeconds(1.2f);
         float off = Vector3.Distance(g.TargetPos, player.transform.position);
         Check("stealth: enemies aim at a decoy, not the player", player.Stealthed && off > 0.5f, $"decoy {off:F1} m away");
+        Destroy(g.gameObject); // it wanders: the blink must go for the still target, the nearest one ahead
         var mark = Dummy(player.transform.position + fwdDir * 5f); // no target: it stands still
         Vector3 start = player.transform.position;
         yield return new WaitForSeconds(0.1f);
@@ -836,7 +837,6 @@ public class GameManager : MonoBehaviour
         float moved = Vector3.Distance(player.transform.position, start);
         Check("the raven blade blinks to the enemy and cuts it", moved > 2f && mark.hp < 100, $"moved {moved:F1} m, hp={mark.hp}");
         Check("cutting does not end stealth", player.Stealthed);
-        Destroy(g.gameObject);
         Destroy(mark.gameObject);
         player.Teleport(start); // the blink carried us forward; later checks aim from the middle of the room
         yield return new WaitForSeconds(PlayerSkill.RavenTime);
@@ -984,6 +984,15 @@ public class GameManager : MonoBehaviour
         }
         else Check("character rig has hand bones", false);
 
+        // A staff is raised straight up to cast (it went flat once when a later line re-aimed every
+        // ranged weapon at the crosshair after the pose).
+        var heldBefore = player.Weapon;
+        player.Equip(Weapons.Get("thunder").Clone());
+        for (float u = 0f; u < 0.6f; u += Time.deltaTime) { player.HoldAim(); yield return null; }
+        yield return new WaitForEndOfFrame();
+        float tilt = Vector3.Angle(player.WeaponPivotForTest.forward, Vector3.up);
+        Check("casting raises the staff straight up", tilt < 20f, $"{tilt:F0} deg from vertical");
+        player.Equip(heldBefore);
         Check("only some weapons charge", Weapons.All.FindAll(x => x.chargeable).Count == 4 && !Weapons.Get("pistol").chargeable && !Weapons.Get("daggers").chargeable);
 
         // Charged rifle shot outdamages a tap by far.

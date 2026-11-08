@@ -544,12 +544,12 @@ public partial class PlayerController : MonoBehaviour
         if (!cam) return;
         // After animation: grips and hand IK (PlayerHold). Without a rig, point the gun at the crosshair.
         if (handsOnWeapon) PoseWeapon(Time.deltaTime);
-        if (InMech && !dead) MechAim(Time.deltaTime);
         else if (body && !dead && !Weapon.melee)
         {
             Vector3 to = AimPoint() - weaponPivot.position;
             if (to.sqrMagnitude > 0.25f) weaponPivot.rotation = Quaternion.LookRotation(to, Vector3.up);
         }
+        if (InMech && !dead) MechAim(Time.deltaTime); // after the pose, never between its if and else
         if (externalCamera) return;
         Quaternion rot = Quaternion.Euler(pitch, yaw, 0f);
         // A mech is bigger: the camera rises and pulls back, smoothly (no jump cut when climbing in).

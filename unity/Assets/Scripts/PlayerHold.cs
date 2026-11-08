@@ -250,15 +250,15 @@ public partial class PlayerController
             case WeaponGrip.Staff:
             {
                 // At rest a staff stands upright at the right side like a walking staff. Each cast lifts it
-                // high overhead, its head tipped towards the crosshair, while the left hand opens towards
-                // the target; it sinks back down when the casting stops. (No gun pose: the body keeps
+                // high overhead, held straight up, while the left hand opens towards the target; it sinks
+                // back down when the casting stops. (No gun pose: the body keeps
                 // its own idle/run, see PlayerController.)
                 float liftTo = Time.time - lastShot < 0.4f ? 1f : 0f;
                 staffLift = Mathf.MoveTowards(staffLift, liftTo, dt * (liftTo > 0f ? 9f : 2.5f));
                 float k = staffLift * staffLift * (3f - 2f * staffLift);
                 float arm = ArmLength("Right");
                 Vector3 flatAim = Vector3.ProjectOnPlane(aimDir, up).normalized;
-                Vector3 dir = Vector3.Slerp((up + fwd * 0.1f).normalized, (up + flatAim * 0.55f).normalized, k);
+                Vector3 dir = Vector3.Slerp((up + fwd * 0.1f).normalized, (up + flatAim * 0.06f).normalized, k); // raised straight up
                 Vector3 rest = rs.position + right * 0.16f + fwd * 0.12f - up * 0.3f;
                 Vector3 raised = rs.position + up * arm * 0.85f + flatAim * 0.12f + right * 0.06f;
                 Vector3 grip = Vector3.Lerp(rest, raised, k);
