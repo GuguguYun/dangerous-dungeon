@@ -1185,16 +1185,6 @@ public class Hud : MonoBehaviour
                 _ => null,
             };
             if (glyph != null) UiKit.Icon(new Rect(c.x - step * 0.36f, c.y - step * 0.36f, step * 0.72f, step * 0.72f), glyph);
-            if (here)
-            {
-                // You: an arrow in the room, pointing where the camera looks.
-                float yaw = player.cam ? player.cam.transform.eulerAngles.y : player.transform.eulerAngles.y;
-                float a = step * 0.34f;
-                var keep = GUI.matrix;
-                GUIUtility.RotateAroundPivot(yaw - 90f, c);
-                UiKit.DrawArrow(new Rect(c.x - a / 2f, c.y - a / 2f, a, a), true, false);
-                GUI.matrix = keep;
-            }
         }
         // Parked mechs: a small marker in the corner of their room.
         foreach (var m in ParkedMech.Live)
@@ -1205,6 +1195,36 @@ public class Hud : MonoBehaviour
             Vector2 c = At(room.cell) + new Vector2(step * 0.3f, -step * 0.3f);
             GUI.DrawTexture(new Rect(c.x - 5f, c.y - 5f, 10f, 10f), Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, m.def.color.linear, 0f, 5f);
         }
+        // You: where you actually stand, mapped into your room's square, or along the corridor bar
+        // between two rooms.
+        Vector3 p = player.transform.position;
+        Vector2 me = At(dungeon.current != null ? dungeon.current.cell : known[0].cell);
+        var inRoom = dungeon.rooms.Find(r => r.Contains(p));
+        if (inRoom != null && known.Contains(inRoom))
+        {
+            Vector3 half = (inRoom.max - inRoom.min) * 0.5f, off = p - inRoom.Center;
+            me = At(inRoom.cell) + new Vector2(off.x / Mathf.Max(0.1f, half.x), -off.z / Mathf.Max(0.1f, half.z)) * big * 0.45f;
+        }
+        else
+        {
+            float best = float.MaxValue;
+            foreach (var (a, b) in dungeon.links)
+            {
+                var ra = dungeon.rooms.Find(r => r.cell == a);
+                var rb = dungeon.rooms.Find(r => r.cell == b);
+                if (ra == null || rb == null || !known.Contains(ra) || !known.Contains(rb)) continue;
+                Vector3 ca = ra.Center, cb = rb.Center, ab = cb - ca;
+                ab.y = 0f;
+                float t = Mathf.Clamp01(Vector3.Dot(new Vector3(p.x - ca.x, 0f, p.z - ca.z), ab) / Mathf.Max(0.01f, ab.sqrMagnitude));
+                float d = Vector3.Distance(new Vector3(p.x, 0f, p.z), new Vector3(ca.x, 0f, ca.z) + ab * t);
+                if (d < best) { best = d; me = Vector2.Lerp(At(a), At(b), t); }
+            }
+        }
+        // A yellow dot (the user's choice), ringed dark so it reads on white and black tiles alike.
+        float dot = Mathf.Max(12f, step * 0.3f);
+        GUI.DrawTexture(new Rect(me.x - dot / 2f - 2f, me.y - dot / 2f - 2f, dot + 4f, dot + 4f), Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, new Color(0.05f, 0.04f, 0.02f, 0.9f).linear, 0f, dot);
+        GUI.DrawTexture(new Rect(me.x - dot / 2f, me.y - dot / 2f, dot, dot), Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, new Color(1f, 0.86f, 0.15f).linear, 0f, dot);
+
         // The floor indicator under the map.
         var label = new Rect(frame.x, frame.yMax + 2, frame.width, 34);
         UiKit.DrawPanel(label);

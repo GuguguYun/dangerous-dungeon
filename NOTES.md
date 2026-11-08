@@ -166,6 +166,13 @@
 - [x] G5 小地图：未清房间 = 大黑格（浅描边），已清 = 小白格；图标在黑格用亮色、白格用深色。
 - 自检：184/184（`logs/shots/r21`、`r22`）。
 
+## 用户试玩反馈（2026-11-08 傍晚）
+
+- [x] H1 法杖横着（用户：「法杖应该竖着举起来呀」「为啥我看着还是横着的」）：根因是第 22 轮在 `LateUpdate` 里把 `MechAim` 插进了 `if (handsOnWeapon) PoseWeapon … else if (…) 指向准星` 中间，结果所有远程武器摆好姿势后又被掰去指准星。挪出来后法杖施法时竖直（自测「casting raises the staff straight up」3° 偏差）。教训：插代码前看清 if/else 结构；用渲染之后的实际朝向做诊断（`WaitForEndOfFrame` 后读）。
+- [x] H2 牧师脸丑：头像是全身立绘裁头部放大，糊且发灰。改为单独 512 px 头像特写（先宽拍、按画面里最上方不透明区域找到头再取景），颜色按 IMGUI 双重编码反解，裁圆。牧师模型本身脸也差（灰皮肤、画上去的阴影、小眼睛）→ Meshy 重新生成 `priest2`（大蓝眼睛、红脸颊、暖肤色），79 积分；长袍防撕裂自动套用。
+- [x] H3 小地图（用户：「看一下元气骑士的设计规范。不要再无脑设计了」「地图还是没有指出人物的位置」「改成一个黄色的点」）：按 Soul Knight Wiki 的 HUD/Mini-map 规范重做：房间一律等大方块按网格排，走廊是短条；未清 = 大黑格、已清 = 小白格（用户规则）、当前房间白描边；图标：起点绿屋、传送门蓝漩涡、首领紫盔红面罩、宝箱房和商店金箱、祭坛/试炼「!」（Meshy 文生图 45 积分），战斗房无图标；地图固定不滚动；层数在地图下方；你 = 黄点（房间内按实际位置，走廊里沿走廊）。
+- 自检 185/185（`logs/shots/r32`）。
+
 ## 素材不进 git
 
 磁盘只剩约 14 GB，Meshy 模型（unity/Assets/Resources/Models，2.6 GB）和原始下载（assets/meshy，4.6 GB）不进 git。重建：`python3 scripts/install_chars.py`（角色）、`python3 scripts/prep_assets.py`（武器/道具，Blender）；原始下载丢了需要用 `assets/meshy/state.json` 里的任务号重新下载。
