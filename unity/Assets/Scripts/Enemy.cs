@@ -241,11 +241,21 @@ public partial class Enemy : MonoBehaviour
             {
                 target.TakeDamage(kind == EnemyKind.Boss ? 2 : 1);
                 contactCd = 1f;
-                // Claw marks across the target: the hit reads as a slash, not a bump.
-                float clawYaw = Quaternion.LookRotation(faceDir.sqrMagnitude > 0.01f ? faceDir : transform.forward).eulerAngles.y;
-                for (int i = -1; i <= 1; i++)
-                    SlashFx.Spawn(target.transform.position + Vector3.up * (1.0f + 0.15f * i) - faceDir * 0.6f, clawYaw, 1.3f, 50f,
-                        new Color(1f, 0.25f, 0.2f), 35f, 0f, 0.16f, 0.85f);
+                if (kind == EnemyKind.Slime)
+                {
+                    // A slime lands on you: a splash of goo, not claw marks.
+                    Vector3 at = target.transform.position + Vector3.up * 0.9f - faceDir * 0.3f;
+                    Vfx.Chips(at, new Color(0.5f, 0.9f, 0.25f), 14, 4.5f);
+                    Vfx.Puff(at, new Color(0.45f, 0.85f, 0.25f, 0.6f), 0.7f, 6);
+                }
+                else
+                {
+                    // Claw marks across the target: the hit reads as a slash, not a bump.
+                    float clawYaw = Quaternion.LookRotation(faceDir.sqrMagnitude > 0.01f ? faceDir : transform.forward).eulerAngles.y;
+                    for (int i = -1; i <= 1; i++)
+                        SlashFx.Spawn(target.transform.position + Vector3.up * (1.0f + 0.15f * i) - faceDir * 0.6f, clawYaw, 1.3f, 50f,
+                            new Color(1f, 0.25f, 0.2f), 35f, 0f, 0.16f, 0.85f);
+                }
                 if (kind == EnemyKind.Boss) anim?.Trigger("attack", 1.5f, 0.3f);
             }
         }

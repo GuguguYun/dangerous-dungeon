@@ -479,6 +479,15 @@ public class GameManager : MonoBehaviour
         Destroy(streakDummy.gameObject);
         player.hp = player.maxHp;
         Check("music tracks load", Resources.Load<AudioClip>("Music/explore") && Resources.Load<AudioClip>("Music/battle"));
+        int fires = 0, crackling = 0;
+        foreach (var f in dungeon.GetComponentsInChildren<Flicker>())
+        {
+            if (f.name != "fire") continue; // the braziers' (candles, fuses and traps flicker too)
+            fires++;
+            var a = f.GetComponent<AudioSource>();
+            if (a && a.isPlaying && a.loop && a.spatialBlend == 1f) crackling++;
+        }
+        Check("braziers crackle (3D, heard up close)", fires > 0 && crackling == fires, $"braziers={fires} crackling={crackling}");
         Check("run summary tracks the numbers", RunState.damageDealt > 0 && RunState.weaponsSeen.Count >= 2 && RunState.runTime > 1f && RunState.mechsPiloted >= 1,
             $"dealt={RunState.damageDealt} weapons={RunState.weaponsSeen.Count} time={RunState.runTime:F0} mechs={RunState.mechsPiloted}");
 

@@ -40,5 +40,19 @@ public static class Props
         l.range = 10f;
         l.intensity = 5f;
         l.gameObject.AddComponent<Flicker>();
+        // Its crackle, heard only up close; each starts at its own point so two side by side don't pop together.
+        var crackle = Sfx.Clip("crackle");
+        if (!crackle) return;
+        var s = l.gameObject.AddComponent<AudioSource>();
+        s.clip = crackle;
+        s.loop = true;
+        s.spatialBlend = 1f;
+        s.rolloffMode = AudioRolloffMode.Linear;
+        s.minDistance = 1.5f;
+        s.maxDistance = 9f;
+        s.dopplerLevel = 0f;
+        s.volume = 0.35f;
+        s.Play();
+        s.time = Random.Range(0f, crackle.length);
     }
 }
