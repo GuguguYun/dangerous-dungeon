@@ -489,9 +489,10 @@ public class GameManager : MonoBehaviour
             if (f.name != "fire") continue; // the braziers' (candles, fuses and traps flicker too)
             fires++;
             var a = f.GetComponent<AudioSource>();
-            if (a && a.isPlaying && a.loop && a.spatialBlend == 1f) crackling++;
+            if (a && a.isPlaying && a.loop && a.spatialBlend == 1f && a.clip && a.clip.length > 10f) crackling++;
         }
-        Check("braziers crackle (3D, heard up close)", fires > 0 && crackling == fires, $"braziers={fires} crackling={crackling}");
+        // The recorded fireplace loop (28 s), not the synthesised crackle the user found piercing.
+        Check("braziers play the soft fire recording (3D, heard up close)", fires > 0 && crackling == fires, $"braziers={fires} playing={crackling}");
         Check("run summary tracks the numbers", RunState.damageDealt > 0 && RunState.weaponsSeen.Count >= 2 && RunState.runTime > 1f && RunState.mechsPiloted >= 1,
             $"dealt={RunState.damageDealt} weapons={RunState.weaponsSeen.Count} time={RunState.runTime:F0} mechs={RunState.mechsPiloted}");
 

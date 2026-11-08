@@ -40,19 +40,27 @@ public static class Props
         l.range = 10f;
         l.intensity = 5f;
         l.gameObject.AddComponent<Flicker>();
-        // Its crackle, heard only up close; each starts at its own point so two side by side don't pop together.
-        var crackle = Sfx.Clip("crackle");
-        if (!crackle) return;
-        var s = l.gameObject.AddComponent<AudioSource>();
-        s.clip = crackle;
+        FireSound(l.gameObject, 0.5f);
+    }
+
+    /// The sound of a fire burning: a CC0 fireplace recording (PagDev, OpenGameArt; low and soft, not a
+    /// hiss of synthesised crackles, which the user found piercing), heard only up close. Each starts at
+    /// its own point in the loop so two side by side don't crackle together.
+    public static AudioSource FireSound(GameObject on, float volume)
+    {
+        var clip = Sfx.Clip("fire");
+        if (!clip) return null;
+        var s = on.AddComponent<AudioSource>();
+        s.clip = clip;
         s.loop = true;
         s.spatialBlend = 1f;
         s.rolloffMode = AudioRolloffMode.Linear;
         s.minDistance = 1.5f;
         s.maxDistance = 9f;
         s.dopplerLevel = 0f;
-        s.volume = 0.35f;
+        s.volume = volume;
         s.Play();
-        s.time = Random.Range(0f, crackle.length);
+        s.time = Random.Range(0f, clip.length);
+        return s;
     }
 }

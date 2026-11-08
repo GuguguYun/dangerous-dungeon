@@ -32,6 +32,7 @@ public class FirePit : Trap
     public Phase phase;
     float t, tick;
     ParticleSystem fire;
+    AudioSource roar; // the fire's sound: embers murmur, it swells in the warning, roars while it burns
     Light glow;
     Renderer embers;
     MaterialPropertyBlock mpb;
@@ -50,6 +51,7 @@ public class FirePit : Trap
         f.glow.range = 5f;
         f.embers = go.GetComponentInChildren<Renderer>();
         f.mpb = new MaterialPropertyBlock();
+        f.roar = Props.FireSound(go, 0f);
         return f;
     }
 
@@ -60,7 +62,7 @@ public class FirePit : Trap
         {
             case Phase.Idle:
                 glow.intensity = 0.6f;
-                if (t > 1.8f) { phase = Phase.Warning; t = 0f; Sfx.Play("rocket", 0.2f, 0.2f); }
+                if (t > 1.8f) { phase = Phase.Warning; t = 0f; }
                 break;
             case Phase.Warning:
                 glow.intensity = 0.6f + 3f * t / 0.7f;
@@ -95,6 +97,11 @@ public class FirePit : Trap
         float heat = phase == Phase.Idle ? 0.6f : phase == Phase.Warning ? 1f + 2f * t : 3f;
         mpb.SetColor("_EmissionColor", Props.FireColor * heat);
         embers.SetPropertyBlock(mpb);
+        if (roar)
+        {
+            float loud = phase == Phase.Idle ? 0.1f : phase == Phase.Warning ? 0.25f + 0.6f * t / 0.7f : 0.9f;
+            roar.volume = Mathf.MoveTowards(roar.volume, loud, Time.deltaTime * 2f);
+        }
     }
 }
 

@@ -50,29 +50,13 @@ public static class Sfx
         Make("die", 0.3f, t => Square(t, 400f - 1000f * t) * Env(t, 0.3f, 8f) * 0.3f);
         Make("buff", 0.5f, t => Sine(t, t < 0.12f ? 660f : t < 0.24f ? 880f : 1320f) * Env(t, 0.5f, 4f) * 0.4f);
         Make("boss", 1.0f, t => (Sine(t, 55f) + Sine(t, 58f)) * Env(t, 1f, 2.5f) * 0.6f);
-        Make("crackle", 4f, Crackle);
     }
 
-    /// A synthesised clip, for a looping source of its own (the braziers' crackle).
-    public static AudioClip Clip(string name) => clips.TryGetValue(name, out var c) ? c : null;
-
-    // A fire, made to loop: a low roar that dips to silence at both ends (no click at the seam) and
-    // random pops of burning wood.
-    static float[] pops;
-    static float Crackle(float t)
+    /// A clip for a looping source of its own (fire): the recording if there is one, else the synthesised one.
+    public static AudioClip Clip(string name)
     {
-        if (t == 0f)
-        {
-            pops = new float[28];
-            for (int i = 0; i < pops.Length; i++) pops[i] = 0.05f + (float)rng.NextDouble() * 3.85f;
-        }
-        float s = Lowpass(Noise(), 0.03f) * 0.7f * Mathf.Clamp01(t * 50f) * Mathf.Clamp01((4f - t) * 50f);
-        for (int i = 0; i < pops.Length; i++)
-        {
-            float d = t - pops[i];
-            if (d >= 0f && d < 0.04f) s += Noise() * Mathf.Exp(-d * 160f) * (0.35f + 0.5f * (i % 3) / 2f);
-        }
-        return s;
+        var recorded = Files(name);
+        return recorded.Length > 0 ? recorded[0] : clips.TryGetValue(name, out var c) ? c : null;
     }
 
     public static void Play(string name, float volume = 1f, float pitchJitter = 0.08f, float pitch = 1f)
