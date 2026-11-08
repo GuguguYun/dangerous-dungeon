@@ -65,7 +65,7 @@ public static class Balance
     public static int BaseHp(EnemyKind k) => k switch
     {
         EnemyKind.Gunner or EnemyKind.Archer => 24,
-        EnemyKind.Spreader or EnemyKind.Bomber => 30,
+        EnemyKind.Spreader or EnemyKind.Bomber or EnemyKind.Slime => 30, // a slime's two halves add 2 x 40%
         EnemyKind.Charger => 36,
         EnemyKind.Guard => 45,
         EnemyKind.Mimic => 110,

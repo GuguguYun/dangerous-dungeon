@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public enum EnemyKind { Gunner, Charger, Spreader, Boss, Bomber, Archer, Guard, Mimic }
+public enum EnemyKind { Gunner, Charger, Spreader, Boss, Bomber, Archer, Guard, Mimic, Slime }
 
 /// Placeholder enemies. Gunner keeps mid range and fires orbs; Charger rushes and hits on contact;
 /// Spreader fires fans; Boss cycles ring / burst / charge attacks and summons help.
@@ -118,6 +118,9 @@ public partial class Enemy : MonoBehaviour
                 spawnT = 1f;
                 transform.localScale = Vector3.one;
                 break;
+            case EnemyKind.Slime:
+                maxHp = Balance.EnemyHp(k, floor); speed = 3.4f; bodyMat = "enemy_body";
+                break;
             case EnemyKind.Boss:
                 bodyMat = "enemy_boss"; scale = 2.3f;
                 SetupBoss(floor);
@@ -133,6 +136,7 @@ public partial class Enemy : MonoBehaviour
     void BuildVisual(float scale)
     {
         if (kind == EnemyKind.Mimic) { BuildMimicVisual(); return; }
+        if (kind == EnemyKind.Slime) { BuildSlimeVisual(); return; }
         string id = kind == EnemyKind.Boss ? BossModel() : kind == EnemyKind.Guard ? GuardModel : kind.ToString().ToLower();
         // The denser second-round minion when it has been imported.
         if (kind != EnemyKind.Boss && Resources.Load<GameObject>($"Models/Chars/{id}_hq/rigged")) id += "_hq";
@@ -221,11 +225,17 @@ public partial class Enemy : MonoBehaviour
                 move = BossThink(to, dist, dt);
                 faceDir = chargeT > 0f ? chargeDir : leaping ? new Vector3(leapVel.x, 0f, leapVel.z) : (dist > 0.01f ? to / dist : faceDir);
             }
-            else move = kind == EnemyKind.Guard ? GuardThink(to, dist, dt) : kind == EnemyKind.Mimic ? MimicThink(to, dist, dt) : MinionThink(to, dist, dt);
+            else move = kind switch
+            {
+                EnemyKind.Guard => GuardThink(to, dist, dt),
+                EnemyKind.Mimic => MimicThink(to, dist, dt),
+                EnemyKind.Slime => SlimeThink(to, dist, dt),
+                _ => MinionThink(to, dist, dt),
+            };
 
-            // Bodies only hurt when they mean to: bosses always, chargers during the lunge.
+            // Bodies only hurt when they mean to: bosses always, chargers during the lunge, slimes mid-hop.
             float reach = cc.radius + 0.75f;
-            bool contact = kind == EnemyKind.Boss || ((kind == EnemyKind.Charger || kind == EnemyKind.Guard || kind == EnemyKind.Mimic) && Lunging);
+            bool contact = kind == EnemyKind.Boss || ((kind == EnemyKind.Charger || kind == EnemyKind.Guard || kind == EnemyKind.Mimic || kind == EnemyKind.Slime) && Lunging);
             float realDist = Vector3.Distance(new Vector3(target.transform.position.x, 0f, target.transform.position.z), new Vector3(transform.position.x, 0f, transform.position.z));
             if (contact && contactCd <= 0f && realDist < reach)
             {
@@ -260,7 +270,7 @@ public partial class Enemy : MonoBehaviour
             flash -= dt;
             if (body)
             {
-                var fc = flash > 0f ? Color.white : (anim || kind == EnemyKind.Mimic ? Color.white : Palette.ColorOf(bodyMat));
+                var fc = flash > 0f || Textured ? Color.white : Palette.ColorOf(bodyMat);
                 mpb.SetColor("_Color", fc);
                 mpb.SetColor("_BaseColor", fc);
                 body.SetPropertyBlock(mpb);
@@ -426,13 +436,14 @@ public partial class Enemy : MonoBehaviour
         else if (body && flash <= 0f && (slowT <= 0f && burnT <= 0f) && wasTinted)
         {
             mpb.SetColor("_Color", Color.white);
-            mpb.SetColor("_BaseColor", anim ? Color.white : Palette.ColorOf(bodyMat));
+            mpb.SetColor("_BaseColor", Textured ? Color.white : Palette.ColorOf(bodyMat));
             body.SetPropertyBlock(mpb);
         }
         wasTinted = slowT > 0f || burnT > 0f;
     }
 
     bool wasTinted;
+    bool Textured => anim || kind == EnemyKind.Mimic || kind == EnemyKind.Slime; // a model with its own colours
 
     System.Collections.Generic.List<Rigidbody> ragdoll;
 
@@ -494,12 +505,14 @@ public partial class Enemy : MonoBehaviour
             Vfx.Detach(burnFx);
             Vfx.Detach(chillFx);
             Pickup.SpawnEnergy(transform.position, kind == EnemyKind.Boss ? 12 : Random.Range(1, 4));
-            Pickup.SpawnGold(transform.position, kind == EnemyKind.Boss ? 20 : Random.Range(1, 4));
+            if (!(mini && kind == EnemyKind.Slime)) // one slime's worth of gold, not three
+                Pickup.SpawnGold(transform.position, kind == EnemyKind.Boss ? 20 : Random.Range(1, 4));
             if (Random.value < (kind == EnemyKind.Boss ? 1f : 0.06f))
                 Pickup.Spawn(PickupKind.Health, transform.position + Vector3.right, 2);
             RunState.kills++;
             if (kind == EnemyKind.Boss) RunState.bossesKilled++;
             EliteDeath();
+            SlimeDeath();
             Sfx.Play(kind == EnemyKind.Boss ? "explode" : "die", 0.6f);
             if (target) target.AddEnergy(RunState.energyOnKill);
             if (kind == EnemyKind.Boss) CameraShake.Add(0.8f);

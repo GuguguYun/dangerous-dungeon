@@ -556,8 +556,13 @@ public class GameManager : MonoBehaviour
             Debug.Log($"AUTOTEST diag {e.kind} dist={Vector3.Distance(e.transform.position, player.transform.position):F1} pos={e.transform.position} scale={e.transform.localScale.x:F2}");
         for (int w = 0; w < room.waves.Length; w++)
         {
-            foreach (var e in FindObjectsByType<Enemy>(FindObjectsSortMode.None))
-                if (!e.dead) e.TakeDamage(999, Vector3.forward);
+            // Again for what a slime splits into (its halves come a frame later and the room counts them).
+            for (int pass = 0; pass < 3; pass++)
+            {
+                foreach (var e in FindObjectsByType<Enemy>(FindObjectsSortMode.None))
+                    if (!e.dead) e.TakeDamage(999, Vector3.forward);
+                yield return new WaitForSeconds(0.1f);
+            }
             yield return new WaitForSeconds(1.8f);
         }
         Check("room clears after all waves", room.state == Room.State.Cleared && !room.GatesClosed(), $"state={room.state} wave={room.waveIndex}");
@@ -1469,6 +1474,24 @@ public class GameManager : MonoBehaviour
         player.Teleport(home);
         foreach (var b in FindObjectsByType<EnemyBomb>(FindObjectsSortMode.None)) Destroy(b.gameObject);
 
+        // A slime hops after you and lands on you; killed, a big one bursts into two small ones, which
+        // just splat. (The room adds the halves a frame later; here they come straight away.)
+        var slime = Dummy(home + fwdDir * 6f, EnemyKind.Slime);
+        slime.target = player;
+        Vector3 s0 = slime.transform.position;
+        int st = player.damageTaken;
+        for (float u = 0; u < 5f && player.damageTaken == st; u += Time.deltaTime) yield return null;
+        Check("a slime hops after you and lands on you", slime.lunges >= 2 && player.damageTaken > st,
+            $"hops={slime.lunges} moved={Vector3.Distance(s0, slime.transform.position):0.0} m taken={player.damageTaken - st}");
+        var halves = new List<Enemy>();
+        System.Action<EnemyKind, Vector3> split = null;
+        split = (k, p) => { var h = Dummy(p, k); h.MakeMini(); h.SplitNow = split; halves.Add(h); };
+        slime.SplitNow = split;
+        slime.TakeDamage(999, fwdDir);
+        Check("a killed slime splits into two small ones", halves.Count == 2 && halves.TrueForAll(h => h.mini && h.kind == EnemyKind.Slime), $"halves={halves.Count}");
+        foreach (var h in halves.ToArray()) h.TakeDamage(999, fwdDir);
+        Check("the small ones don't split again", halves.Count == 2, $"halves={halves.Count}");
+
         player.hp = player.maxHp = RunState.maxHp;
         player.armor = player.maxArmor;
         yield return new WaitForSeconds(1.0f);
@@ -2171,6 +2194,18 @@ public class GameManager : MonoBehaviour
             yield return new WaitForSeconds(0.4f);
             yield return Shot("22b_mimic.png");
             Destroy(mimic.gameObject);
+            // Slimes: a big one and two small ones (as after a split) hopping at you.
+            var slimes = new System.Collections.Generic.List<Enemy> { Dummy(np + nf * 5f, EnemyKind.Slime) };
+            for (int i = -1; i <= 1; i += 2)
+            {
+                var small = Dummy(np + nf * 4f + nr * i * 1.8f, EnemyKind.Slime);
+                small.MakeMini();
+                slimes.Add(small);
+            }
+            foreach (var sl in slimes) sl.target = player;
+            yield return new WaitForSeconds(0.75f);
+            yield return Shot("22c_slime.png");
+            foreach (var sl in slimes) Destroy(sl.gameObject);
         }
 
         // Loot: three drops of rising rarity with their light pillars.

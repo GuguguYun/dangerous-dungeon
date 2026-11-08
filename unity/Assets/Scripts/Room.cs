@@ -64,14 +64,19 @@ public class Room : MonoBehaviour
         }
     }
 
-    /// Mark the spot first so nothing pops up unannounced next to the player.
-    System.Collections.IEnumerator SpawnAfterWarning(EnemyKind kind, Vector3 at, bool mini = false)
+    /// Mark the spot first so nothing pops up unannounced next to the player. (warn false: a slime's
+    /// halves come out of its body, on the next frame: never in the middle of a loop over the live enemies.)
+    System.Collections.IEnumerator SpawnAfterWarning(EnemyKind kind, Vector3 at, bool mini = false, bool warn = true)
     {
-        alive++;
+        alive++; // counted at once, so the room can't think it is clear in between
         hud.enemiesLeft = alive;
-        var marker = SpawnMarker.Create(at);
-        yield return new WaitForSeconds(0.7f);
-        Destroy(marker.gameObject);
+        if (warn)
+        {
+            var marker = SpawnMarker.Create(at);
+            yield return new WaitForSeconds(0.7f);
+            Destroy(marker.gameObject);
+        }
+        else yield return null;
         Spawn(kind, at, counted: true, mini);
     }
 
@@ -90,6 +95,8 @@ public class Room : MonoBehaviour
             Tips.Show("elite", "精英怪：头上写着它的词缀，更耐打，掉更多金币");
         }
         e.Split = (k, p) => StartCoroutine(SpawnAfterWarning(k, ClampInside(p), true));
+        e.SplitNow = (k, p) => StartCoroutine(SpawnAfterWarning(k, ClampInside(p), true, warn: false));
+        if (kind == EnemyKind.Slime && !mini) Tips.Show("slime", "分裂史莱姆：打死会分成两只小的。爆炸、雷电一下打一群");
         if (kind == EnemyKind.Boss) hud.BossBanner(e.displayName, $"第 {floor} 层首领 · {e.Epithet}");
         e.target = player;
         e.Died += OnEnemyDied;

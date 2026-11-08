@@ -41,6 +41,7 @@ public partial class Enemy
         EnemyKind.Archer => "骸骨弓手",
         EnemyKind.Guard => "哥布林盾卫",
         EnemyKind.Mimic => "宝箱怪",
+        EnemyKind.Slime => "分裂史莱姆",
         _ => displayName,
     };
 
@@ -91,7 +92,7 @@ public partial class Enemy
         mini = true;
         maxHp = hp = Mathf.Max(2, Mathf.CeilToInt(maxHp * 0.4f));
         speed *= 1.15f;
-        Grow(0.7f);
+        Grow(kind == EnemyKind.Slime ? 0.55f : 0.7f); // a slime's halves: half its size
     }
 
     void Grow(float f)

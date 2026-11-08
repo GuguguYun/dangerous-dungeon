@@ -254,6 +254,14 @@ ASSETS = {
         "smile, clean smooth face with no shadows painted on it, long golden blonde hair in a single braid "
         "over the shoulder with a neat fringe, a thin golden halo circlet floating above the head, long white "
         "and gold robe, blue sash, no weapon. ")),
+    # round 45: the slime (分裂史莱姆): hops after you and splits in two when killed (no rig: squash and
+    # stretch in code), after Enter the Gungeon's blobulons
+    "slime": dict(kind="prop", size=1.0, polycount=4000, suffix="Single object, front view facing the camera, isolated. ",
+                  prompt=(
+        "A cute chunky cartoon slime monster, a round squishy dome-shaped blob of glossy translucent-looking "
+        "lime green goo, painted solid not see-through, two big round black eyes with white highlights and a "
+        "wide toothy grin on the front, a few small bubbles and darker green spots inside, a little drip "
+        "running down one side, flat bottom sitting on the ground. ")),
     # tileable textures for the Blender dungeon kit (image only)
     "tex_floor": dict(kind="texture", prompt=(
         "Seamless tileable texture of square stone floor flagstones, 2 by 2 large slabs with dark grout, "
