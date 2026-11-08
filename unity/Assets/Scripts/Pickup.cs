@@ -4,7 +4,7 @@ using UnityEngine;
 public enum PickupKind { Energy, Health, Weapon, Gold }
 
 /// Things on the floor: energy orbs fly to the player, health potions heal on touch,
-/// weapons wait for the player to press E.
+/// weapons wait for the player to press E under a rarity-coloured light pillar.
 public class Pickup : MonoBehaviour
 {
     public static readonly List<Pickup> Live = new List<Pickup>();
@@ -13,8 +13,8 @@ public class Pickup : MonoBehaviour
     public int amount;
     public WeaponDef weapon;
     public Rigidbody body;
-    Transform visual;
-    float age;
+    Transform visual, beam;
+    float age, beamWidth, beamHeight;
     Vector3 basePos;
 
     public static Pickup Spawn(PickupKind kind, Vector3 pos, int amount = 0, WeaponDef weapon = null)
@@ -68,44 +68,19 @@ public class Pickup : MonoBehaviour
                 v.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
                 var l = new GameObject("glow").AddComponent<Light>();
                 l.transform.SetParent(go.transform, false);
-                l.transform.localPosition = Vector3.up;
+                l.transform.localPosition = Vector3.up * 0.8f;
                 l.type = LightType.Point;
                 l.color = Weapons.RarityColors[weapon.rarity];
-                l.range = 3.5f;
-                l.intensity = 3f + weapon.rarity;
-                Beam(go.transform, Weapons.RarityColors[weapon.rarity], weapon.rarity);
+                l.range = 3f + 0.3f * weapon.rarity;
+                l.intensity = 1.6f + 0.7f * weapon.rarity;
+                l.shadows = LightShadows.None;
+                p.beam = LootFx.LootBeam(go.transform, weapon.rarity);
+                p.beamWidth = p.beam.localScale.x;
+                p.beamHeight = p.beam.localScale.y;
+                p.beam.localScale = new Vector3(p.beamWidth, 0.01f, p.beamWidth);
                 break;
         }
         return p;
-    }
-
-    /// A light pillar in the rarity colour, taller for rarer weapons, so loot reads across a room.
-    static void Beam(Transform parent, Color c, int rarity)
-    {
-        float height = 1.6f + rarity * 0.9f;
-        var beam = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        DestroyImmediate(beam.GetComponent<Collider>());
-        beam.name = "loot_beam";
-        beam.transform.SetParent(parent, false);
-        beam.transform.localPosition = Vector3.up * height * 0.5f;
-        beam.transform.localScale = new Vector3(0.28f, height * 0.5f, 0.28f);
-        var r = beam.GetComponent<Renderer>();
-        r.sharedMaterial = Vfx.Fresnel(c * (0.8f + 0.3f * rarity), 1.4f, 0.04f, 0.2f);
-        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        var ring = new GameObject("loot_ring").AddComponent<LineRenderer>();
-        ring.transform.SetParent(parent, false);
-        ring.loop = true;
-        ring.useWorldSpace = false;
-        ring.positionCount = 32;
-        ring.widthMultiplier = 0.05f;
-        ring.sharedMaterial = Palette.Trail("shockwave");
-        ring.startColor = ring.endColor = c * 2.5f;
-        ring.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        for (int i = 0; i < 32; i++)
-        {
-            float a = i * Mathf.PI * 2f / 32f;
-            ring.SetPosition(i, new Vector3(Mathf.Cos(a) * 0.7f, 0.04f, Mathf.Sin(a) * 0.7f));
-        }
     }
 
     /// A weapon for a kill or a room: at least minRarity, rarer on deeper floors. Shines and chimes.
@@ -159,6 +134,12 @@ public class Pickup : MonoBehaviour
         float pop = kind == PickupKind.Weapon && age < 0.6f ? Mathf.Abs(Mathf.Cos(age * 9f)) * (0.6f - age) * 2.2f : 0f;
         visual.localPosition = body ? Vector3.zero : Vector3.up * (0.7f + pop + Mathf.Sin(age * 3f) * 0.12f);
         visual.localRotation = Quaternion.Euler(0f, age * 90f, 0f);
+        if (beam && age < 0.9f)
+        {
+            // The pillar grows up out of the floor as the weapon lands.
+            float k = 1f - Mathf.Pow(1f - Mathf.Clamp01(age / 0.9f), 3f);
+            beam.localScale = new Vector3(beamWidth, Mathf.Max(0.01f, beamHeight * k), beamWidth);
+        }
 
         var player = PlayerController.Current;
         if (!player || player.dead || kind == PickupKind.Weapon) return;
