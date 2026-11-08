@@ -262,7 +262,7 @@ public partial class PlayerController : MonoBehaviour
         stamina -= 1f;
         groundT = 0f;
         velocity.y = JumpVelocity;
-        Sfx.Play("step", 0.5f, 0.1f, 1.2f);
+        Sfx.Play("step", 0.5f, 0.1f);
         return true;
     }
 
@@ -1011,7 +1011,7 @@ public partial class PlayerController : MonoBehaviour
             if (!next) break;
             scale *= falloff;
             Fx.Lightning(last.AimPoint, next.AimPoint);
-            Sfx.Play("laser", 0.4f, 0.2f, 1.2f);
+            Sfx.Play("laser", 0.4f, 0.1f);
             Reactions.Shock(next);
             int dmg = Mathf.Max(1, Mathf.RoundToInt(RollDamage(w.damage, out bool crit) * scale));
             next.TakeDamage(dmg, (next.transform.position - last.transform.position).normalized, crit);

@@ -133,7 +133,7 @@ public partial class PlayerController
         if (armor >= maxArmor) return;
         armor++;
         Vfx.Puff(transform.position + Vector3.up, new Color(1f, 0.9f, 0.5f, 0.6f), 0.5f, 6);
-        Sfx.Play("pickup", 0.35f, 0.05f, 1.3f);
+        Sfx.Play("pickup", 0.35f, 0.05f);
     }
 
     // ---------- 誓约圣盾: three blocks ----------

@@ -62,7 +62,7 @@ public partial class Enemy
             aiT = air;
             lungeDir = dist > 0.6f ? toDir : Vector3.zero;
             lunges++;
-            Sfx.Play("step", 0.35f, 0.15f, mini ? 1.2f : 0.75f);
+            Sfx.Play("step", mini ? 0.25f : 0.35f, 0.1f, mini ? 1f : 0.75f);
         }
         return Vector3.zero;
     }

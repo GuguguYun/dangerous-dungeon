@@ -963,20 +963,42 @@ public partial class Hud : MonoBehaviour
         }
     }
 
-    /// Name tags (and the shield gauge) over elite enemies that are on screen.
+    readonly List<(Enemy e, Vector3 sp)> tagsOnScreen = new List<(Enemy, Vector3)>();
+    readonly List<Rect> tagsPlaced = new List<Rect>();
+
+    /// Name tags (and the shield gauge) over elite enemies that are on screen. The nearest keep their
+    /// place; a tag that would cover one already drawn steps up above it (two elites side by side used
+    /// to print their names over each other).
     void DrawEliteTags()
     {
         var cam = Camera.main;
         if (!cam) return;
         var tag = new GUIStyle(center) { fontSize = 17, richText = true };
+        tagsOnScreen.Clear();
         foreach (var e in Enemy.Elites)
         {
             if (!e || e.dead) continue;
             Vector3 head = e.transform.position + Vector3.up * (e.AimPoint.y - e.transform.position.y) * 2.1f;
             Vector3 sp = cam.WorldToScreenPoint(head);
             if (sp.z < 0.5f || sp.z > 40f) continue;
+            tagsOnScreen.Add((e, sp));
+        }
+        tagsOnScreen.Sort((a, b) => a.sp.z.CompareTo(b.sp.z));
+        tagsPlaced.Clear();
+        foreach (var (e, sp) in tagsOnScreen)
+        {
             var g = ToGui(sp);
             float x = g.x, y = g.y;
+            float tw = Mathf.Max(90f, tag.CalcSize(new GUIContent(e.EliteName)).x + 16f);
+            var box = new Rect(x - tw / 2, y - 50, tw, 50);
+            for (int pass = 0; pass < 8; pass++)
+            {
+                int hit = tagsPlaced.FindIndex(r => r.Overlaps(box));
+                if (hit < 0) break;
+                box.y = tagsPlaced[hit].yMin - box.height - 2f;
+            }
+            tagsPlaced.Add(box);
+            y = box.y + 50;
             // Outlined so the affix colour reads on any floor (blue on the frost floor was lost).
             UiKit.Text(new Rect(x - 110, y - 50, 220, 22), e.EliteName, tag, Color.Lerp(e.EliteColor, Color.white, 0.25f));
             UiKit.Text(new Rect(x - 110, y - 30, 220, 20), e.KindName, new GUIStyle(tag) { fontSize = 14 }, Color.white);

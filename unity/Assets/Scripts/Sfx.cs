@@ -67,9 +67,14 @@ public static class Sfx
         if (!clip) return;
         var s = pool[next];
         next = (next + 1) % pool.Length;
-        s.pitch = pitch * (1f + Random.Range(-pitchJitter, pitchJitter));
+        // Never above the clip's own pitch (the user: no pitched-up sounds; they turn shrill): lower is
+        // fine, and the jitter only varies it downwards.
+        s.pitch = LastPitch = Mathf.Min(1f, pitch) * (1f - Random.Range(0f, pitchJitter));
         s.PlayOneShot(clip, volume);
     }
+
+    /// The pitch the last Play used (self-tests).
+    public static float LastPitch { get; private set; }
 
     static float lp;
     static float Lowpass(float x, float a) => lp += (x - lp) * a;

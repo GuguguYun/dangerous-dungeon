@@ -222,7 +222,7 @@ public class Pickup : MonoBehaviour
                 player.Heal(amount);
                 LootFx.Collect(player.transform.position, LootFx.HealthColor, true);
             }
-            if (kind == PickupKind.Gold) Sfx.Play("coin", 0.3f, 0.15f, 1.15f);
+            if (kind == PickupKind.Gold) Sfx.Play("coin", 0.3f, 0.1f, 0.9f);
             else Sfx.Play("pickup", kind == PickupKind.Health ? 0.6f : 0.25f, 0.15f);
             Destroy(gameObject);
         }

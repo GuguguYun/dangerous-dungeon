@@ -483,6 +483,9 @@ public class GameManager : MonoBehaviour
         bool recordedSlash = Resources.Load<AudioClip>("Sfx/slash");
         for (int i = 1; i <= 8; i++) recordedSlash |= Resources.Load<AudioClip>($"Sfx/slash_{i}");
         Check("swings use the soft synthesised swish (no recorded blade clips)", !recordedSlash);
+        float highest = 0f;
+        for (int i = 0; i < 20; i++) { Sfx.Play("hit", 0.01f, 0.2f, 1.3f); highest = Mathf.Max(highest, Sfx.LastPitch); }
+        Check("no sound is played above its own pitch", highest <= 1f);
         int fires = 0, crackling = 0;
         foreach (var f in dungeon.GetComponentsInChildren<Flicker>())
         {
@@ -862,8 +865,14 @@ public class GameManager : MonoBehaviour
                 yield return null;
                 if (d.hp != last)
                 {
-                    times.Add(Time.time);
-                    amounts.Add(last - d.hp);
+                    // One volley is one hit: a shotgun's pellets can land over two frames, and the half that
+                    // came a frame late was counted on top of the steady rate (shotgun 36.8 for 32.7, r56).
+                    if (times.Count > 0 && Time.time - times[times.Count - 1] < 0.05f) amounts[amounts.Count - 1] += last - d.hp;
+                    else
+                    {
+                        times.Add(Time.time);
+                        amounts.Add(last - d.hp);
+                    }
                     last = d.hp;
                 }
             }
