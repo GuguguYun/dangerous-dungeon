@@ -8,7 +8,8 @@ using UnityEngine.SceneManagement;
 
 /// Builds the whole game from code when a scene loads: world lighting, dungeon, player, HUD.
 /// Each floor is one scene load; RunState carries the run across floors.
-/// Command line: -autotest runs the self-check and quits; -shots <dir> saves screenshots and quits.
+/// Command line: -autotest runs the self-check and quits; -shots <dir> saves screenshots and quits;
+/// -soak <runs> plays every fight of whole runs unattended and reports anything that gets stuck.
 public class GameManager : MonoBehaviour
 {
     Hud hud;
@@ -35,7 +36,7 @@ public class GameManager : MonoBehaviour
     static bool showTitle = true;
     static bool argsApplied;
 
-    bool Scripted => autotest || shotDir != null || gripDir != null || iconDir != null || flickerDir != null;
+    bool Scripted => autotest || shotDir != null || gripDir != null || iconDir != null || flickerDir != null || Soak.Active;
 
     void Start()
     {
@@ -121,6 +122,13 @@ public class GameManager : MonoBehaviour
         else if (gripDir != null) StartCoroutine(GripSheets());
         else if (flickerDir != null) StartCoroutine(FlickerFrames());
         else if (iconDir != null) StartCoroutine(DumpIcons());
+        else if (Soak.Active)
+        {
+            var soak = gameObject.AddComponent<Soak>();
+            soak.player = player;
+            soak.dungeon = dungeon;
+            StartCoroutine(soak.Run());
+        }
         else if (showTitle)
         {
             hud.screen = Hud.Screen.Title;
@@ -231,6 +239,7 @@ public class GameManager : MonoBehaviour
             if (args[i] == "-grips" && i + 1 < args.Length) gripDir = args[i + 1];
             if (args[i] == "-flicker" && i + 1 < args.Length) flickerDir = args[i + 1];
             if (args[i] == "-icons" && i + 1 < args.Length) iconDir = args[i + 1];
+            if (args[i] == "-soak" && i + 1 < args.Length && int.TryParse(args[i + 1], out int runs)) Soak.Init(runs);
             // Self-check helpers: start as a class and/or on a floor (first load only).
             if (!argsApplied && args[i] == "-class" && i + 1 < args.Length) RunState.ChooseClass(args[i + 1]);
         }
@@ -633,6 +642,11 @@ public class GameManager : MonoBehaviour
 
         // The real floor boss: beat it, get the chest and the portal, step through.
         var arena = dungeon.combatRooms.Find(r => r.boss);
+        // The soak run's stuck-enemy probe: inside one of the arena's pillars, but not just beside it.
+        Vector3 pillar = arena.Center() + new Vector3(6f, 0.9f, 6f);
+        Check("the soak probe finds a point inside a pillar, not one beside it",
+            Soak.InsideSolid(pillar) != null && Soak.InsideSolid(pillar + new Vector3(-1.6f, 0f, 0f)) == null,
+            $"inside={Soak.InsideSolid(pillar)} beside={Soak.InsideSolid(pillar + new Vector3(-1.6f, 0f, 0f))}");
         player.Teleport(arena.Center() + new Vector3(0f, 0.1f, -8f));
         yield return new WaitForSeconds(2.5f);
         Check("boss room locks and the boss appears", arena.state == Room.State.Fighting && Enemy.ActiveBoss != null, $"state={arena.state}");
