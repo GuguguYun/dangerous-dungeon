@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 
-/// -vfxshots <dir>: a quick look at the loot pillars, the energy shields and the potion / crystal
-/// pickups, as close-ups and from the normal play camera, saved as PNGs; then quit. It hooks itself in
-/// (no GameManager change) and takes over once the floor is built. Run with -class knight so the dome
-/// is the knight's own. Needs a window (screenshots), like -shots.
+/// -vfxshots <dir>: a quick look at the loot pillars, the energy shields, the potion / crystal pickups
+/// and the assassin's stealth, as close-ups and from the normal play camera, saved as PNGs; then quit.
+/// It hooks itself in (no GameManager change) and takes over once the floor is built. Run with -class
+/// knight so the dome is the knight's own, -class assassin for the stealth. Needs a window
+/// (screenshots), like -shots.
 public class VfxShots : MonoBehaviour
 {
     string dir;
@@ -76,6 +77,10 @@ public class VfxShots : MonoBehaviour
         yield return Shot("pickups_bounce.png");
         yield return new WaitForSeconds(2.2f);
         yield return Shot("pickups_game.png");
+        // Crystals further off, where they usually lie when a fight ends.
+        for (int i = 0; i < 3; i++) Pickup.Spawn(PickupKind.Energy, P + F * (6.5f + i * 0.6f) + R * (i - 1) * 1.4f, 3);
+        yield return new WaitForSeconds(2.0f);
+        yield return Shot("pickups_far.png");
         Look(P + F * 1.5f + Vector3.up * 1.0f, P + F * 3.4f + Vector3.up * 0.35f);
         yield return Shot("pickups_close.png");
         PlayCam();
@@ -91,7 +96,7 @@ public class VfxShots : MonoBehaviour
         yield return new WaitForSeconds(0.4f);
 
         // ---- the knight's dome ----
-        if (RunState.classId != "knight") player.skill.Setup(player, Classes.Get("knight"));
+        if (player.skill.def.skill != SkillKind.Shield) player.skill.Setup(player, Classes.Get("knight"));
         player.skill.cooldownLeft = 0f;
         player.skill.TryUse();
         yield return new WaitForSeconds(0.12f);
@@ -110,6 +115,38 @@ public class VfxShots : MonoBehaviour
         yield return new WaitForSeconds(2.4f); // let it run out and dissolve
         yield return Shot("knight_after.png");
 
+        // ---- the dome over a jumping knight: seen from the side at the top of a jump and of a double jump ----
+        yield return new WaitForSeconds(0.6f);
+        player.stamina = player.maxStamina;
+        player.skill.cooldownLeft = 0f;
+        player.skill.TryUse();
+        yield return new WaitForSeconds(0.4f);
+        Look(P + R * 4.8f + F * 0.6f + Vector3.up * 1.9f, P + Vector3.up * 1.7f);
+        player.Jump();
+        yield return Apex();
+        yield return Shot("knight_jump_side.png");
+        PlayCam();
+        yield return Land();
+        yield return new WaitForSeconds(0.1f);
+        player.Jump();
+        yield return Apex();
+        yield return Shot("knight_jump_game.png");
+        yield return Land();
+        yield return new WaitForSeconds(0.1f);
+        bool hadDouble = RunState.doubleJump;
+        RunState.doubleJump = true;
+        player.stamina = player.maxStamina;
+        Look(P + R * 4.8f + F * 0.6f + Vector3.up * 2.4f, P + Vector3.up * 2.3f);
+        player.Jump();
+        yield return new WaitForSeconds(0.2f);
+        player.Jump();
+        yield return Apex();
+        yield return Shot("knight_doublejump_side.png");
+        RunState.doubleJump = hadDouble;
+        PlayCam();
+        yield return Land();
+        yield return new WaitForSeconds(3.0f);
+
         // ---- shielded elites ----
         var gunner = Dummy(P + F * 4.2f - R * 1.5f, EnemyKind.Gunner);
         gunner.MakeElite(EliteKind.Shielded);
@@ -121,12 +158,15 @@ public class VfxShots : MonoBehaviour
         Vector3 g = gunner.transform.position;
         Look(g - F * 2.6f + R * 0.7f + Vector3.up * 1.3f, g + Vector3.up * 0.8f);
         yield return Shot("elite_close.png");
-        for (int i = 0; i < 3; i++)
+        // Real shots from its front-right (not from the player behind the camera): the ripples must
+        // start on the right of the dome, where the shots came through.
+        Vector3 aim = gunner.AimPoint;
+        for (int i = 0; i < 2; i++)
         {
-            gunner.TakeDamage(1, F);
-            yield return new WaitForSeconds(0.07f);
+            Vector3 from = aim + (R * 0.85f - F * 0.5f).normalized * 2.2f + Vector3.up * (0.5f * i - 0.1f);
+            Bullet.Fire(from, (aim + Vector3.up * (0.3f * i - 0.1f) - from).normalized * 22f, true, 0.1f, "bullet_player", 2f, 1);
         }
-        yield return new WaitForSeconds(0.08f);
+        yield return new WaitForSeconds(0.2f);
         yield return Shot("elite_close_hit.png");
         gunner.shield = Mathf.CeilToInt(gunner.maxShield * 0.3f);
         yield return new WaitForSeconds(1.0f);
@@ -137,6 +177,36 @@ public class VfxShots : MonoBehaviour
         PlayCam();
         Destroy(gunner.gameObject);
         Destroy(shaman.gameObject);
+
+        // ---- the assassin's stealth: settling in, close, from the play camera, moving, ending ----
+        player.Teleport(P);
+        player.yaw = Mathf.Atan2(F.x, F.z) * Mathf.Rad2Deg;
+        player.pitch = 12f;
+        if (player.skill.def.skill != SkillKind.Stealth) player.skill.Setup(player, Classes.Get("assassin"));
+        player.skill.cooldownLeft = 0f;
+        yield return new WaitForSeconds(0.5f);
+        player.skill.TryUse();
+        yield return new WaitForSeconds(0.15f);
+        yield return Shot("stealth_start.png");
+        yield return new WaitForSeconds(0.9f);
+        yield return Shot("stealth_game.png");
+        Look(P + F * 2.3f + R * 0.9f + Vector3.up * 1.4f, P + Vector3.up * 0.8f);
+        yield return Shot("stealth_close.png");
+        foreach (var ps in player.GetComponentsInChildren<ParticleSystem>())
+            Debug.Log($"VFXSHOTS particles {ps.name} {ps.particleCount} playing={ps.isPlaying}");
+        Look(P - R * 2.4f + F * 0.6f + Vector3.up * 1.3f, P + Vector3.up * 0.8f);
+        yield return Shot("stealth_side.png");
+        PlayCam();
+        for (float t = 0f; t < 0.9f; t += Time.deltaTime)
+        {
+            player.Teleport(P + R * (t * 3f));
+            yield return null;
+        }
+        yield return Shot("stealth_moving.png");
+        while (player.Stealthed) yield return null;
+        yield return new WaitForSeconds(0.1f);
+        yield return Shot("stealth_end.png");
+        player.Teleport(P);
 
         // ---- the shop's potion and energy crystal ----
         var wares = ShopItem.Live.FindAll(s => s.kind == ShopItem.Kind.Potion || s.kind == ShopItem.Kind.Energy);
@@ -155,6 +225,19 @@ public class VfxShots : MonoBehaviour
         }
         Debug.Log("VFXSHOTS done");
         Application.Quit();
+    }
+
+    /// Waits for the top of a jump.
+    IEnumerator Apex()
+    {
+        yield return null;
+        while (player.VerticalSpeed > 0f) yield return null;
+    }
+
+    /// Waits until the player is back on the floor (at most 3 s).
+    IEnumerator Land()
+    {
+        for (float t = 0f; t < 3f && !player.Grounded; t += Time.deltaTime) yield return null;
     }
 
     /// Three enemy shots fired at the dome from just outside it.
