@@ -68,6 +68,7 @@ public partial class Enemy : MonoBehaviour
     string bodyMat = "enemy_body";
     float shootTimer, strafeSign, strafeTimer, flash, vy, spawnT, deathT, contactCd;
     Vector3 knock;
+    public bool pinned; // self-test: hits don't push it about
 
     void Awake()
     {
@@ -94,26 +95,26 @@ public partial class Enemy : MonoBehaviour
         switch (k)
         {
             case EnemyKind.Gunner:
-                maxHp = 6 + floor * 2; speed = 3.2f; bodyMat = "enemy_body";
+                maxHp = Balance.EnemyHp(k, floor); speed = 3.2f; bodyMat = "enemy_body";
                 break;
             case EnemyKind.Charger:
-                maxHp = 9 + floor * 3; speed = 5.4f; bodyMat = "enemy_charger";
+                maxHp = Balance.EnemyHp(k, floor); speed = 5.4f; bodyMat = "enemy_charger";
                 break;
             case EnemyKind.Spreader:
-                maxHp = 8 + floor * 2; speed = 2.6f; bodyMat = "enemy_spreader"; shootTimer += 0.8f;
+                maxHp = Balance.EnemyHp(k, floor); speed = 2.6f; bodyMat = "enemy_spreader"; shootTimer += 0.8f;
                 break;
             case EnemyKind.Bomber:
-                maxHp = 8 + floor * 2; speed = 3.0f; bodyMat = "enemy_body"; shootTimer += 1.0f;
+                maxHp = Balance.EnemyHp(k, floor); speed = 3.0f; bodyMat = "enemy_body"; shootTimer += 1.0f;
                 break;
             case EnemyKind.Archer:
-                maxHp = 6 + floor * 2; speed = 3.0f; bodyMat = "enemy_charger"; shootTimer += 0.5f;
+                maxHp = Balance.EnemyHp(k, floor); speed = 3.0f; bodyMat = "enemy_charger"; shootTimer += 0.5f;
                 break;
             case EnemyKind.Guard:
-                maxHp = 12 + floor * 3; speed = 2.4f; bodyMat = "enemy_body";
+                maxHp = Balance.EnemyHp(k, floor); speed = 2.4f; bodyMat = "enemy_body";
                 break;
             case EnemyKind.Mimic:
                 // A chest that was one all along: no spawn pop, it just starts moving.
-                maxHp = 30 + floor * 8; speed = 4.2f; bodyMat = "enemy_body";
+                maxHp = Balance.EnemyHp(k, floor); speed = 4.2f; bodyMat = "enemy_body";
                 spawnT = 1f;
                 transform.localScale = Vector3.one;
                 break;
@@ -406,7 +407,7 @@ public partial class Enemy : MonoBehaviour
             if (burnTick <= 0f)
             {
                 burnTick = 0.5f;
-                TakeDamage(1, Vector3.zero);
+                TakeDamage(Balance.BurnTick, Vector3.zero);
                 Reactions.CheckClouds(transform.position, 0f); // a burning goblin walking into gas sets it off
             }
         }
@@ -466,14 +467,17 @@ public partial class Enemy : MonoBehaviour
             mpb.SetColor("_BaseColor", new Color(3f, 3f, 3f));
             body.SetPropertyBlock(mpb);
         }
-        if (kind != EnemyKind.Boss) knock = new Vector3(hitDir.x, 0f, hitDir.z) * 4f;
+        // Knock-back in proportion to the blow: light hits only stagger, a heavy one shoves. (Every hit used
+        // to set 4 m/s, so an SMG or daggers pushed a goblin away at 3-4 m/s, out of reach of the daggers
+        // and out of the flamethrower's flames.)
+        if (kind != EnemyKind.Boss && !pinned) knock = new Vector3(hitDir.x, 0f, hitDir.z) * 4f * Mathf.Clamp(amount / (float)Balance.HeavyHit, 0.15f, 1f);
         if (anim && hp > 0 && hitAnimCd <= 0f && kind != EnemyKind.Boss)
         {
             anim.Trigger("hit", 2f, 0.12f);
             hitAnimCd = 0.6f;
         }
         Hud.I?.AddDamage(transform.position + Vector3.up * (cc.height + 0.3f), amount, crit);
-        if (amount >= 8 || crit) TimeControl.HitStop(crit && amount >= 8 ? 0.07f : 0.045f);
+        if (amount >= Balance.HeavyHit || crit) TimeControl.HitStop(crit && amount >= Balance.HeavyHit ? 0.07f : 0.045f);
         Hud.I?.HitMarker();
         Sfx.Play("hit", 0.45f, 0.2f);
         if (hp <= 0)

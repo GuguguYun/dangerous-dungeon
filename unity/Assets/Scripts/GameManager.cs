@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -383,8 +384,8 @@ public class GameManager : MonoBehaviour
         player.PickUp(smg);
         Check("picking up replaces the held weapon and drops it", player.Weapon.id == "smg" && Pickup.Live.Exists(p => p.weapon?.id == "sword"));
         int before = player.energy;
-        player.Attack();
-        Check("smg spends energy", player.energy == before - 1, $"energy {before}->{player.energy}");
+        for (int i = 0; i < 3; i++) player.Attack(); // 0.4 a shot: three cost at least a point
+        Check("smg spends energy", player.energy < before, $"energy {before}->{player.energy}");
         Pickup.SpawnEnergy(player.transform.position + Vector3.forward * 2f, 3);
         yield return new WaitForSeconds(1.2f);
         Check("energy orbs fly in and refill", player.energy > before - 1, $"energy={player.energy}");
@@ -398,6 +399,9 @@ public class GameManager : MonoBehaviour
 
         // Special weapons, each against fresh dummies in the start room.
         yield return WeaponTests();
+
+        // The combat power system: every weapon's real damage per second against its band.
+        yield return BalanceTests();
 
         // Monster behaviour: face where they walk, aim before shooting, wind up before lunging.
         yield return MonsterTests();
@@ -456,11 +460,17 @@ public class GameManager : MonoBehaviour
             yield return new WaitForSeconds(0.8f);
         }
 
-        // Hit streak: hits within 2 s build it up (+2% each, max +30%), getting hurt breaks it.
+        // Hit streak: kept up, it adds 10% a second to +30% whatever the weapon; getting hurt breaks it.
         Combo.Break();
         var streakDummy = Dummy(dungeon.playerStart + Vector3.forward * 30f);
         for (int i = 0; i < 20; i++) streakDummy.TakeDamage(1, Vector3.forward);
-        Check("the hit streak counts hits and caps the bonus at +30%", Combo.count == 20 && Mathf.Approximately(Combo.Bonus, 0.3f), $"count={Combo.count} bonus={Combo.Bonus}");
+        Check("the hit streak counts hits but 20 at once add no bonus", Combo.count == 20 && Combo.Bonus < 0.01f, $"count={Combo.count} bonus={Combo.Bonus}");
+        for (int i = 0; i < 9; i++)
+        {
+            yield return new WaitForSeconds(0.4f);
+            streakDummy.TakeDamage(1, Vector3.forward);
+        }
+        Check("kept up for 3 s the streak caps at +30%", Mathf.Approximately(Combo.Bonus, 0.3f), $"count={Combo.count} bonus={Combo.Bonus}");
         yield return new WaitForSeconds(0.7f); // past any hit invulnerability
         Combo.Hit();
         player.TakeDamage(1);
@@ -636,6 +646,27 @@ public class GameManager : MonoBehaviour
         yield return null;
     }
 
+    /// Tilt the view until the crosshair is on the enemy's body (AimAt puts it on the floor at its feet,
+    /// where a spread of pellets half goes into the ground).
+    IEnumerator AimAtBody(Enemy e)
+    {
+        float best = float.MaxValue, bestPitch = player.pitch;
+        for (float p = -10f; p <= 50f; p += 1f)
+        {
+            player.pitch = p;
+            yield return null;
+            var r = player.cam.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
+            float off = Vector3.Cross(r.direction, e.AimPoint - r.origin).magnitude;
+            if (off < best)
+            {
+                best = off;
+                bestPitch = p;
+            }
+        }
+        player.pitch = bestPitch;
+        yield return null;
+    }
+
     /// Tilt the view until the crosshair lands about `metres` ahead, so targets stay inside the
     /// 12 m start room whatever direction its door happens to face.
     IEnumerator AimAt(float metres)
@@ -676,7 +707,7 @@ public class GameManager : MonoBehaviour
         yield return new WaitForSeconds(0.4f);
         int e0 = player.energy;
         yield return Hold(1f);
-        Check("laser: held beam ticks damage and drains energy", 100 - d.hp >= 5 && e0 - player.energy >= 4, $"dmg={100 - d.hp} energy={e0 - player.energy}");
+        Check("laser: held beam ticks damage and drains energy", 100 - d.hp >= 5 && e0 - player.energy >= 3, $"dmg={100 - d.hp} energy={e0 - player.energy}");
         Destroy(d.gameObject);
 
         // Flamethrower sets enemies alight.
@@ -754,6 +785,97 @@ public class GameManager : MonoBehaviour
         player.energy = player.maxEnergy = RunState.maxEnergy;
         RunState.critChance = critWas;
         yield return new WaitForSeconds(0.5f);
+    }
+
+    /// The combat power system (Balance): each weapon, fired for three seconds at a dummy that cannot
+    /// die, must deal within 15% of the DPS its rarity and role call for (10% design tolerance plus
+    /// misses and frame timing). Each result is logged as a BALANCE line with the hits and seconds it
+    /// takes to kill the common enemies on floors 1 and 4.
+    IEnumerator BalanceTests()
+    {
+        float critWas = RunState.critChance, rateWas = RunState.fireRateMul, meleeWas = RunState.meleeMul, bonusWas = RunState.damageBonus;
+        RunState.critChance = 0f;
+        RunState.fireRateMul = 1f;
+        RunState.meleeMul = 1f;
+        RunState.damageBonus = 0f;
+        var held = player.Weapon;
+        player.hp = player.maxHp = 60;
+        var all = new List<WeaponDef>(Weapons.All);
+        all.AddRange(Weapons.SkillWeapons);
+        var modelOff = new List<string>();
+        var measuredOff = new List<string>();
+        foreach (var w in all)
+        {
+            float target = Balance.TargetDps(w);
+            if (Mathf.Abs(w.Dps / target - 1f) > Balance.BandTolerance) modelOff.Add($"{w.id} {w.Dps:0.0}/{target:0.0}");
+
+            player.Teleport(dungeon.playerStart);
+            player.energy = player.maxEnergy = 99999;
+            yield return AimAt(w.melee ? 1.8f : w.id is "shotgun" or "flamer" ? 2.5f : 4f);
+            player.Equip(w);
+            var d = Dummy(CrosshairGround());
+            d.hp = d.maxHp = 1000000;
+            d.pinned = true; // stays where it stands, as if you kept after it
+            yield return AimAtBody(d);
+            yield return new WaitForSeconds(0.4f);
+            var times = new List<float>();
+            var amounts = new List<int>();
+            int last = d.hp;
+            float t0 = Time.time, bowT = 0f;
+            const float fireFor = 3f;
+            while (Time.time - t0 < fireFor + 0.3f)
+            {
+                if (Time.time - t0 >= fireFor) player.testTrigger = false;
+                else if (w.chargeable) player.testTrigger = !player.testTrigger; // taps, never a charge
+                else if (w.kind == WeaponKind.Charge)
+                {
+                    // The bow: draw in full, loose, draw again.
+                    bowT += Time.deltaTime;
+                    player.testTrigger = bowT < Weapons.ChargeTime + w.interval + 0.05f;
+                    if (!player.testTrigger) bowT = 0f;
+                }
+                else player.testTrigger = true;
+                Combo.Break(); // no streak bonus in the measurement
+                yield return null;
+                if (d.hp != last)
+                {
+                    times.Add(Time.time);
+                    amounts.Add(last - d.hp);
+                    last = d.hp;
+                }
+            }
+            player.testTrigger = false;
+            // The steady rate: everything after the first hit over the time from the first hit to the last.
+            float dps = 0f;
+            if (times.Count >= 2)
+            {
+                int sum = 0;
+                for (int i = 1; i < amounts.Count; i++) sum += amounts[i];
+                dps = sum / Mathf.Max(0.01f, times[times.Count - 1] - times[0]);
+            }
+            if (Mathf.Abs(dps / target - 1f) > 0.15f) measuredOff.Add($"{w.id} {dps:0.0}/{target:0.0}");
+            string Kill(EnemyKind k, int f)
+            {
+                int hp = Balance.EnemyHp(k, f);
+                return dps > 0f ? $"{hp / dps:0.00}s" : "-";
+            }
+            Debug.Log($"BALANCE {w.id} rarity={w.rarity} target={target:0.0} model={w.Dps:0.0} measured={dps:0.0} hits={times.Count} energy/s={w.EnergyRate:0.0} " +
+                      $"ttk gunner f1={Kill(EnemyKind.Gunner, 1)} f4={Kill(EnemyKind.Gunner, 4)} charger f1={Kill(EnemyKind.Charger, 1)} guard f4={Kill(EnemyKind.Guard, 4)}");
+            Destroy(d.gameObject);
+            yield return new WaitForSeconds(0.3f);
+        }
+        Check("every weapon's numbers sit in its rarity band (designed DPS within 10%)", modelOff.Count == 0, string.Join(", ", modelOff));
+        Check("every weapon really deals its band's DPS (measured within 15%)", measuredOff.Count == 0, string.Join(", ", measuredOff));
+        Check("enemy health grows 30% a floor", Balance.EnemyHp(EnemyKind.Gunner, 1) == 24 && Balance.EnemyHp(EnemyKind.Gunner, 4) == Mathf.RoundToInt(24 * 1.9f));
+
+
+        RunState.critChance = critWas;
+        RunState.fireRateMul = rateWas;
+        RunState.meleeMul = meleeWas;
+        RunState.damageBonus = bonusWas;
+        player.Equip(held);
+        player.energy = player.maxEnergy = RunState.maxEnergy;
+        yield return new WaitForSeconds(0.3f);
     }
 
     IEnumerator MonsterTests()
@@ -1176,10 +1298,10 @@ public class GameManager : MonoBehaviour
         var frozen = Dummy(home + fwdDir * 4f);
         frozen.ApplySlow(0.5f, 3f);
         int shatters = Reactions.Shatters;
-        frozen.TakeDamage(10, fwdDir);
-        Check("碎冰: a heavy hit on a frozen enemy deals double", frozen.hp == 80 && Reactions.Shatters == shatters + 1 && !frozen.Slowed, $"hp={frozen.hp}");
-        frozen.TakeDamage(10, fwdDir);
-        Check("碎冰 uses up the ice (next hit is normal)", frozen.hp == 70, $"hp={frozen.hp}");
+        frozen.TakeDamage(Balance.HeavyHit, fwdDir);
+        Check("碎冰: a heavy hit on a frozen enemy deals double", frozen.hp == 100 - 2 * Balance.HeavyHit && Reactions.Shatters == shatters + 1 && !frozen.Slowed, $"hp={frozen.hp}");
+        frozen.TakeDamage(Balance.HeavyHit, fwdDir);
+        Check("碎冰 uses up the ice (next hit is normal)", frozen.hp == 100 - 3 * Balance.HeavyHit, $"hp={frozen.hp}");
 
         // 超载: lightning on a burning enemy blasts it and its neighbours.
         // Well inside the room (its corners hold braziers and its walls are 6 m out).
@@ -1307,7 +1429,7 @@ public class GameManager : MonoBehaviour
         Check("a shield guard blocks hits on its shield", guard.Guarding && guard.hp == ghp && guard.blocks > 0, $"hp {ghp}->{guard.hp} blocks={guard.blocks}");
         guard.TakeDamage(3, guard.transform.forward);
         Check("hits in its back get through", guard.hp == ghp - 3, $"hp {ghp}->{guard.hp}");
-        guard.TakeDamage(10, fwdDir);
+        guard.TakeDamage(Balance.HeavyHit, fwdDir);
         Check("a heavy blow breaks its guard", !guard.Guarding && guard.hp < ghp - 3, $"guarding={guard.Guarding} hp={guard.hp}");
         Destroy(guard.gameObject);
 
@@ -1427,13 +1549,15 @@ public class GameManager : MonoBehaviour
         Check("buying a weapon puts it on the floor", bought && Pickup.Live.FindAll(p => p.kind == PickupKind.Weapon).Count == before + 1 && RunState.gold == gold1 - gun.price,
             $"bought={bought} price={gun.price} gold={RunState.gold}");
         foreach (var p in Pickup.Live.ToArray()) if (p.kind == PickupKind.Weapon && p.weapon == gun.weapon) Destroy(p.gameObject);
-        // Weapon upgrade: +1 damage on the held weapon, remembered for the run.
+        // Weapon upgrade: +20% damage on the held weapon (Balance.UpgradeStep), remembered for the run.
         var upgrade = wares.Find(w => w.kind == ShopItem.Kind.Upgrade);
         RunState.gold = 100;
         int dmg0 = player.Weapon.damage, lvl0 = RunState.LevelOf(player.Weapon.id);
-        Check("the weapon upgrade adds +1 damage for the run", upgrade.Buy(player) && player.Weapon.damage == dmg0 + 1 && RunState.LevelOf(player.Weapon.id) == lvl0 + 1 && player.Weapon.Title.Contains("+"),
-            $"damage {dmg0} -> {player.Weapon.damage} title={player.Weapon.Title}");
-        Check("upgrades never touch the shared weapon table", Weapons.Get(player.Weapon.id).damage == dmg0 - lvl0, $"table={Weapons.Get(player.Weapon.id).damage}");
+        float dps0 = player.Weapon.Dps;
+        Check("the weapon upgrade adds +20% damage for the run", upgrade.Buy(player) && RunState.LevelOf(player.Weapon.id) == lvl0 + 1 && player.Weapon.Title.Contains("+")
+            && Mathf.Abs(player.Weapon.Dps / dps0 - Balance.LevelMul(lvl0 + 1) / Balance.LevelMul(lvl0)) < 0.01f,
+            $"dps {dps0:0.0} -> {player.Weapon.Dps:0.0} title={player.Weapon.Title}");
+        Check("upgrades never touch the shared weapon table", Weapons.Get(player.Weapon.id).damage == dmg0 && Weapons.Get(player.Weapon.id).level == 0, $"table={Weapons.Get(player.Weapon.id).damage}");
         // The mech beacon: the only way besides chests to get a mech.
         var beacon = wares.Find(w => w.kind == ShopItem.Kind.Mech);
         RunState.gold = 100;

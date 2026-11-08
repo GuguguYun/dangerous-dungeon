@@ -85,7 +85,7 @@ public class FirePit : Trap
                     Reactions.CheckClouds(transform.position, radius);
                     foreach (var e in EnemiesNear(transform.position + Vector3.up, radius))
                     {
-                        e.TakeDamage(3, Vector3.up, false, 1f);
+                        e.TakeDamage(Balance.FireTrap, Vector3.up, false, 1f);
                         e.ApplyBurn(2f);
                     }
                 }
@@ -145,7 +145,7 @@ public class SpikeTrap : Trap
             // Only things on the plate when the spikes come up get hit; a jump clears them.
             if (p && !p.dead && !p.SpikeProof && Inside(p.transform.position, radius) && p.FeetHeight < 0.5f && hitThisTime.Add(p)) p.TakeDamage(1);
             foreach (var e in EnemiesNear(transform.position + Vector3.up * 0.5f, radius))
-                if (hitThisTime.Add(e)) e.TakeDamage(4, Vector3.up, false, 2f);
+                if (hitThisTime.Add(e)) e.TakeDamage(Balance.SpikeTrap, Vector3.up, false, 2f);
             if (upT <= 0f) { raised = false; cooldown = 1.2f; }
         }
         float target = raised ? 0f : -0.62f;
@@ -193,7 +193,7 @@ public class PoisonCloud : Trap
             tick = 0.5f;
             var p = PlayerController.Current;
             if (p && !p.dead && Inside(p.transform.position, radius)) p.Poison(3f);
-            foreach (var e in EnemiesNear(transform.position + Vector3.up, radius)) e.TakeDamage(2, Vector3.zero, false, 0f);
+            foreach (var e in EnemiesNear(transform.position + Vector3.up, radius)) e.TakeDamage(Balance.SawTrap, Vector3.zero, false, 0f);
         }
         if (life <= 0f)
         {
@@ -251,7 +251,7 @@ public class LavaCrack : Trap
         var p = PlayerController.Current;
         if (p && !p.dead && OnCrack(p.transform.position) && p.FeetHeight < 0.3f) p.TakeShockwave(1);
         foreach (var e in EnemiesNear(transform.position, 1.6f))
-            if (OnCrack(e.transform.position)) e.TakeDamage(2, Vector3.up, false, 0f);
+            if (OnCrack(e.transform.position)) e.TakeDamage(Balance.CrackTrap, Vector3.up, false, 0f);
     }
 }
 

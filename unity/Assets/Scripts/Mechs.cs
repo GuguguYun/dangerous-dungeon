@@ -157,7 +157,7 @@ public class ParkedMech : MonoBehaviour
         Vfx.Ring(ground, 3f, def.color);
         Vfx.Puff(ground + Vector3.up * 0.3f, new Color(0.6f, 0.58f, 0.55f, 0.6f), 1.4f, 12);
         Vfx.Sparks(ground + Vector3.up * 0.2f, def.color, 14, 6f);
-        Mechs.Shock(ground, 2.5f, 6, 8f);
+        Mechs.Shock(ground, 2.5f, Balance.MechDrop, 8f);
         CameraShake.Add(0.3f);
         Sfx.Play("explode", 0.6f, 0.1f);
     }

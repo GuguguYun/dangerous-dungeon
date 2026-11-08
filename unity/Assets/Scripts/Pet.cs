@@ -111,7 +111,7 @@ public class Pet : MonoBehaviour
             shots++;
             Vector3 from = transform.position + visual.forward * 0.3f;
             Vector3 dir = (best.AimPoint - from).normalized;
-            Bullet.Fire(from, dir * 40f, true, 0.07f, "bullet_player", 1.5f, 1 + RunState.floor / 2);
+            Bullet.Fire(from, dir * 40f, true, 0.07f, "bullet_player", 1.5f, Balance.DroneShot(RunState.floor));
             Vfx.MuzzleFlash(from, dir, new Color(0.4f, 0.95f, 1f));
             Sfx.Play("laser", 0.25f, 0.2f);
         }

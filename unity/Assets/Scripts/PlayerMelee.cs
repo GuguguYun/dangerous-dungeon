@@ -55,7 +55,7 @@ public partial class PlayerController
     void Melee(WeaponDef w, bool heavy = false)
     {
         float swing = SwingTime(w);
-        float atYaw = yaw;
+        float atYaw = MeleeYaw();
         swingT = body ? 0f : 0.18f;
         if (body)
         {

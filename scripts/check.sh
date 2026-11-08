@@ -29,7 +29,7 @@ if [[ -z "${SKIP_BUILD:-}" ]]; then
 fi
 
 echo "== autotest"
-run_for 200 "$BIN" -batchmode -nographics -autotest -logFile "$ROOT/logs/autotest.log" >/dev/null 2>&1
+run_for 480 "$BIN" -batchmode -nographics -autotest -logFile "$ROOT/logs/autotest.log" >/dev/null 2>&1
 grep -E "AUTOTEST (FAIL|done)|Exception" "$ROOT/logs/autotest.log"
 
 echo "== shots"

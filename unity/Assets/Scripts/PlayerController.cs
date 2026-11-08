@@ -605,8 +605,11 @@ public partial class PlayerController : MonoBehaviour
     {
         bool ambush = stealthed && !ambushUsed;
         crit = nextCrit || ambush || Random.value < RunState.critChance;
-        // The hit streak adds up to +30%; a class skill weapon adds its own boost.
-        int d = Mathf.RoundToInt((baseDamage + RunState.bonusDamage) * (1f + Combo.Bonus) * Weapon.damageMul);
+        // Every bonus is a percentage (Balance): blessings, the hit streak (up to +30%), and for hand
+        // weapons the shop upgrades and a class skill weapon's own boost.
+        float mul = (1f + RunState.damageBonus) * (1f + Combo.Bonus);
+        if (!InMech) mul *= Weapon.damageMul * Balance.LevelMul(Weapon.level);
+        int d = Mathf.Max(1, Mathf.RoundToInt(baseDamage * mul));
         if (ambush)
         {
             ambushUsed = true; // the first strike out of the shadows; stealth itself lasts its time
@@ -623,7 +626,7 @@ public partial class PlayerController : MonoBehaviour
         switch (w.kind)
         {
             case WeaponKind.Charge:
-                if (trigger && fireCd <= 0f) charge = Mathf.Min(1f, charge + dt / 0.8f);
+                if (trigger && fireCd <= 0f) charge = Mathf.Min(1f, charge + dt / Weapons.ChargeTime);
                 else if (!trigger && prevTrigger && charge > 0f) { FireCharged(w, charge); charge = 0f; }
                 break;
             case WeaponKind.Beam:
@@ -668,6 +671,22 @@ public partial class PlayerController : MonoBehaviour
         if (beamGlow) beamGlow.enabled = beamLight.enabled = beaming;
     }
 
+    /// Pay for a shot. Costs may be fractions of a point (the SMG's 0.4): they add up in energyAcc,
+    /// the part of the next point already spent.
+    bool SpendEnergy(float cost)
+    {
+        if (cost <= 0f) return true;
+        if (energy - energyAcc < cost - 0.001f) return false;
+        energyAcc += cost;
+        while (energyAcc >= 1f - 0.001f && energy > 0)
+        {
+            energyAcc -= 1f;
+            energy--;
+        }
+        energyAcc = Mathf.Max(0f, energyAcc);
+        return true;
+    }
+
     bool DrainEnergy(WeaponDef w, float dt)
     {
         if (w.energyPerSec <= 0f) return true;
@@ -709,19 +728,17 @@ public partial class PlayerController : MonoBehaviour
     /// The heavy version of each chargeable weapon, scaled by how long it was charged (0.25..1).
     void ChargedAttack(WeaponDef w, float c)
     {
-        int cost = Mathf.Max(1, w.energy * 2);
-        if (energy < cost) return;
-        energy -= cost;
+        if (!SpendEnergy(Mathf.Max(1f, w.energy * 2f))) return;
         lastShot = Time.time;
         fireCd = w.interval / RunState.fireRateMul;
         Vector3 from = muzzle.position;
         Vector3 aim = (AimPoint() - from).normalized;
-        Vector3 fwd = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
+        Vector3 fwd = Quaternion.Euler(0f, w.melee ? MeleeYaw() : yaw, 0f) * Vector3.forward;
         switch (w.id)
         {
             case "rifle":
             {
-                var b = Bullet.Fire(from, aim * 120f, true, 0.12f, "bullet_laser", 2f, RollDamage(Mathf.RoundToInt(w.damage * (2f + 3f * c)), out bool cr), 0f, cr);
+                var b = Bullet.Fire(from, aim * 120f, true, 0.12f, "bullet_laser", 2f, RollDamage(Mathf.RoundToInt(w.damage * (1.5f + 2f * c)), out bool cr), 0f, cr);
                 b.pierce = 5;
                 Fx.Lightning(from, from + aim * 3f);
                 break;
@@ -779,16 +796,15 @@ public partial class PlayerController : MonoBehaviour
         MeleeFx(Weapon, transform.position + Vector3.up, true);
     }
 
-    /// Bow: damage x1..x4 with the charge; a full charge also pierces three enemies.
+    /// Bow: damage x1..x5 with the charge; a full charge also pierces three enemies.
     void FireCharged(WeaponDef w, float c)
     {
-        if (energy < w.energy) return;
-        energy -= w.energy;
+        if (!SpendEnergy(w.energy)) return;
         fireCd = w.interval / RunState.fireRateMul;
         lastShot = Time.time;
         Vector3 from = muzzle.position;
         Vector3 aim = (AimPoint() - from).normalized;
-        int dmg = RollDamage(Mathf.RoundToInt(w.damage * (1f + 3f * c)), out bool crit);
+        int dmg = RollDamage(Mathf.RoundToInt(w.damage * (1f + (Weapons.FullCharge - 1f) * c)), out bool crit);
         var b = Bullet.Fire(from, aim * w.speed * (1f + c), true, w.radius * (1f + c), w.mat, 3f, dmg, 0f, crit);
         if (c >= 0.95f) b.pierce = 3;
         nextCrit = false;
@@ -857,6 +873,16 @@ public partial class PlayerController : MonoBehaviour
             Vfx.Sparks(end, Palette.ColorOf(w.mat), 4, 4f);
         }
         return true;
+    }
+
+    /// Melee swings toward what the crosshair is on: the camera looks over the shoulder, so straight
+    /// ahead of the body passes up to 20° beside a close enemy under the crosshair (the spear's 30° thrust
+    /// missed it outright).
+    float MeleeYaw()
+    {
+        Vector3 to = AimPoint() - transform.position;
+        to.y = 0f;
+        return to.sqrMagnitude > 0.25f ? Quaternion.LookRotation(to).eulerAngles.y : yaw;
     }
 
     /// Thunder: locks on to the enemy nearest the crosshair (35°, 20 m, in sight) so it needn't be dead
@@ -936,7 +962,7 @@ public partial class PlayerController : MonoBehaviour
     public void Attack()
     {
         var w = Weapon;
-        if (energy < w.energy)
+        if (!SpendEnergy(w.energy))
         {
             fireCd = 0.2f;
             if (noEnergyMsgCd <= 0f)
@@ -946,8 +972,9 @@ public partial class PlayerController : MonoBehaviour
             }
             return;
         }
-        energy -= w.energy;
-        fireCd = w.interval / RunState.fireRateMul;
+        // Holding the trigger, carry over the part of a frame the last shot overshot by, so a weapon fires
+        // at its stated rate whatever the frame rate (resetting it lost up to a frame a shot: -10% on the SMG).
+        fireCd = (fireCd > -0.05f ? fireCd : 0f) + w.interval / RunState.fireRateMul;
         lastShot = Time.time;
         if (w.id == "raven_blade" && RavenBlink(w)) { } // the cut lands on arrival
         else if (w.melee) Melee(w);
@@ -968,12 +995,15 @@ public partial class PlayerController : MonoBehaviour
                 StartCoroutine(StaffMeteor(w));
                 return;
             case WeaponKind.Flame:
-                for (int i = 0; i < 2; i++)
+                // The flames are for show (and light gas and enemies they touch); the damage is the cone:
+                // everyone inside it, in sight, takes it each tick. Per flame it came out at 40 a second.
+                for (int i = 0; i < 3; i++)
                 {
                     var sp = Quaternion.Euler(Random.Range(-w.spread, w.spread) * 0.5f, Random.Range(-w.spread, w.spread) * 0.5f, 0f);
-                    var f = Bullet.Fire(from, Quaternion.LookRotation(aim) * sp * Vector3.forward * w.speed * Random.Range(0.85f, 1.15f), true, w.radius, w.mat, 0.38f, RollDamage(w.damage, out _));
+                    var f = Bullet.Fire(from, Quaternion.LookRotation(aim) * sp * Vector3.forward * w.speed * Random.Range(0.85f, 1.15f), true, w.radius, w.mat, 0.38f, 0);
                     f.burn = 2f;
                 }
+                FlameCone(w, from, aim);
                 if (Random.value < 0.3f) Sfx.Play("rocket", 0.25f, 0.3f);
                 return;
             case WeaponKind.Grenade:
@@ -1031,6 +1061,23 @@ public partial class PlayerController : MonoBehaviour
     }
 
     int swingIndex;
+
+    /// The flamethrower's tick: every enemy within the flames' reach and about their width.
+    void FlameCone(WeaponDef w, Vector3 from, Vector3 aim)
+    {
+        float reach = w.speed * 0.38f; // how far the flames fly
+        foreach (var e in EnemiesAround(from, reach + 0.5f))
+        {
+            Vector3 to = e.AimPoint - from;
+            float along = Vector3.Dot(to, aim);
+            if (along <= 0f || along > reach) continue;
+            float off = (to - aim * along).magnitude; // distance from the flame's centre line
+            if (off > 0.6f + along * Mathf.Tan(w.spread * 0.5f * Mathf.Deg2Rad)) continue;
+            if (Physics.Linecast(from, e.AimPoint, Layers.WorldMask, QueryTriggerInteraction.Ignore)) continue;
+            e.TakeDamage(RollDamage(w.damage, out bool crit), aim, crit, 1f);
+            e.ApplyBurn(2f);
+        }
+    }
 
     /// What a melee blow does where it lands (the swing itself is the blade's smear, see PlayerMelee):
     /// the hammer cracks the floor with a ring of dust, sparks and a few small arcs; the spear's tip

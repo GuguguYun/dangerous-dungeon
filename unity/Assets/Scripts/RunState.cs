@@ -15,7 +15,8 @@ public static class RunState
     public static string[] weapons;
     public static int slot;
 
-    public static int bonusDamage, energyOnKill, maxStamina;
+    public static int energyOnKill, maxStamina;
+    public static float damageBonus; // blessings: +20% each (Balance.DamageBuff)
     public static bool doubleJump, dodgeMaster;
     public static float fireRateMul, critChance, dashCooldownMul, meleeMul;
     public static List<string> buffs = new List<string>();
@@ -61,7 +62,7 @@ public static class RunState
         dodgeMaster = false;
         weapons = (string[])c.weapons.Clone();
         slot = 0;
-        bonusDamage = 0;
+        damageBonus = 0f;
         energyOnKill = 0;
         fireRateMul = 1f;
         critChance = c.crit;

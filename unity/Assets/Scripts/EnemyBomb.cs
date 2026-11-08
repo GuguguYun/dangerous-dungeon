@@ -106,7 +106,7 @@ public class EnemyBomb : MonoBehaviour
         foreach (var c in Physics.OverlapSphere(to + Vector3.up * 0.5f, radius, Layers.EnemyMask, QueryTriggerInteraction.Ignore))
         {
             var e = c.GetComponentInParent<Enemy>();
-            if (e && !e.dead) e.TakeDamage(3, (e.transform.position - to).normalized, false, 5f);
+            if (e && !e.dead) e.TakeDamage(Balance.GoblinBomb, (e.transform.position - to).normalized, false, 5f);
         }
         foreach (var prop in PhysicsProp.Live.ToArray())
             if (prop && Vector3.Distance(prop.transform.position, to) < radius) prop.Hit(4, to, prop.transform.position - to);

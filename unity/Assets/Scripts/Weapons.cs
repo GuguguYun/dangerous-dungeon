@@ -18,7 +18,7 @@ public class WeaponDef
     public int rarity; // 0 white, 1 green, 2 blue, 3 purple, 4 orange
     public int damage = 1;
     public float interval = 0.2f;
-    public int energy;          // per shot / swing
+    public float energy;        // per shot / swing (fractions add up: 0.4 = one point every 2.5 shots)
     public float energyPerSec;  // continuous weapons (beam, flame)
     public float speed = 40f;
     public int pellets = 1;
@@ -38,6 +38,28 @@ public class WeaponDef
     public bool IsSkillWeapon => owner != null;
 
     public bool melee => kind == WeaponKind.Melee || kind == WeaponKind.Thrust;
+
+    /// Sustained damage per second on one enemy, before buffs, crits and the hit streak: the number
+    /// Balance tunes every weapon by (see Balance.TargetDps), and what the HUD compares.
+    public float Dps
+    {
+        get
+        {
+            float hit = damage * damageMul * Balance.LevelMul(level);
+            return kind switch
+            {
+                WeaponKind.Charge => hit * Weapons.FullCharge / (interval + Weapons.ChargeTime), // charged in full each time
+                WeaponKind.Flame or WeaponKind.Meteor => hit / interval + Balance.BurnTick / 0.5f, // and it keeps them burning
+                WeaponKind.Homing => hit * 2f / interval, // two missiles a shot
+                WeaponKind.Boomerang => hit * 2f / interval, // out and back once per throw
+                _ => hit * pellets / interval,
+            };
+        }
+    }
+
+    /// Energy per second of steady use.
+    public float EnergyRate => energyPerSec > 0f ? energyPerSec
+        : kind == WeaponKind.Charge ? energy / (interval + Weapons.ChargeTime) : energy / interval;
 
     public WeaponDef Clone() => (WeaponDef)MemberwiseClone();
 
@@ -69,39 +91,44 @@ public static class Weapons
 
     public static readonly List<WeaponDef> All = new List<WeaponDef>
     {
-        new WeaponDef { id = "pistol", name = "老伙计", type = "左轮", rarity = 0, damage = 2, interval = 0.22f, speed = 42f, spread = 1f, desc = "不耗能量的老伙计" },
-        new WeaponDef { id = "smg", name = "蜂鸣", type = "冲锋枪", rarity = 1, damage = 1, interval = 0.075f, energy = 1, speed = 48f, spread = 4f, size = new Vector3(0.14f, 0.2f, 0.8f), desc = "射速极快" },
-        new WeaponDef { id = "shotgun", name = "开花炮", type = "霰弹枪", rarity = 1, damage = 2, interval = 0.6f, energy = 3, speed = 36f, pellets = 6, spread = 14f, radius = 0.07f, mat = "bullet_heavy", size = new Vector3(0.16f, 0.18f, 0.95f), desc = "近距离一次 6 发" },
-        new WeaponDef { id = "rifle", name = "穿星", type = "能量步枪", rarity = 2, damage = 5, interval = 0.4f, energy = 2, speed = 80f, spread = 0.2f, radius = 0.1f, mat = "bullet_laser", size = new Vector3(0.12f, 0.16f, 1.1f), look = "gun_green", desc = "高速精准；按住蓄力：电磁贯穿弹" },
-        new WeaponDef { id = "launcher", name = "轰天雷", type = "火箭筒", rarity = 3, damage = 6, interval = 0.9f, energy = 5, speed = 22f, radius = 0.18f, explode = 3f, mat = "bullet_rocket", size = new Vector3(0.22f, 0.22f, 1.0f), look = "gun_red", desc = "命中爆炸" },
-        new WeaponDef { id = "sword", name = "誓约之刃", type = "骑士大剑", kind = WeaponKind.Melee, rarity = 2, damage = 5, interval = 0.42f, reach = 3.2f, arc = 140f, size = new Vector3(0.08f, 0.12f, 1.4f), look = "blade", desc = "挥砍能打掉敌人子弹；按住蓄力：旋风斩" },
-        new WeaponDef { id = "hammer", name = "震岳", type = "雷霆重锤", kind = WeaponKind.Melee, rarity = 3, damage = 9, interval = 0.8f, energy = 1, reach = 3.6f, arc = 200f, size = new Vector3(0.3f, 0.3f, 1.2f), look = "gun_red", desc = "大范围重击，电流传导给身边 2 个敌人；按住蓄力：360° 砸地" },
+        // Numbers follow Balance: each weapon's Dps sits within 10% of its rarity's band times its role.
+        new WeaponDef { id = "pistol", name = "老伙计", type = "左轮", rarity = 0, damage = 5, interval = 0.22f, speed = 42f, spread = 1f, desc = "不耗能量的老伙计" },
+        new WeaponDef { id = "smg", name = "蜂鸣", type = "冲锋枪", rarity = 1, damage = 3, interval = 0.11f, energy = 0.4f, speed = 48f, spread = 4f, size = new Vector3(0.14f, 0.2f, 0.8f), desc = "射速极快" },
+        new WeaponDef { id = "shotgun", name = "开花炮", type = "霰弹枪", rarity = 1, damage = 3, interval = 0.55f, energy = 2f, speed = 36f, pellets = 6, spread = 14f, radius = 0.07f, mat = "bullet_heavy", size = new Vector3(0.16f, 0.18f, 0.95f), desc = "近距离一次 6 发" },
+        new WeaponDef { id = "rifle", name = "穿星", type = "能量步枪", rarity = 2, damage = 12, interval = 0.4f, energy = 1.5f, speed = 80f, spread = 0.2f, radius = 0.1f, mat = "bullet_laser", size = new Vector3(0.12f, 0.16f, 1.1f), look = "gun_green", desc = "高速精准；按住蓄力：电磁贯穿弹" },
+        new WeaponDef { id = "launcher", name = "轰天雷", type = "火箭筒", rarity = 3, damage = 22, interval = 0.9f, energy = 3.5f, speed = 22f, radius = 0.18f, explode = 3f, mat = "bullet_rocket", size = new Vector3(0.22f, 0.22f, 1.0f), look = "gun_red", desc = "命中爆炸" },
+        new WeaponDef { id = "sword", name = "誓约之刃", type = "骑士大剑", kind = WeaponKind.Melee, rarity = 2, damage = 15, interval = 0.42f, reach = 3.2f, arc = 140f, size = new Vector3(0.08f, 0.12f, 1.4f), look = "blade", desc = "挥砍能打掉敌人子弹；按住蓄力：旋风斩" },
+        new WeaponDef { id = "hammer", name = "震岳", type = "雷霆重锤", kind = WeaponKind.Melee, rarity = 3, damage = 22, interval = 0.75f, energy = 1f, reach = 3.6f, arc = 200f, size = new Vector3(0.3f, 0.3f, 1.2f), look = "gun_red", desc = "大范围重击，电流传导给身边 2 个敌人；按住蓄力：360° 砸地" },
         // round 2: special mechanics
-        new WeaponDef { id = "bow", name = "追月", type = "猎弓", kind = WeaponKind.Charge, rarity = 2, damage = 3, interval = 0.25f, energy = 1, speed = 45f, radius = 0.09f, mat = "bullet_arrow", look = "blade", desc = "按住蓄力，满蓄伤害 ×4 并穿透" },
-        new WeaponDef { id = "laser", name = "灼线", type = "激光枪", kind = WeaponKind.Beam, rarity = 3, damage = 1, interval = 0.1f, energyPerSec = 6f, mat = "beam", look = "gun_red", desc = "按住持续照射" },
-        new WeaponDef { id = "flamer", name = "龙息", type = "喷火器", kind = WeaponKind.Flame, rarity = 2, damage = 1, interval = 0.05f, energyPerSec = 5f, speed = 14f, spread = 18f, radius = 0.22f, mat = "bullet_fire", look = "gun_red", desc = "近距离点燃敌人" },
-        new WeaponDef { id = "grenade", name = "跳跳雷", type = "弹跳榴弹", kind = WeaponKind.Grenade, rarity = 2, damage = 7, interval = 0.7f, energy = 3, speed = 16f, radius = 0.16f, explode = 3.5f, mat = "bullet_grenade", desc = "撞墙反弹，1.2 秒后爆炸" },
-        new WeaponDef { id = "missile", name = "群鸦", type = "追踪导弹", kind = WeaponKind.Homing, rarity = 4, damage = 4, interval = 0.55f, energy = 3, speed = 18f, radius = 0.13f, explode = 2.2f, mat = "bullet_missile", look = "gun_red", desc = "一次两发，自动追敌" },
-        new WeaponDef { id = "thunder", name = "惊蛰", type = "雷电法杖", kind = WeaponKind.Chain, rarity = 3, damage = 4, interval = 0.45f, energy = 2, look = "blade", desc = "自动锁定准星附近的敌人，电流再传导 5 个" },
-        new WeaponDef { id = "frost", name = "霜语", type = "寒冰法杖", kind = WeaponKind.Frost, rarity = 2, damage = 2, interval = 0.3f, energy = 1, speed = 34f, pellets = 3, spread = 10f, radius = 0.11f, mat = "bullet_frost", look = "blade", desc = "冰片命中减速 50%" },
-        new WeaponDef { id = "boomerang", name = "归燕", type = "回旋镖", kind = WeaponKind.Boomerang, rarity = 1, damage = 4, interval = 0.3f, speed = 20f, radius = 0.25f, mat = "bullet_heavy", desc = "飞出再飞回，来回都伤人" },
-        new WeaponDef { id = "spear", name = "破阵", type = "长枪", kind = WeaponKind.Thrust, rarity = 2, damage = 7, interval = 0.5f, reach = 4.6f, arc = 30f, size = new Vector3(0.06f, 0.06f, 1.8f), look = "blade", desc = "远距离突刺，一线穿透；按住蓄力：冲刺突刺" },
-        new WeaponDef { id = "daggers", name = "影牙", type = "双匕首", kind = WeaponKind.Melee, rarity = 1, damage = 3, interval = 0.15f, reach = 2.3f, arc = 100f, size = new Vector3(0.05f, 0.05f, 0.5f), look = "blade", desc = "极快的连斩" },
+        new WeaponDef { id = "bow", name = "追月", type = "猎弓", kind = WeaponKind.Charge, rarity = 2, damage = 7, interval = 0.3f, energy = 1f, speed = 45f, radius = 0.09f, mat = "bullet_arrow", look = "blade", desc = "按住蓄力，满蓄伤害 ×5 并穿透" },
+        new WeaponDef { id = "laser", name = "灼线", type = "激光枪", kind = WeaponKind.Beam, rarity = 3, damage = 3, interval = 0.1f, energyPerSec = 3.6f, mat = "beam", look = "gun_red", desc = "按住持续照射" },
+        new WeaponDef { id = "flamer", name = "龙息", type = "喷火器", kind = WeaponKind.Flame, rarity = 2, damage = 2, interval = 0.08f, energyPerSec = 4f, speed = 14f, spread = 18f, radius = 0.22f, mat = "bullet_fire", look = "gun_red", desc = "近距离烧到火焰里的所有敌人并点燃" },
+        new WeaponDef { id = "grenade", name = "跳跳雷", type = "弹跳榴弹", kind = WeaponKind.Grenade, rarity = 2, damage = 16, interval = 0.7f, energy = 2.5f, speed = 16f, radius = 0.16f, explode = 3.5f, mat = "bullet_grenade", desc = "撞墙反弹，1.2 秒后爆炸" },
+        new WeaponDef { id = "missile", name = "群鸦", type = "追踪导弹", kind = WeaponKind.Homing, rarity = 4, damage = 6, interval = 0.55f, energy = 2f, speed = 18f, radius = 0.13f, explode = 2.2f, mat = "bullet_missile", look = "gun_red", desc = "一次两发，自动追敌" },
+        new WeaponDef { id = "thunder", name = "惊蛰", type = "雷电法杖", kind = WeaponKind.Chain, rarity = 3, damage = 9, interval = 0.45f, energy = 1.6f, look = "blade", desc = "自动锁定准星附近的敌人，电流再传导 5 个" },
+        new WeaponDef { id = "frost", name = "霜语", type = "寒冰法杖", kind = WeaponKind.Frost, rarity = 2, damage = 3, interval = 0.33f, energy = 1.2f, speed = 34f, pellets = 3, spread = 6f, radius = 0.11f, mat = "bullet_frost", look = "blade", desc = "冰片命中减速 50%" },
+        new WeaponDef { id = "boomerang", name = "归燕", type = "回旋镖", kind = WeaponKind.Boomerang, rarity = 1, damage = 12, interval = 0.95f, speed = 20f, radius = 0.25f, mat = "bullet_heavy", desc = "飞出再飞回，来回都伤人" },
+        new WeaponDef { id = "spear", name = "破阵", type = "长枪", kind = WeaponKind.Thrust, rarity = 2, damage = 16, interval = 0.5f, reach = 4.6f, arc = 30f, size = new Vector3(0.06f, 0.06f, 1.8f), look = "blade", desc = "远距离突刺，一线穿透；按住蓄力：冲刺突刺" },
+        new WeaponDef { id = "daggers", name = "影牙", type = "双匕首", kind = WeaponKind.Melee, rarity = 1, damage = 5, interval = 0.15f, reach = 2.3f, arc = 100f, size = new Vector3(0.05f, 0.05f, 0.5f), look = "blade", desc = "极快的连斩" },
     };
 
     /// The class skills' own weapons (see PlayerSkill): held only while the skill lasts, so they are
     /// kept out of All (drops, chests, the shop and the random pools never see them).
     public static readonly List<WeaponDef> SkillWeapons = new List<WeaponDef>
     {
-        new WeaponDef { id = "oath_sword", owner = "knight", name = "誓约圣剑", type = "骑士专属", kind = WeaponKind.Melee, rarity = 4, damage = 5, damageMul = 1.2f, interval = 0.38f, reach = 4.3f, arc = 150f, look = "blade", desc = "剑气更长，伤害 +20%" },
-        new WeaponDef { id = "raven_blade", owner = "assassin", name = "鸦羽刃", type = "刺客专属", kind = WeaponKind.Melee, rarity = 4, damage = 4, damageMul = 2f, interval = 0.24f, reach = 2.6f, arc = 130f, look = "blade", desc = "闪到敌人身边斩击，伤害 ×2" },
-        new WeaponDef { id = "star_staff", owner = "mage", name = "焚星杖", type = "法师专属", kind = WeaponKind.Meteor, rarity = 4, damage = 6, interval = 0.5f, radius = 0.35f, explode = 2.4f, mat = "bullet_fire", look = "blade", desc = "准星处落陨石，爆炸并点燃" },
-        new WeaponDef { id = "dawn_scepter", owner = "priest", name = "晨曦权杖", type = "牧师专属", kind = WeaponKind.Beam, rarity = 4, damage = 2, interval = 0.1f, mat = "bullet_gold", look = "blade", desc = "圣光光束，照到敌人回护甲" },
+        new WeaponDef { id = "oath_sword", owner = "knight", name = "誓约圣剑", type = "骑士专属", kind = WeaponKind.Melee, rarity = 4, damage = 16, damageMul = 1.2f, interval = 0.38f, reach = 4.3f, arc = 150f, look = "blade", desc = "剑气更长，伤害 +20%" },
+        new WeaponDef { id = "raven_blade", owner = "assassin", name = "鸦羽刃", type = "刺客专属", kind = WeaponKind.Melee, rarity = 4, damage = 6, damageMul = 2f, interval = 0.24f, reach = 2.6f, arc = 130f, look = "blade", desc = "闪到敌人身边斩击，伤害 ×2" },
+        new WeaponDef { id = "star_staff", owner = "mage", name = "焚星杖", type = "法师专属", kind = WeaponKind.Meteor, rarity = 4, damage = 15, interval = 0.5f, radius = 0.35f, explode = 2.4f, mat = "bullet_fire", look = "blade", desc = "准星处落陨石，爆炸并点燃" },
+        new WeaponDef { id = "dawn_scepter", owner = "priest", name = "晨曦权杖", type = "牧师专属", kind = WeaponKind.Beam, rarity = 4, damage = 4, interval = 0.1f, mat = "bullet_gold", look = "blade", desc = "圣光光束，照到敌人回护甲" },
     };
+
+    /// The bow: seconds to a full charge, and what a full charge multiplies the damage by.
+    public const float ChargeTime = 0.8f, FullCharge = 5f;
 
     public static WeaponDef Get(string id) => All.Find(w => w.id == id) ?? SkillWeapons.Find(w => w.id == id);
 
-    /// The weapon as the player holds it: a copy with this run's shop upgrades (+1 damage per level).
+    /// The weapon as the player holds it: a copy with this run's shop upgrades (+20% damage per level,
+    /// applied when the damage is rolled, see Balance.LevelMul).
     public static WeaponDef Held(string id)
     {
         var w = Get(id);
@@ -109,7 +136,6 @@ public static class Weapons
         int level = RunState.LevelOf(id);
         if (level == 0) return w;
         var c = w.Clone();
-        c.damage += level;
         c.level = level;
         return c;
     }

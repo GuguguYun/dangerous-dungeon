@@ -199,7 +199,7 @@ public class PlayerSkill : MonoBehaviour
             }
             var from = spot + new Vector3(Random.Range(-2f, 2f), 14f, Random.Range(-2f, 2f));
             var m = Bullet.Fire(from, (spot - from).normalized * 30f, true, 0.4f, "bullet_fire", 3f,
-                8 + RunState.bonusDamage, 2.5f, Random.value < RunState.critChance);
+                Mathf.RoundToInt(Balance.MeteorStorm * (1f + RunState.damageBonus)), 2.5f, Random.value < RunState.critChance);
             m.burn = 2f;
             yield return new WaitForSeconds(0.12f);
         }

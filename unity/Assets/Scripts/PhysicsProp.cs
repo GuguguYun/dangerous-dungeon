@@ -84,7 +84,7 @@ public class PhysicsProp : MonoBehaviour
     {
         Vector3 at = transform.position + Vector3.up * 0.5f;
         Destroy(gameObject);
-        Explosion.At(at, 3.5f, 8, true);
+        Explosion.At(at, 3.5f, Balance.BarrelBlast, true);
     }
 
     void Debris(Vector3 at, Vector3 dir)

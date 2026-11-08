@@ -36,7 +36,7 @@ public class ShopItem : MonoBehaviour
         Kind.Weapon => $"{Weapons.RarityNames[weapon.rarity]} · {weapon.desc}",
         Kind.Potion => "回复 3 点生命（在机甲里则修理机甲）",
         Kind.Energy => "回复 100 点能量",
-        Kind.Upgrade => PlayerController.Current ? $"手上的「{PlayerController.Current.Weapon.Title}」伤害 +1（这一局都有效，可叠加）" : "手上的武器伤害 +1",
+        Kind.Upgrade => PlayerController.Current ? $"手上的「{PlayerController.Current.Weapon.Title}」伤害 +20%（这一局都有效，可叠加）" : "手上的武器伤害 +20%",
         Kind.Mech => $"呼叫{(mech.heavy ? "重装" : "轻装")}机甲「{mech.name}」空投到商店门口",
         _ => buff.desc,
     };

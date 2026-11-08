@@ -431,9 +431,9 @@ public class Dungeon : MonoBehaviour
             var rot = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
             // Cover is physical: bullets shove it, enough damage breaks it; every third barrel is explosive.
             if (k % 2 == 1 && Props.Has("barrel"))
-                PhysicsProp.Make(Props.Spawn("barrel", p, rot, transform), 12f, 6, k % 3 == 0 || k == 1);
+                PhysicsProp.Make(Props.Spawn("barrel", p, rot, transform), 12f, 15, k % 3 == 0 || k == 1);
             else
-                PhysicsProp.Make(Kit.Spawn("crate", p, rot, transform), 18f, 9);
+                PhysicsProp.Make(Kit.Spawn("crate", p, rot, transform), 18f, 22);
             room.blocked.Add(p);
             k++;
         }
@@ -500,7 +500,7 @@ public class Dungeon : MonoBehaviour
                     case "ice": IcePatch.Create(p, transform); break;
                     case "gas":
                         if (!Props.Has("gas_crate")) continue;
-                        PhysicsProp.Make(Props.Spawn("gas_crate", p, Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f), transform), 14f, 3).toxic = true;
+                        PhysicsProp.Make(Props.Spawn("gas_crate", p, Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f), transform), 14f, 8).toxic = true;
                         break;
                     default: SpikeTrap.Create(p, transform); break;
                 }

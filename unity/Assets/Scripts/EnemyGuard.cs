@@ -66,7 +66,7 @@ public partial class Enemy
         if (Vector3.Dot(d, faceDir) > -0.4f) return amount; // from the side or behind
         Vector3 p = at ?? (guardShield ? guardShield.position : AimPoint);
         Tips.Show("guard", "盾卫正面挡子弹：绕到侧面或背后打，或者用重击、爆炸把盾打开");
-        if (amount >= 8)
+        if (amount >= Balance.HeavyHit)
         {
             guardBreakT = 1.8f;
             ai = Ai.Recover;

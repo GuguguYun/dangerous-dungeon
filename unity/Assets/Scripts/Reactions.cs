@@ -17,7 +17,7 @@ public static class Reactions
     /// Called from Enemy.TakeDamage before the hit lands; returns the (possibly doubled) damage.
     public static int Shatter(Enemy e, int amount)
     {
-        if (!e.Slowed || amount < 6) return amount;
+        if (!e.Slowed || amount < Balance.HeavyHit) return amount;
         Shatters++;
         e.ApplySlow(1f, 0f); // the ice is gone
         e.ClearSlow();
@@ -39,7 +39,7 @@ public static class Reactions
         foreach (var c in Physics.OverlapSphere(at, 2.5f, Layers.EnemyMask, QueryTriggerInteraction.Ignore))
         {
             var other = c.GetComponentInParent<Enemy>();
-            if (other && !other.dead) other.TakeDamage(5, (other.transform.position - at).normalized, false, 5f);
+            if (other && !other.dead) other.TakeDamage(Balance.Overload, (other.transform.position - at).normalized, false, 5f);
         }
         Vfx.Explosion(at, 1.6f);
         Fx.Lightning(at + Vector3.up * 2f, at);
@@ -53,7 +53,7 @@ public static class Reactions
         cloud.ignited = true;
         Combustions++;
         Vector3 at = cloud.transform.position + Vector3.up * 0.6f;
-        Explosion.At(at, cloud.radius + 0.5f, 8, true, false, 3f);
+        Explosion.At(at, cloud.radius + 0.5f, Balance.GasBlast, true, false, 3f);
         Vfx.Explosion(at + Vector3.up * 0.4f, cloud.radius);
         Vfx.Flash(at, new Color(1f, 0.6f, 0.2f), 10f, 9f, 0.25f);
         Name(cloud.transform.position, "爆燃！", new Color(1f, 0.55f, 0.2f));

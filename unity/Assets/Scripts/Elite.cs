@@ -57,7 +57,7 @@ public partial class Enemy
     {
         if (k == EliteKind.None || kind == EnemyKind.Boss) return;
         elite = k;
-        maxHp = hp = Mathf.CeilToInt(maxHp * 2.2f);
+        maxHp = hp = Mathf.CeilToInt(maxHp * Balance.EliteHpMul);
         Grow(1.22f);
         switch (k)
         {
@@ -220,7 +220,7 @@ public class DelayedBlast : MonoBehaviour
             glow.intensity = 2f + 6f * t / delay;
             yield return null;
         }
-        Explosion.At(transform.position + Vector3.up * 0.5f, radius, 6, true);
+        Explosion.At(transform.position + Vector3.up * 0.5f, radius, Balance.EliteDeathBlast, true);
         Destroy(gameObject);
     }
 }

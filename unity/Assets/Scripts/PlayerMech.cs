@@ -133,7 +133,7 @@ public partial class PlayerController
         if (destroyed)
         {
             Vfx.Explosion(at + Vector3.up, 2.5f);
-            Mechs.Shock(at, 3f, 8, 8f);
+            Mechs.Shock(at, 3f, Balance.MechWreck, 8f);
             CameraShake.Add(0.4f);
             Sfx.Play("explode", 0.9f);
             invuln = 1.5f;
@@ -209,7 +209,7 @@ public partial class PlayerController
                 {
                     var e = c.GetComponentInParent<Enemy>();
                     if (!e || e.dead || !rammed.Add(e)) continue;
-                    e.TakeDamage(RollDamage(7, out _), dashDir, false, 8f);
+                    e.TakeDamage(RollDamage(Balance.MechRam, out _), dashDir, false, 8f);
                     e.Knock(dashDir * 14f);
                     CameraShake.Add(0.2f);
                     Sfx.Play("hit", 0.8f, 0.1f);
@@ -219,7 +219,7 @@ public partial class PlayerController
         {
             slamPending = false;
             mechSlams++;
-            Mechs.Shock(transform.position, 4.5f, RollDamage(10, out _), 12f);
+            Mechs.Shock(transform.position, 4.5f, RollDamage(Balance.MechStomp, out _), 12f);
             Vfx.Ring(transform.position, 4.5f, mechDef.color);
             Vfx.Puff(transform.position + Vector3.up * 0.3f, new Color(0.6f, 0.55f, 0.5f, 0.6f), 1.4f, 14);
             Vfx.Sparks(transform.position + Vector3.up * 0.2f, mechDef.color, 16, 6f);
@@ -303,7 +303,7 @@ public partial class PlayerController
             Vector3 from = MechMuzzle(mechDef.gunBone, 0.6f) + model.right * (barrel == 0 ? -0.08f : 0.08f);
             Vector3 aim = (aimAt - from).normalized;
             var spread = Quaternion.Euler(Random.Range(-1.2f, 1.2f), Random.Range(-1.2f, 1.2f), 0f);
-            int dmg = RollDamage(2, out bool crit);
+            int dmg = RollDamage(Balance.MechGun, out bool crit);
             Bullet.Fire(from, Quaternion.LookRotation(aim) * spread * Vector3.forward * 60f, true, 0.08f, "bullet_player", 2f, dmg, 0f, crit);
             Vfx.MuzzleFlash(from, aim, Palette.ColorOf("bullet_player"));
             CameraShake.Add(0.03f);
@@ -327,7 +327,7 @@ public partial class PlayerController
             mechFireCd = 0.7f;
             Vector3 from = MechMuzzle(mechDef.gunBone, 0.7f);
             Vector3 aim = (aimAt - from).normalized;
-            int dmg = RollDamage(9, out bool crit);
+            int dmg = RollDamage(Balance.MechCannon, out bool crit);
             Bullet.Fire(from, aim * 34f, true, 0.2f, "bullet_rocket", 3f, dmg, 2.5f, crit);
             Vfx.MuzzleFlash(from, aim, Palette.ColorOf("bullet_rocket"));
             Vfx.Puff(from, new Color(0.6f, 0.6f, 0.6f, 0.5f), 0.6f, 6);
@@ -391,7 +391,7 @@ public partial class PlayerController
         }
         model.rotation = Quaternion.LookRotation(fwd);
         float reach = HeavyMech ? 3.4f : 3.6f, arc = HeavyMech ? 110f : 150f;
-        int baseDmg = HeavyMech ? (finisher ? 18 : 12) : 7;
+        int baseDmg = HeavyMech ? (finisher ? Balance.MechFinisher : Balance.MechFist) : Balance.MechBlade;
         mechMeleeCd = HeavyMech ? (finisher ? 0.9f : 0.55f) : 0.3f;
         // The arm swings now; the blow lands when the fist or blade comes through in the clip.
         string clip = HeavyMech ? "swing" : "slash";
@@ -441,7 +441,7 @@ public partial class PlayerController
             if (finisher)
             {
                 // Third punch: both fists into the floor.
-                Mechs.Shock(impact, 3.2f, RollDamage(8, out _), 10f);
+                Mechs.Shock(impact, 3.2f, RollDamage(Balance.MechQuake, out _), 10f);
                 Vfx.Ring(impact, 3.2f, mechDef.color);
                 Vfx.Puff(impact + Vector3.up * 0.3f, new Color(0.6f, 0.55f, 0.5f, 0.6f), 1.4f, 12);
                 CameraShake.Add(0.2f);
@@ -497,7 +497,7 @@ public partial class PlayerController
             {
                 var e = c.GetComponentInParent<Enemy>();
                 if (!e || e.dead || !pierced.Add(e)) continue;
-                e.TakeDamage(RollDamage(12, out bool crit), dir, crit, 7f);
+                e.TakeDamage(RollDamage(Balance.MechThrust, out bool crit), dir, crit, 7f);
                 e.Knock(dir * 9f);
                 Vfx.Sparks(e.AimPoint, mechDef.color, 8, 5f);
             }
@@ -531,7 +531,7 @@ public partial class PlayerController
                 Vector3 from = MechMuzzle(i % 2 == 0 ? "leftshoulder" : "rightshoulder", 0f) + Vector3.up * 0.5f;
                 Vector3 side = model.right * ((i % 2 == 0 ? -1f : 1f) * (0.3f + 0.15f * (i / 2)));
                 var m = Bullet.Fire(from, (flat + side + Vector3.up * 0.6f).normalized * 16f, true, 0.13f, "bullet_missile", 4f,
-                    RollDamage(5, out bool crit), 2.2f, crit);
+                    RollDamage(Balance.MechMissile, out bool crit), 2.2f, crit);
                 m.homing = 300f;
             }
             if (body) body.Trigger("shoot", 1.5f, 0.3f);

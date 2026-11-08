@@ -517,8 +517,10 @@ public class Hud : MonoBehaviour
             var rc = Weapons.RarityColors[pw.rarity];
             UiKit.Text(new Rect(r.x + 146, r.y + 6, 440, 34), $"<color=#FFD27A>E</color> 拾取  {pw.name}  <size=15>{pw.type} · {Weapons.RarityNames[pw.rarity]}</size>", new GUIStyle(left) { fontSize = 24 }, rc);
             UiKit.Text(new Rect(r.x + 146, r.y + 40, 440, 22), pw.desc, new GUIStyle(left) { fontSize = 15 });
-            string Cmp(int a2, int b2) => b2 > a2 ? $"<color=#8CFF7A>{b2} ▲</color>" : b2 < a2 ? $"<color=#FF7A6A>{b2} ▼</color>" : $"{b2}";
-            UiKit.Text(new Rect(r.x + 146, r.y + 64, 440, 22), $"伤害 {cur.damage} → {Cmp(cur.damage, pw.damage)}   耗能 {cur.energy} → {pw.energy}   会替换：{cur.name}", new GUIStyle(left) { fontSize = 14 }, UiKit.Dim);
+            // Damage per second, not per hit: a hammer's 22 and an SMG's 3 are about the same weapon.
+            int a = Mathf.RoundToInt(cur.Dps), b = Mathf.RoundToInt(pw.Dps);
+            string cmp = b > a ? $"<color=#8CFF7A>{b} ▲</color>" : b < a ? $"<color=#FF7A6A>{b} ▼</color>" : $"{b}";
+            UiKit.Text(new Rect(r.x + 146, r.y + 64, 440, 22), $"秒伤 {a} → {cmp}   耗能 {EnergyText(cur)} → {EnergyText(pw)}   会替换：{cur.name}", new GUIStyle(left) { fontSize = 14 }, UiKit.Dim);
         }
         else if (player.nearbyThing)
         {
@@ -736,6 +738,9 @@ public class Hud : MonoBehaviour
         }
     }
 
+    /// Energy a weapon uses in a second of steady fire ("0" for the free ones).
+    static string EnergyText(WeaponDef w) => w.EnergyRate <= 0f ? "0" : w.EnergyRate.ToString(w.EnergyRate < 10f ? "0.#" : "0");
+
     void DrawWeapons(float w, float h)
     {
         var cur = player.Weapon;
@@ -751,9 +756,8 @@ public class Hud : MonoBehaviour
         UiKit.Text(new Rect(tx, r.y + 12, 260, 34), $"{cur.Title}{tag}", new GUIStyle(left) { fontSize = 26 }, rc);
         UiKit.Text(new Rect(tx, r.y + 46, 260, 20), cur.IsSkillWeapon ? $"{cur.type} · 技能期间" : $"{cur.type} · {Weapons.RarityNames[cur.rarity]}", new GUIStyle(left) { fontSize = 14 }, UiKit.Dim);
         UiKit.Text(new Rect(tx, r.y + 66, 260, 20), cur.desc, new GUIStyle(left) { fontSize = 14, clipping = TextClipping.Clip });
-        string cost = cur.energyPerSec > 0f ? $"每秒 {cur.energyPerSec:0} 能量" : cur.energy > 0 ? $"每次 {cur.energy} 能量" : "不耗能量";
-        string mul = cur.damageMul != 1f ? $" ×{cur.damageMul:0.#}" : "";
-        UiKit.Text(new Rect(tx, r.y + 86, 260, 20), $"伤害 {cur.damage}{mul} · {cost}", new GUIStyle(left) { fontSize = 14 }, UiKit.Dim);
+        string cost = cur.EnergyRate > 0f ? $"每秒 {EnergyText(cur)} 能量" : "不耗能量";
+        UiKit.Text(new Rect(tx, r.y + 86, 260, 20), $"秒伤 {cur.Dps:0} · {cost}", new GUIStyle(left) { fontSize = 14 }, UiKit.Dim);
         if (cur.IsSkillWeapon)
         {
             // A class skill's weapon: the time it has left along the bottom of its picture, and the

@@ -74,10 +74,10 @@ public partial class Enemy
         bossKind = floor <= 1 ? BossKind.GoblinKing : floor == 2 ? BossKind.BoarChief : floor == 3 ? BossKind.Lich : BossKind.OrcWarlord;
         switch (bossKind)
         {
-            case BossKind.GoblinKing: maxHp = 240; speed = 2.6f; displayName = "贪金王·葛巴"; break;
-            case BossKind.BoarChief: maxHp = 340; speed = 2.2f; displayName = "裂地酋长·獠牙"; break;
-            case BossKind.Lich: maxHp = 380; speed = 2.0f; displayName = "骸骨巫妖·霜冠"; break;
-            default: maxHp = 480; speed = 2.4f; displayName = "血斧督军·克鲁格"; break;
+            case BossKind.GoblinKing: maxHp = Balance.BossHp(bossKind); speed = 2.6f; displayName = "贪金王·葛巴"; break;
+            case BossKind.BoarChief: maxHp = Balance.BossHp(bossKind); speed = 2.2f; displayName = "裂地酋长·獠牙"; break;
+            case BossKind.Lich: maxHp = Balance.BossHp(bossKind); speed = 2.0f; displayName = "骸骨巫妖·霜冠"; break;
+            default: maxHp = Balance.BossHp(bossKind); speed = 2.4f; displayName = "血斧督军·克鲁格"; break;
         }
         ActiveBoss = this;
         phaseTimer = 2f;
