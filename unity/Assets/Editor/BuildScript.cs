@@ -352,7 +352,7 @@ public static class BuildScript
         if (fresnel) Save(new Material(fresnel) { name = "vfx_fresnel" }, $"{dir}/vfx_fresnel.mat");
         Debug.Log($"SETUP fresnel shader found={(bool)fresnel}");
         // Energy shields, loot pillars and floor glows (ShieldFx, LootFx): one base material per shader.
-        foreach (var (shaderName, file) in new[] { ("Meshy/LootBeam", "vfx_beam"), ("Meshy/GroundGlow", "vfx_ground") })
+        foreach (var (shaderName, file) in new[] { ("Meshy/Shield", "vfx_shield"), ("Meshy/LootBeam", "vfx_beam"), ("Meshy/GroundGlow", "vfx_ground") })
         {
             var sh = Shader.Find(shaderName);
             if (sh) Save(new Material(sh) { name = file }, $"{dir}/{file}.mat");

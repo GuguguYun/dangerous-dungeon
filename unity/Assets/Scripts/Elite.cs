@@ -18,8 +18,7 @@ public partial class Enemy
     public bool mini;
     public System.Action<EnemyKind, Vector3> Split; // the room spawns the halves
     float shieldIdle;
-    GameObject shieldFx;
-    static Material shieldMat;
+    ShieldFx shieldFx;
 
     public static float EliteChance(int floor) => 0.06f + 0.06f * floor; // 12%, 18%, 24%
 
@@ -77,22 +76,10 @@ public partial class Enemy
         aura.color = EliteColor;
         aura.range = 3.5f;
         aura.intensity = 3f;
-        // And a steady ring on the floor in the affix colour.
-        var ring = new GameObject("elite_ring").AddComponent<LineRenderer>();
-        ring.transform.SetParent(transform, false);
-        ring.loop = true;
-        ring.useWorldSpace = false;
-        ring.positionCount = 40;
-        ring.widthMultiplier = 0.08f;
-        ring.sharedMaterial = Palette.Trail("shockwave");
-        ring.startColor = ring.endColor = EliteColor * 2.5f;
-        ring.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        float rr = cc.radius + 0.45f;
-        for (int i = 0; i < 40; i++)
-        {
-            float a = i * Mathf.PI * 2f / 40f;
-            ring.SetPosition(i, new Vector3(Mathf.Cos(a) * rr, 0.06f, Mathf.Sin(a) * rr));
-        }
+        // And a steady ring on the floor in the affix colour (the old line ring took the orange of its
+        // trail material whatever the affix).
+        var ring = LootFx.Glow(transform, EliteColor, 1.1f, (cc.radius + 0.45f) * 4f, 1.3f, 0f, 0.2f);
+        ring.name = "elite_ring";
         Elites.Add(this);
     }
 
@@ -113,18 +100,14 @@ public partial class Enemy
         cc.center *= f;
     }
 
+    /// A hex-cell dome in the affix colour standing over the elite (ShieldFx): it loses cells as it
+    /// wears down, ripples where it is hit, shatters at zero and grows back cell by cell.
     void MakeShieldFx()
     {
-        if (!shieldMat) shieldMat = Vfx.Fresnel(new Color(0.35f, 0.75f, 1.6f), 2f, 0.03f, 0.6f);
-        shieldFx = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        Destroy(shieldFx.GetComponent<Collider>());
-        shieldFx.name = "elite_shield";
-        shieldFx.transform.SetParent(transform, false);
-        shieldFx.transform.localPosition = cc.center;
-        shieldFx.transform.localScale = Vector3.one * cc.height * 1.15f;
-        var r = shieldFx.GetComponent<Renderer>();
-        r.sharedMaterial = shieldMat;
-        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        float h = cc.height;
+        float radius = Mathf.Max(h * 0.62f, cc.radius + 0.45f);
+        shieldFx = ShieldFx.Create("elite_shield", EliteColor, 1.0f, new Color(0.85f, 0.95f, 1f), 1.3f, radius, h * 0.44f, false, transform);
+        shieldFx.Show(0.5f);
     }
 
     /// Shield first; returns what is left for the health bar.
@@ -135,11 +118,20 @@ public partial class Enemy
         if (shield <= 0) return amount;
         int soaked = Mathf.Min(shield, amount);
         shield -= soaked;
-        Vfx.Sparks(AimPoint, new Color(0.5f, 0.85f, 1f), 6, 4f);
+        Vector3 at = AimPoint;
+        if (shieldFx)
+        {
+            // Most hits come from the player: ripple on the side facing them.
+            var p = PlayerController.Current;
+            at = shieldFx.SurfaceToward(p ? p.transform.position + Vector3.up : AimPoint + transform.forward);
+            shieldFx.Hit(at);
+        }
+        Vfx.Sparks(at, EliteColor, 5, 3f);
         if (shield <= 0)
         {
             Vfx.Shatter(AimPoint);
             Sfx.Play("shatter", 0.8f, 0.1f);
+            if (shieldFx) shieldFx.Hide(0.25f);
         }
         return amount - soaked;
     }
@@ -152,16 +144,19 @@ public partial class Enemy
         if (shieldIdle > 4f && shield < maxShield) shield = Mathf.Min(maxShield, shield + Mathf.CeilToInt(maxShield * 0.25f * dt + 0.01f));
         if (shieldFx)
         {
-            shieldFx.SetActive(shield > 0);
-            float k = maxShield > 0 ? shield / (float)maxShield : 0f;
-            shieldFx.transform.localScale = Vector3.one * cc.height * (1.0f + 0.15f * k + Mathf.Sin(Time.time * 8f) * 0.02f);
+            if (shield > 0 && !shieldFx.Up) shieldFx.Show(1.2f); // regrown: cells come back slowly
+            shieldFx.SetStrength(maxShield > 0 ? shield / (float)maxShield : 0f);
         }
     }
 
     void EliteDeath()
     {
         Elites.Remove(this);
-        if (shieldFx) Destroy(shieldFx);
+        if (shieldFx)
+        {
+            shieldFx.Hide(0.2f);
+            Destroy(shieldFx.gameObject, 0.3f);
+        }
         if (elite == EliteKind.None) return;
         Pickup.SpawnGold(transform.position, 6);
         if (Random.value < 0.25f) Pickup.DropWeapon(transform.position + Vector3.right, 1); // elites: a good weapon now and then

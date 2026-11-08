@@ -11,12 +11,16 @@ public class PlayerSkill : MonoBehaviour
     public int uses;
 
     PlayerController p;
-    GameObject shieldFx;
+    ShieldFx shield;
+    float shieldFloor;
     Renderer[] ghosted;
     Material[][] saved;
-    Material ghostMat, shieldMat;
-    float pulse;
+    Material ghostMat;
     ParticleSystem motes;
+
+    // The knight's dome: a sphere sitting a little above the floor, cut by it (see ShieldFx).
+    const float ShieldRadius = 2.05f, ShieldLift = 0.3f;
+    public static readonly Color ShieldGold = new Color(1f, 0.84f, 0.42f), ShieldBlue = new Color(0.45f, 0.75f, 1f);
 
     public bool Active => activeLeft > 0f;
 
@@ -56,21 +60,28 @@ public class PlayerSkill : MonoBehaviour
             activeLeft -= dt;
             if (activeLeft <= 0f) End();
         }
-        if (shieldFx)
+        if (shield)
         {
-            shieldFx.transform.position = transform.position + Vector3.up * 0.9f;
-            shieldFx.transform.localScale = Vector3.one * (4.4f + Mathf.Sin(Time.time * 10f) * 0.08f);
-            foreach (var b in Bullet.Live.ToArray())
-                if (!b.HitsEnemies && Vector3.Distance(b.transform.position, shieldFx.transform.position) < 2.25f)
+            // The dome stays on the floor (a jump goes up inside it) and follows the knight across it.
+            if (p && p.Grounded) shieldFloor = transform.position.y;
+            shield.transform.position = new Vector3(transform.position.x, shieldFloor, transform.position.z);
+            if (p && p.shielded)
+            {
+                Vector3 centre = shield.Centre;
+                float r2 = (ShieldRadius + 0.1f) * (ShieldRadius + 0.1f);
+                var live = Bullet.Live;
+                for (int i = live.Count - 1; i >= 0; i--)
                 {
-                    // The shield flares where it is struck.
-                    Vfx.Sparks(b.transform.position, new Color(0.5f, 0.9f, 1f), 8, 4f);
+                    var b = live[i];
+                    if (!b || b.HitsEnemies || (b.transform.position - centre).sqrMagnitude > r2) continue;
+                    // A ripple runs out from where the shot struck the dome.
+                    Vector3 at = shield.SurfaceToward(b.transform.position);
+                    shield.Hit(at);
+                    Vfx.Sparks(at, ShieldGold, 6, 3f);
                     Sfx.Play("clank", 0.4f, 0.1f, 1.4f);
-                    pulse = 0.2f;
                     b.Cancel();
                 }
-            pulse = Mathf.Max(0f, pulse - Time.deltaTime);
-            shieldFx.transform.localScale *= 1f + pulse * 0.25f;
+            }
         }
     }
 
@@ -80,21 +91,20 @@ public class PlayerSkill : MonoBehaviour
     {
         activeLeft = 3.5f;
         p.shielded = true;
-        shieldFx = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        Destroy(shieldFx.GetComponent<Collider>());
-        shieldFx.name = "shield";
-        // A force field: a bright cyan rim with moving bands, clear in the middle.
-        if (!shieldMat) shieldMat = Vfx.Fresnel(new Color(0.3f, 0.8f, 1.5f), 3.2f, 0f, 0.5f); // rim only: the view stays clear
-        var r = shieldFx.GetComponent<Renderer>();
-        r.sharedMaterial = shieldMat;
-        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        // A golden hex-cell dome (blue ripples where it is struck), clear in the middle so the knight shows.
+        if (!shield) shield = ShieldFx.Create("shield", ShieldGold, 1.0f, ShieldBlue, 1.6f, ShieldRadius, ShieldLift, true, null);
+        shieldFloor = transform.position.y;
+        if (!p.Grounded && Physics.Raycast(transform.position + Vector3.up * 0.2f, Vector3.down, out var ground, 6f, Layers.WorldMask, QueryTriggerInteraction.Ignore))
+            shieldFloor = ground.point.y; // cast mid-jump: the dome still stands on the floor
+        shield.transform.position = new Vector3(transform.position.x, shieldFloor, transform.position.z);
+        shield.Show(0.3f);
         // Bash: knock nearby enemies back.
         foreach (var c in Physics.OverlapSphere(transform.position, 3.5f, Layers.EnemyMask, QueryTriggerInteraction.Ignore))
         {
             var e = c.GetComponentInParent<Enemy>();
             if (e && !e.dead) e.Knock((e.transform.position - transform.position).normalized * 9f);
         }
-        Vfx.Ring(transform.position, 3.5f, new Color(0.4f, 0.85f, 1f));
+        Vfx.Ring(transform.position, 3.5f, ShieldGold);
         CameraShake.Add(0.2f);
     }
 
@@ -135,7 +145,7 @@ public class PlayerSkill : MonoBehaviour
             p.shielded = false;
             p.stealthed = false;
         }
-        if (shieldFx) Destroy(shieldFx);
+        if (shield) shield.Hide(0.4f);
         if (ghosted != null)
         {
             for (int i = 0; i < ghosted.Length; i++)
