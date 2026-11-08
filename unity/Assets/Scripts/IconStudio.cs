@@ -10,7 +10,8 @@ public class IconStudio : MonoBehaviour
     public static IconStudio I;
     const int Layer = 30;
     static readonly Vector3 Origin = new Vector3(0f, -600f, 0f);
-    readonly Dictionary<string, Texture2D> weaponIcons = new Dictionary<string, Texture2D>();
+    readonly Dictionary<string, Texture2D> weaponIcons = new Dictionary<string, Texture2D>();      // true colours (-icons)
+    readonly Dictionary<string, Texture2D> weaponIconsShown = new Dictionary<string, Texture2D>(); // decoded for IMGUI
     readonly Dictionary<string, RenderTexture> classTargets = new Dictionary<string, RenderTexture>();
     readonly Dictionary<string, Texture2D> classViews = new Dictionary<string, Texture2D>();
     float copyT;
@@ -31,7 +32,7 @@ public class IconStudio : MonoBehaviour
         return I;
     }
 
-    public Texture2D Weapon(string id) => id != null && weaponIcons.TryGetValue(id, out var t) ? t : null;
+    public Texture2D Weapon(string id) => id != null && weaponIconsShown.TryGetValue(id, out var t) ? t : null;
     public bool Ready => portraits.Count == Classes.All.Count && faces.Count == Classes.All.Count;
 
     /// Save every icon and portrait as PNG (-icons <dir>: checking them without a window on screen).
@@ -121,6 +122,7 @@ public class IconStudio : MonoBehaviour
             tex.Apply();
             RenderTexture.active = prev;
             weaponIcons[w.id] = tex;
+            weaponIconsShown[w.id] = ForImgui(tex, false); // drawn as captured, dark metal came out pale grey
             Destroy(v);
             yield return null;
         }

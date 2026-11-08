@@ -273,6 +273,9 @@
 - 自检 207/207（`logs/shots/r62b`），已发布。
 - 教训：第 58 轮看截图时漏了标题页按钮被挡、立绘发淡这两处；以后看截图要按原尺寸逐张看文字和颜色，拿游戏内画面对照。
 
+第 63 轮（武器图标同样发淡）：
+- 用 `-batchmode -icons <dir>`（**不能加 -nographics**，空设备导出来是 504 字节的空图）导出最新原图，和图鉴里显示的对比：手枪深棕带金 → 米白，冲锋枪黑 → 浅灰，大锤柄、火箭筒都偏淡，和第 62 轮的立绘同一个原因。图标同样分两份：`weaponIcons` 原色（导出用）、`weaponIconsShown` 反解后给 IMGUI 画（图鉴、武器卡、拾取提示、商店、暂停、结算、选角都用 `IconStudio.Weapon`）。未收集武器的灰蓝剪影只用图标的透明度，不受影响。自检 207/207（`logs/shots/r63`），已发布。
+
 ## 素材不进 git
 
 代码仓库（2026-11-09 起）：https://github.com/meshy-dev/meshy-dungeon （公司组织 meshy-dev 下的私有仓库，默认分支 dev；每轮提交后 `git push`）。公司 SSH 证书只允许推到 Meshy 企业名下的仓库，推不到个人账号 tianyaoguan-lab。
