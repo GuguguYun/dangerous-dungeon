@@ -106,6 +106,14 @@ public static class GameSettings
         if (w == Vector2.zero)
             Screen.SetResolution(screen.width, screen.height, FullScreenMode.FullScreenWindow);
         else
-            Screen.SetResolution(Mathf.RoundToInt(screen.width * w.x), Mathf.RoundToInt(screen.height * w.y), FullScreenMode.Windowed);
+        {
+            int ww = Mathf.RoundToInt(screen.width * w.x), wh = Mathf.RoundToInt(screen.height * w.y);
+            Screen.SetResolution(ww, wh, FullScreenMode.Windowed);
+            // The player grows the window about the old one's centre, which can push it off the screen
+            // edge (measured: 27 points off the left); put it in the middle, just under the menu bar.
+            var d = Screen.mainWindowDisplayInfo;
+            if (d.width > 0)
+                Screen.MoveMainWindowTo(d, new Vector2Int(Mathf.Max(0, (d.width - ww) / 2), Mathf.Max(0, (d.height - wh) / 4)));
+        }
     }
 }

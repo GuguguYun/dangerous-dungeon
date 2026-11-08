@@ -33,6 +33,12 @@ run_for 200 "$BIN" -batchmode -nographics -autotest -logFile "$ROOT/logs/autotes
 grep -E "AUTOTEST (FAIL|done)|Exception" "$ROOT/logs/autotest.log"
 
 echo "== shots"
+# The screenshot run opens a window; don't pop it over the game while the user is playing.
+if [[ -z "${FORCE_SHOTS:-}" ]] && ps -axo command | grep -q "^$ROOT/unity/Builds/MeshyDungeon.app/Contents/MacOS"; then
+  echo "SHOTS skipped: the game is open"
+  grep -q "AUTOTEST done pass=[0-9]* fail=0" "$ROOT/logs/autotest.log" && "$ROOT/scripts/publish.sh"
+  exit 0
+fi
 rm -rf "$SHOTS"; mkdir -p "$SHOTS"
 # A sleeping display stalls the windowed player; keep it lit (it works even behind the lock screen).
 caffeinate -u -t 260 &

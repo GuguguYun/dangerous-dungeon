@@ -466,6 +466,15 @@ public class Hud : MonoBehaviour
         Gem(new Rect(r.x - g * 0.12f, r.y + r.height * 0.02f, g * 0.8f, g), "glyph_energy", $"{c.maxEnergy}", new GUIStyle(gemStyle) { fontSize = Mathf.RoundToInt(g * 0.3f) });
         Gem(new Rect(r.x - g * 0.18f, r.yMax - g * 0.95f, g, g), "glyph_heart", $"{c.maxHp}", gemStyle);
         Gem(new Rect(r.xMax - g * 0.82f, r.yMax - g * 0.95f, g, g), "glyph_armor", $"{c.maxArmor}", gemStyle);
+        // Top right: the weapon this hero's skill puts in hand, on a gold medallion.
+        var sw = Weapons.SkillWeapons.Find(x => x.owner == c.id);
+        var swIcon = sw != null && IconStudio.I ? IconStudio.I.Weapon(sw.id) : null;
+        if (swIcon)
+        {
+            var badge = new Rect(r.xMax - g * 0.88f, r.y - g * 0.02f, g, g);
+            UiKit.DrawMedal(badge, null, 1f, new Color(cc.r * 0.3f, cc.g * 0.3f, cc.b * 0.35f));
+            GUI.DrawTexture(new Rect(badge.x + g * 0.12f, badge.y + g * 0.12f, g * 0.76f, g * 0.76f), swIcon, ScaleMode.ScaleToFit, true);
+        }
         // The hotkey on the ribbon's left end.
         var kr = new Rect(r.x + r.width * 0.06f, ribbonY - fs * 0.05f, fs * 0.1f, fs * 0.1f);
         GUI.DrawTexture(kr, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, new Color(0.06f, 0.05f, 0.04f, 0.9f).linear, 0f, kr.width / 2f);
