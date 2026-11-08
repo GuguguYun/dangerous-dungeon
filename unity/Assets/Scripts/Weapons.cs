@@ -93,10 +93,10 @@ public static class Weapons
     /// kept out of All (drops, chests, the shop and the random pools never see them).
     public static readonly List<WeaponDef> SkillWeapons = new List<WeaponDef>
     {
-        new WeaponDef { id = "oath_sword", owner = "knight", name = "誓约圣剑", type = "骑士专属", kind = WeaponKind.Melee, rarity = 4, damage = 5, damageMul = 1.2f, interval = 0.38f, reach = 4.3f, arc = 150f, look = "blade", desc = "剑气更长，伤害 +20%；左手圣盾自动挡 3 次伤害" },
-        new WeaponDef { id = "raven_blade", owner = "assassin", name = "鸦羽刃", type = "刺客专属", kind = WeaponKind.Melee, rarity = 4, damage = 4, damageMul = 2f, interval = 0.24f, reach = 2.6f, arc = 130f, look = "blade", desc = "每一刀闪到准星前方的敌人身边，伤害 ×2" },
-        new WeaponDef { id = "star_staff", owner = "mage", name = "焚星杖", type = "法师专属", kind = WeaponKind.Meteor, rarity = 4, damage = 6, interval = 0.5f, radius = 0.35f, explode = 2.4f, mat = "bullet_fire", look = "blade", desc = "每次施法在准星处落下一颗陨石，点燃敌人" },
-        new WeaponDef { id = "dawn_scepter", owner = "priest", name = "晨曦权杖", type = "牧师专属", kind = WeaponKind.Beam, rarity = 4, damage = 2, interval = 0.1f, mat = "bullet_gold", look = "blade", desc = "金色圣光光束；照射敌人每满 1 秒回 1 点护甲" },
+        new WeaponDef { id = "oath_sword", owner = "knight", name = "誓约圣剑", type = "骑士专属", kind = WeaponKind.Melee, rarity = 4, damage = 5, damageMul = 1.2f, interval = 0.38f, reach = 4.3f, arc = 150f, look = "blade", desc = "剑气更长，伤害 +20%" },
+        new WeaponDef { id = "raven_blade", owner = "assassin", name = "鸦羽刃", type = "刺客专属", kind = WeaponKind.Melee, rarity = 4, damage = 4, damageMul = 2f, interval = 0.24f, reach = 2.6f, arc = 130f, look = "blade", desc = "闪到敌人身边斩击，伤害 ×2" },
+        new WeaponDef { id = "star_staff", owner = "mage", name = "焚星杖", type = "法师专属", kind = WeaponKind.Meteor, rarity = 4, damage = 6, interval = 0.5f, radius = 0.35f, explode = 2.4f, mat = "bullet_fire", look = "blade", desc = "准星处落陨石，爆炸并点燃" },
+        new WeaponDef { id = "dawn_scepter", owner = "priest", name = "晨曦权杖", type = "牧师专属", kind = WeaponKind.Beam, rarity = 4, damage = 2, interval = 0.1f, mat = "bullet_gold", look = "blade", desc = "圣光光束，照到敌人回护甲" },
     };
 
     public static WeaponDef Get(string id) => All.Find(w => w.id == id) ?? SkillWeapons.Find(w => w.id == id);

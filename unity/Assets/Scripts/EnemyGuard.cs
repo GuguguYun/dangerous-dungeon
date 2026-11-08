@@ -27,8 +27,8 @@ public partial class Enemy
             var s = Props.Spawn(GuardShield, holder.position, holder.rotation, holder, false);
             // The prop stands 1.15 m tall with its origin at the bottom middle; size it to the goblin
             // (in the model's own metres: the enemy is still at its spawn-pop scale here).
-            s.transform.localScale = Vector3.one * (h * 0.72f / 1.15f);
-            s.transform.localPosition = Vector3.down * h * 0.36f;
+            s.transform.localScale = Vector3.one * (h * 0.6f / 1.15f);
+            s.transform.localPosition = Vector3.down * h * 0.3f;
             foreach (var t in s.GetComponentsInChildren<Transform>()) t.gameObject.layer = Layers.Enemy;
         }
         else
@@ -37,7 +37,7 @@ public partial class Enemy
             Destroy(slab.GetComponent<Collider>());
             slab.layer = Layers.Enemy;
             slab.transform.SetParent(holder, false);
-            slab.transform.localScale = new Vector3(h * 0.45f, h * 0.72f, 0.08f);
+            slab.transform.localScale = new Vector3(h * 0.4f, h * 0.6f, 0.08f);
             slab.GetComponent<Renderer>().sharedMaterial = Palette.Get("trim");
         }
         PoseGuardShield(h, 1f);
@@ -46,11 +46,13 @@ public partial class Enemy
     void PoseGuardShield(float h, float up)
     {
         if (!guardShield) return;
-        // Up: square in front of the chest. Down: swung out to the right and tipped back.
-        var raised = new Vector3(0.05f, h * 0.5f, cc.radius + 0.28f);
+        // Up: in front of the body, a little to its left and tipped back, low enough that the helmet
+        // shows over it (a shield that hides the whole goblin reads as a crate). Down: swung out to the
+        // right and tipped back.
+        var raised = new Vector3(-0.1f, h * 0.42f, cc.radius + 0.3f);
         var lowered = new Vector3(cc.radius + 0.35f, h * 0.38f, cc.radius * 0.4f);
         guardShield.localPosition = Vector3.Lerp(lowered, raised, up);
-        guardShield.localRotation = Quaternion.Slerp(Quaternion.Euler(15f, 75f, 0f), Quaternion.identity, up);
+        guardShield.localRotation = Quaternion.Slerp(Quaternion.Euler(15f, 75f, 0f), Quaternion.Euler(-6f, 0f, 0f), up);
     }
 
     /// Damage that reaches a guard: from the shield side it is blocked (0), unless it is heavy enough
