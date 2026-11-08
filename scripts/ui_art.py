@@ -88,6 +88,12 @@ ART = {
     "glyph_energy": dict(ratio="1:1", bg=True, prompt=GLYPH.format(what="a glowing blue energy crystal shard")),
     "glyph_gold": dict(ratio="1:1", bg=True, prompt=GLYPH.format(what="a small stack of shiny gold coins")),
     "glyph_skull": dict(ratio="1:1", bg=True, prompt=GLYPH.format(what="a cartoon bone-white skull")),
+    # minimap room icons, after Soul Knight's: start hut, portal swirl, boss helmet, chest box, special "!"
+    "glyph_hut": dict(ratio="1:1", bg=True, prompt=GLYPH.format(what="a small cozy green-roofed hut with a wooden door")),
+    "glyph_portal": dict(ratio="1:1", bg=True, prompt=GLYPH.format(what="a glowing blue swirling magic portal vortex")),
+    "glyph_boss": dict(ratio="1:1", bg=True, prompt=GLYPH.format(what="a purple knight helmet seen from the front with a glowing red visor slit")),
+    "glyph_chest": dict(ratio="1:1", bg=True, prompt=GLYPH.format(what="a small golden treasure chest, closed")),
+    "glyph_special": dict(ratio="1:1", bg=True, prompt=GLYPH.format(what="a bold golden exclamation mark on a small round red badge")),
 }
 
 

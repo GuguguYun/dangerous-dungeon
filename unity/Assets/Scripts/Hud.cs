@@ -800,8 +800,7 @@ public class Hud : MonoBehaviour
         var r = new Rect(70, y0 + 6, 300, 112);
         UiKit.DrawPanel(r);
         var medal = new Rect(8, y0, 124, 124);
-        var portrait = IconStudio.I ? IconStudio.I.ClassView(cls.id) : null;
-        UiKit.DrawMedal(medal, portrait, 1f, new Color(cc.r * 0.35f, cc.g * 0.35f, cc.b * 0.4f), new Rect(0.14f, 0.42f, 0.72f, 0.58f));
+        DrawHeroMedal(medal, cls, cc);
         float bx = r.x + 90, bw = 140;
         var lab = new GUIStyle(left) { fontSize = 15 };
         void Row(float yy, string glyph, float v, float max, Color c, int seg, string shown)
@@ -813,21 +812,29 @@ public class Hud : MonoBehaviour
         Row(r.y + 16, "glyph_heart", player.hp, player.maxHp, new Color(0.86f, 0.18f, 0.22f), player.maxHp <= 14 ? player.maxHp : 0, $"{player.hp}/{player.maxHp}");
         Row(r.y + 46, "glyph_armor", player.armor, player.maxArmor, new Color(0.66f, 0.72f, 0.84f), player.maxArmor <= 14 ? player.maxArmor : 0, $"{player.armor}/{player.maxArmor}");
         Row(r.y + 76, "glyph_energy", player.energy, player.maxEnergy, new Color(0.25f, 0.6f, 1f), 0, $"{player.energy}");
-        // Floor · kills · gold, and how many are left in the room.
-        var strip = new Rect(70, r.yMax + 6, 300, 38);
+        // Kills and gold (the floor is under the minimap, as in Soul Knight), and how many are left in the room.
+        var strip = new Rect(70, r.yMax + 6, 180, 38);
         UiKit.DrawPanel(strip);
         var ss = new GUIStyle(left) { fontSize = 15 };
-        UiKit.Text(new Rect(strip.x + 18, strip.y, 150, 38), $"第 {RunState.floor}/{RunState.Floors} 层 · {themeName}", ss);
-        UiKit.Icon(new Rect(strip.x + 170, strip.y + 8, 22, 22), "glyph_skull");
-        UiKit.Text(new Rect(strip.x + 194, strip.y, 40, 38), $"{RunState.kills}", ss);
-        UiKit.Icon(new Rect(strip.x + 230, strip.y + 8, 22, 22), "glyph_gold");
-        UiKit.Text(new Rect(strip.x + 254, strip.y, 50, 38), $"{RunState.gold}", ss, new Color(1f, 0.85f, 0.35f));
+        UiKit.Icon(new Rect(strip.x + 18, strip.y + 8, 22, 22), "glyph_skull");
+        UiKit.Text(new Rect(strip.x + 44, strip.y, 40, 38), $"{RunState.kills}", ss);
+        UiKit.Icon(new Rect(strip.x + 90, strip.y + 8, 22, 22), "glyph_gold");
+        UiKit.Text(new Rect(strip.x + 116, strip.y, 56, 38), $"{RunState.gold}", ss, new Color(1f, 0.85f, 0.35f));
         if (enemiesLeft >= 0)
         {
             var er = new Rect(70, strip.yMax + 6, 170, 36);
             UiKit.DrawPanel(er);
             UiKit.Text(new Rect(er.x + 18, er.y, 160, 36), $"<color=#FF7A6A>剩余敌人 {enemiesLeft}</color>", ss);
         }
+    }
+
+    /// The hero's face in a gold medallion: the close-up made for it, or the top of the portrait.
+    static void DrawHeroMedal(Rect medal, ClassDef cls, Color cc)
+    {
+        var backdrop = new Color(cc.r * 0.35f, cc.g * 0.35f, cc.b * 0.4f);
+        var face = IconStudio.I ? IconStudio.I.Face(cls.id) : null;
+        if (face) UiKit.DrawMedal(medal, face, 1f, backdrop, new Rect(0f, 0f, 1f, 1f));
+        else UiKit.DrawMedal(medal, IconStudio.I ? IconStudio.I.ClassView(cls.id) : null, 1f, backdrop, new Rect(0.14f, 0.42f, 0.72f, 0.58f));
     }
 
     void DrawCrosshair(float w, float h)
@@ -1033,7 +1040,7 @@ public class Hud : MonoBehaviour
         var cc = ClassColor(cls.id);
         // The hero in a medallion with the name under it.
         var medal = new Rect(panel.x + 26, y + 20, 124, 124);
-        UiKit.DrawMedal(medal, IconStudio.I ? IconStudio.I.ClassView(cls.id) : null, 1f, new Color(cc.r * 0.35f, cc.g * 0.35f, cc.b * 0.4f), new Rect(0.14f, 0.42f, 0.72f, 0.58f));
+        DrawHeroMedal(medal, cls, cc);
         UiKit.Text(new Rect(medal.x - 10, medal.yMax - 4, medal.width + 20, 24), cls.name, new GUIStyle(center) { fontSize = 17 }, cc);
         // Ten numbers on two rows of tiles.
         int secs = Mathf.FloorToInt(RunState.runTime);
@@ -1115,87 +1122,92 @@ public class Hud : MonoBehaviour
         }
     }
 
-    /// Visited rooms in full, their neighbours dimmed, the player as a dot (Soul Knight style).
+    /// The minimap, after Soul Knight's (wiki: HUD / Mini-map): every room is the same square on the
+    /// dungeon's grid, joined by short corridor bars; only rooms you have entered and their neighbours
+    /// show. Rooms still to clear are big dark squares, cleared ones smaller light squares (the user's
+    /// rule), the room you are in is the brightest and holds an arrow for you. Icons only where Soul
+    /// Knight puts them: start = green hut, portal = blue swirl, boss = purple helmet, chest room and
+    /// shop = golden box, special rooms (altar, trial) = "!"; fight rooms have none. The map stays
+    /// still, fitted to the known rooms, and the floor indicator sits under it.
     void DrawMinimap(float screenW)
     {
         if (!dungeon || !player) return;
-        const float scale = 1.9f; // pixels per metre: the room you are in and its neighbours fill the map
-        const float size = 240f;
-        var frame = new Rect(screenW - size - 28, 12, size + 16, size + 44);
+        const float size = 236f;
+        var frame = new Rect(screenW - size - 24, 12, size, size);
         UiKit.DrawPanel(frame);
-        UiKit.Text(new Rect(frame.x, frame.y + 8, frame.width, 26), themeName, new GUIStyle(center) { fontSize = 15 }, UiKit.Gold);
-        var panel = new Rect(screenW - size - 20, 40, size, size);
-        UiKit.Rect(panel, new Color(0f, 0f, 0f, 0.35f));
-        Vector3 c = player.transform.position;
+        var area = new Rect(frame.x + 20, frame.y + 20, frame.width - 40, frame.height - 40);
 
-        Rect ToMap(Vector3 min, Vector3 max)
+        bool Known(Dungeon.RoomInfo room) => room.visited || dungeon.links.Exists(l =>
+            (l.a == room.cell && dungeon.rooms.Find(r => r.cell == l.b).visited) ||
+            (l.b == room.cell && dungeon.rooms.Find(r => r.cell == l.a).visited));
+        var known = dungeon.rooms.FindAll(Known);
+        if (known.Count == 0) return;
+        int x0 = int.MaxValue, x1 = int.MinValue, y0 = int.MaxValue, y1 = int.MinValue;
+        foreach (var r in known)
         {
-            float x0 = panel.center.x + (min.x - c.x) * scale;
-            float x1 = panel.center.x + (max.x - c.x) * scale;
-            float y0 = panel.center.y - (max.z - c.z) * scale;
-            float y1 = panel.center.y - (min.z - c.z) * scale;
-            return Rect.MinMaxRect(Mathf.Max(x0, panel.xMin), Mathf.Max(y0, panel.yMin), Mathf.Min(x1, panel.xMax), Mathf.Min(y1, panel.yMax));
+            x0 = Mathf.Min(x0, r.cell.x); x1 = Mathf.Max(x1, r.cell.x);
+            y0 = Mathf.Min(y0, r.cell.y); y1 = Mathf.Max(y1, r.cell.y);
         }
+        // One grid step per room; the known part of the floor fits the panel (never bigger than 46 px).
+        float step = Mathf.Min(46f, area.width / (x1 - x0 + 1), area.height / (y1 - y0 + 1));
+        float big = step * 0.66f, small = step * 0.46f, bar = Mathf.Max(3f, step * 0.14f);
+        Vector2 mid = new Vector2((x0 + x1) * 0.5f, (y0 + y1) * 0.5f);
+        Vector2 At(Vector2Int c) => new Vector2(area.center.x + (c.x - mid.x) * step, area.center.y - (c.y - mid.y) * step);
+        bool Cleared(Dungeon.RoomInfo r) => r.combat ? r.combat.state == Room.State.Cleared : r.visited;
 
+        // Corridors first, under the rooms.
         foreach (var (a, b) in dungeon.links)
         {
             var ra = dungeon.rooms.Find(r => r.cell == a);
             var rb = dungeon.rooms.Find(r => r.cell == b);
-            if (!ra.visited && !rb.visited) continue;
-            Vector3 p = ra.Center, q = rb.Center;
-            var lo = Vector3.Min(p, q) - new Vector3(1.5f, 0f, 1.5f);
-            var hi = Vector3.Max(p, q) + new Vector3(1.5f, 0f, 1.5f);
-            var r = ToMap(lo, hi);
-            if (r.width > 0 && r.height > 0) UiKit.Fill(r, new Color(0.55f, 0.52f, 0.5f, 0.55f));
+            if (ra == null || rb == null || (!ra.visited && !rb.visited)) continue;
+            Vector2 pa = At(a), pb = At(b);
+            var rect = Rect.MinMaxRect(Mathf.Min(pa.x, pb.x) - bar / 2f, Mathf.Min(pa.y, pb.y) - bar / 2f, Mathf.Max(pa.x, pb.x) + bar / 2f, Mathf.Max(pa.y, pb.y) + bar / 2f);
+            UiKit.Fill(rect, new Color(0.55f, 0.55f, 0.6f, 0.9f));
         }
-        foreach (var room in dungeon.rooms)
+        foreach (var room in known)
         {
-            bool known = room.visited || dungeon.links.Exists(l =>
-                (l.a == room.cell && dungeon.rooms.Find(r => r.cell == l.b).visited) ||
-                (l.b == room.cell && dungeon.rooms.Find(r => r.cell == l.a).visited));
-            if (!known) continue;
-            var r = ToMap(room.min, room.max);
-            if (r.width <= 0 || r.height <= 0) continue;
-            // Cleared rooms are small white tiles; rooms still to clear are big black ones (a fight
-            // room counts once its doors open again, any other room once you have walked in).
-            bool cleared = room.combat ? room.combat.state == Room.State.Cleared : room.visited;
-            var tile = cleared ? new Rect(r.x + r.width * 0.2f, r.y + r.height * 0.2f, r.width * 0.6f, r.height * 0.6f) : r;
-            var fill = cleared ? new Color(0.93f, 0.93f, 0.95f) : new Color(0.03f, 0.03f, 0.04f, room.visited ? 1f : 0.85f);
-            var rim = cleared ? new Color(0.55f, 0.55f, 0.6f) : new Color(0.6f, 0.58f, 0.62f, room.visited ? 0.9f : 0.5f);
+            Vector2 c = At(room.cell);
+            bool here = room == dungeon.current, cleared = Cleared(room);
+            float side = cleared ? small : big;
+            var tile = new Rect(c.x - side / 2f, c.y - side / 2f, side, side);
+            Color fill = cleared ? (here ? Color.white : new Color(0.82f, 0.82f, 0.86f)) : (here ? new Color(0.2f, 0.2f, 0.24f) : new Color(0.06f, 0.06f, 0.08f, room.visited ? 1f : 0.8f));
+            Color rim = here ? Color.white : cleared ? new Color(0.5f, 0.5f, 0.55f) : new Color(0.55f, 0.55f, 0.6f, room.visited ? 0.9f : 0.5f);
             GUI.DrawTexture(tile, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, fill.linear, 0f, 4f);
-            GUI.DrawTexture(tile, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, rim.linear, 1.5f, 4f);
-            if (room == dungeon.current)
-                GUI.DrawTexture(new Rect(r.x - 2, r.y - 2, r.width + 4, r.height + 4), Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, UiKit.Gold.linear, 2f, 6f);
-            // An icon on the rooms that matter: boss, chest, shop.
-            // Bright on the black tiles, dark on the white ones.
-            string icon = room.kind switch
+            GUI.DrawTexture(tile, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, rim.linear, here ? 2.5f : 1.5f, 4f);
+            string glyph = room.kind switch
             {
-                Dungeon.Kind.Boss => cleared ? "<color=#A01E14>首</color>" : "<color=#FF5A4A>首</color>",
-                Dungeon.Kind.Chest => cleared ? "<color=#7A5A10>宝</color>" : "<color=#FFD45A>宝</color>",
-                Dungeon.Kind.Shop => cleared ? "<color=#0E5A48>商</color>" : "<color=#4FE3C1>商</color>",
-                Dungeon.Kind.Altar => cleared ? "<color=#8A1A1A>祭</color>" : "<color=#FF6A6A>祭</color>",
-                Dungeon.Kind.Trial => cleared ? "<color=#8A4A10>试</color>" : "<color=#FFA040>试</color>",
+                Dungeon.Kind.Start => "glyph_hut",
+                Dungeon.Kind.End => "glyph_portal",
+                Dungeon.Kind.Boss => "glyph_boss",
+                Dungeon.Kind.Chest or Dungeon.Kind.Shop => "glyph_chest",
+                Dungeon.Kind.Altar or Dungeon.Kind.Trial => "glyph_special",
                 _ => null,
             };
-            if (icon != null) Label(new Rect(r.center.x - 15, r.center.y - 14, 30, 28), icon, new GUIStyle(center) { fontSize = cleared ? 16 : 20, richText = true });
+            if (glyph != null) UiKit.Icon(new Rect(c.x - step * 0.36f, c.y - step * 0.36f, step * 0.72f, step * 0.72f), glyph);
+            if (here)
+            {
+                // You: an arrow in the room, pointing where the camera looks.
+                float yaw = player.cam ? player.cam.transform.eulerAngles.y : player.transform.eulerAngles.y;
+                float a = step * 0.34f;
+                var keep = GUI.matrix;
+                GUIUtility.RotateAroundPivot(yaw - 90f, c);
+                UiKit.DrawArrow(new Rect(c.x - a / 2f, c.y - a / 2f, a, a), true, false);
+                GUI.matrix = keep;
+            }
         }
-        // The portal once it is open, and parked mechs.
-        if (dungeon.portal)
-        {
-            var pr = ToMap(dungeon.portal.transform.position - Vector3.one * 2.5f, dungeon.portal.transform.position + Vector3.one * 2.5f);
-            if (pr.width > 0 && pr.height > 0) Label(new Rect(pr.center.x - 15, pr.center.y - 14, 30, 28), "<color=#C08CFF>◎</color>", new GUIStyle(center) { fontSize = 20, richText = true });
-        }
+        // Parked mechs: a small marker in the corner of their room.
         foreach (var m in ParkedMech.Live)
         {
-            var mr = ToMap(m.transform.position - Vector3.one * 2f, m.transform.position + Vector3.one * 2f);
-            if (mr.width > 0 && mr.height > 0) Label(new Rect(mr.center.x - 15, mr.center.y - 13, 30, 26), $"<color=#{ColorUtility.ToHtmlStringRGB(m.def.color)}>机</color>", new GUIStyle(center) { fontSize = 15, richText = true });
+            if (!m) continue;
+            var room = dungeon.rooms.Find(r => r.Contains(m.transform.position));
+            if (room == null || !known.Contains(room)) continue;
+            Vector2 c = At(room.cell) + new Vector2(step * 0.3f, -step * 0.3f);
+            GUI.DrawTexture(new Rect(c.x - 5f, c.y - 5f, 10f, 10f), Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, m.def.color.linear, 0f, 5f);
         }
-        // You: an arrow pointing where the camera looks.
-        float yaw = player.cam ? player.cam.transform.eulerAngles.y : player.transform.eulerAngles.y;
-        var you = new Rect(panel.center.x - 9, panel.center.y - 9, 18, 18);
-        var keep = GUI.matrix;
-        GUIUtility.RotateAroundPivot(yaw - 90f, panel.center);
-        UiKit.DrawArrow(you, true, false);
-        GUI.matrix = keep;
+        // The floor indicator under the map.
+        var label = new Rect(frame.x, frame.yMax + 2, frame.width, 34);
+        UiKit.DrawPanel(label);
+        UiKit.Text(label, $"第 {RunState.floor}/{RunState.Floors} 层 · {themeName}", new GUIStyle(center) { fontSize = 15 }, UiKit.Gold);
     }
 }
