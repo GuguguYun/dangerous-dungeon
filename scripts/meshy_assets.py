@@ -223,6 +223,29 @@ ASSETS = {
     "dawn_scepter": dict(kind="weapon", length=1.3, polycount=3000, prompt=(
         "A holy priest scepter, a white and gold shaft with pearl inlays, the head is a radiant golden sun disk "
         "with pointed rays around a glowing warm white crystal, small white feathered wings below the head. ")),
+    # round 16: enemy and boss shots as real objects instead of glowing balls (Bullet.cs)
+    "proj_skull": dict(kind="prop", size=0.5, polycount=3000, prompt=(
+        "A chunky stylized cartoon human skull with its jaw, old ivory bone with dark cracks, big round deep "
+        "eye sockets, a row of square teeth, a jagged little crown of pale blue ice shards on top of the head. ")),
+    "proj_beast_skull": dict(kind="prop", size=0.45, polycount=3000, prompt=(
+        "A small chunky stylized goblin beast skull with two short curved horns, old pale bone with dark cracks, "
+        "big empty eye sockets, small sharp fangs, bright green tribal paint stripes across the brow. ")),
+    "proj_axe": dict(kind="prop", size=0.7, polycount=3000, prompt=(
+        "A one-handed orc throwing axe lying flat, a big crescent-shaped dark iron blade with a chipped edge and "
+        "dried blood-red streaks, a short thick wooden handle wrapped in dark red leather straps, a small iron "
+        "spike on the back of the head. ")),
+    "proj_coin": dict(kind="prop", size=0.42, polycount=2000, prompt=(
+        "A thick chunky cartoon gold coin standing on its edge, a raised beaded rim and a big embossed crown on "
+        "its face, shiny polished gold. ")),
+    "proj_jade_coin": dict(kind="prop", size=0.5, polycount=2000, prompt=(
+        "An ancient round jade coin standing on its edge, a square hole in the middle, a raised carved rim, "
+        "polished bright emerald green jade with lighter veins. ")),
+    "proj_boulder": dict(kind="prop", size=0.6, polycount=2000, prompt=(
+        "A single chunky jagged boulder, rough brown-gray stone with deep cracks, sharp chipped edges and a few "
+        "small patches of moss. ")),
+    "proj_ice_shard": dict(kind="prop", size=0.6, polycount=2000, prompt=(
+        "A single long jagged spike of pale blue ice lying on its side, a sharp pointed icicle shard with "
+        "several flat facets and frosted white edges, painted solid, not see-through. ")),
     # tileable textures for the Blender dungeon kit (image only)
     "tex_floor": dict(kind="texture", prompt=(
         "Seamless tileable texture of square stone floor flagstones, 2 by 2 large slabs with dark grout, "

@@ -35,11 +35,12 @@ public class Bullet : MonoBehaviour
     bool dodgeChecked;
     float travelled;
     bool returning;
-    Vector3 spinAxis;       // coins, axes and rocks spin as they fly
-    float spinSpeed;
+    Transform model;        // enemy shots: the real thing riding on the shot (bullet, arrow, skull, coin, axe ...)
+    Vector3 modelSpin;      // its turn about its own axes, degrees per second
     readonly HashSet<Enemy> hit = new HashSet<Enemy>();
-    static Mesh disc;
+    static Mesh disc, slug;
     static Material groundGlow;
+    static readonly Dictionary<string, Material> looks = new Dictionary<string, Material>();
 
     public bool HitsEnemies => hitsEnemies;
 
@@ -52,15 +53,15 @@ public class Bullet : MonoBehaviour
         go.transform.position = from;
         go.transform.localScale = Vector3.one * radius * 2f;
         var r = go.GetComponent<MeshRenderer>();
-        r.sharedMaterial = Palette.Get(mat);
+        r.sharedMaterial = Palette.Get(Base(mat));
         r.shadowCastingMode = ShadowCastingMode.Off;
 
         var tr = go.AddComponent<TrailRenderer>();
-        tr.sharedMaterial = Palette.Trail(mat);
+        tr.sharedMaterial = Palette.Trail(Base(mat));
         tr.time = 0.12f;
         tr.startWidth = radius * 1.6f;
         tr.endWidth = 0f;
-        var c = Palette.ColorOf(mat);
+        var c = Palette.ColorOf(Base(mat));
         tr.startColor = c;
         tr.endColor = new Color(c.r, c.g, c.b, 0f);
         tr.shadowCastingMode = ShadowCastingMode.Off;
@@ -79,10 +80,22 @@ public class Bullet : MonoBehaviour
         return b;
     }
 
+    /// Palette entry of a shot id (the Goblin King's jade coins are green like every low shot).
+    static string Base(string mat) => mat == "bullet_jade" ? "bullet_low" : mat;
+
+    /// Low shots skim the floor (jump them): the shaman's ghost-fire skulls, the Goblin King's jade coins.
+    public static bool IsLow(string mat) => mat == "bullet_low" || mat == "bullet_jade";
+
     /// Per-projectile look: tracers and arrows stretch along their flight, frost is a crystal
     /// with a mist trail, flames are pure particles, rockets and missiles leave smoke.
+    /// Enemy shots are real things instead (see EnemyLook).
     void Style(GameObject go, MeshRenderer r, TrailRenderer tr)
     {
+        if (!hitsEnemies && EnemyLook(go, r, tr))
+        {
+            Orient();
+            return;
+        }
         switch (mat)
         {
             case "bullet_player":
@@ -110,51 +123,6 @@ public class Bullet : MonoBehaviour
                 stretch = 2.5f;
                 trailFx = Vfx.Trail(go.transform, "smoke");
                 break;
-            // ---- enemy shots: each source has its own look, colour still says the height ----
-            case "bullet_enemy":
-                // Goblin gunpowder bolt.
-                stretch = 2.2f;
-                trailFx = Vfx.Trail(go.transform, "sparks");
-                break;
-            case "bullet_low":
-                // Green ghost fire skimming the floor, with a glow on the ground under it: jump it.
-                go.transform.localScale = Vector3.one * radius * 1.3f;
-                trailFx = Vfx.Trail(go.transform, "ghostfire");
-                GroundGlow(go);
-                break;
-            case "bullet_gold":
-                // Goblin King: spinning gold coins.
-                go.GetComponent<MeshFilter>().sharedMesh = Disc();
-                go.transform.localScale = new Vector3(radius * 2.4f, radius * 0.35f, radius * 2.4f);
-                go.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-                spinAxis = Vector3.up;
-                spinSpeed = 900f;
-                trailFx = Vfx.Trail(go.transform, "glitter");
-                break;
-            case "bullet_rock":
-                // Boar Chief: tumbling boulders throwing off dust.
-                go.GetComponent<MeshFilter>().sharedMesh = Vfx.Crystal();
-                go.transform.localScale = new Vector3(radius * 2.6f, radius * 2.0f, radius * 2.3f);
-                go.transform.rotation = Random.rotation;
-                spinAxis = Random.onUnitSphere;
-                spinSpeed = 400f;
-                tr.enabled = false;
-                trailFx = Vfx.Trail(go.transform, "dust");
-                break;
-            case "bullet_hex":
-                // The lich's skulls: a violet core in a trail of arcane motes.
-                go.transform.localScale = Vector3.one * radius * 1.5f;
-                trailFx = Vfx.Trail(go.transform, "arcane");
-                break;
-            case "bullet_axe":
-                // Orc Warlord: whirling red axe blades.
-                go.GetComponent<MeshFilter>().sharedMesh = Disc();
-                go.transform.localScale = new Vector3(radius * 3.2f, radius * 0.2f, radius * 3.2f);
-                spinAxis = Vector3.up;
-                spinSpeed = 1080f;
-                tr.startWidth = radius * 2.6f;
-                tr.time = 0.18f;
-                break;
         }
         if (stretch > 0f && mat != "bullet_frost")
             go.transform.localScale = new Vector3(go.transform.localScale.x, go.transform.localScale.y, radius * 2f * stretch);
@@ -163,7 +131,241 @@ public class Bullet : MonoBehaviour
 
     void Orient()
     {
-        if (stretch > 0f && velocity.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(velocity);
+        if ((stretch > 0f || model) && velocity.sqrMagnitude > 0.01f) transform.rotation = Quaternion.LookRotation(velocity);
+    }
+
+    // ---------- enemy shots: real things, never glowing balls ----------
+
+    /// What each enemy throws. The colour still tells the height: green things skim the floor (jump
+    /// them), everything else flies at chest height (sidestep or dash). No lights, nothing blinks.
+    bool EnemyLook(GameObject go, MeshRenderer r, TrailRenderer tr)
+    {
+        go.transform.localScale = Vector3.one; // the parts below are sized in metres
+        switch (mat)
+        {
+            case "bullet_enemy":
+                // Goblin gunner: a fat copper-jacketed slug trailing gun smoke.
+                model = Part(Slug(), Look("copper"), new Vector3(0.19f, 0.19f, 0.46f));
+                trailFx = Vfx.Trail(go.transform, "gunsmoke");
+                break;
+            case "bullet_arrow":
+                // Skeleton archer: a wooden arrow, iron head first, red fletching, a faint streak of air.
+                model = Arrow();
+                tr.sharedMaterial = Palette.Trail("bullet_arrow");
+                tr.time = 0.07f;
+                tr.startWidth = 0.035f;
+                tr.startColor = new Color(1f, 0.95f, 0.85f, 0.3f);
+                break;
+            case "bullet_low":
+                // Ghost-fire shaman: a horned beast skull wreathed in green flame, with a glow on the floor under it.
+                model = Model("proj_beast_skull", 0.44f, 0.35f, Fit.AsIs) ?? Part(Vfx.Crystal(), Look("bone"), Vector3.one * 0.22f);
+                trailFx = Vfx.Trail(go.transform, "ghostflame");
+                GroundGlow(go);
+                break;
+            case "bullet_jade":
+                // Goblin King: big jade coins at knee height, face first, turning like wheels.
+                model = Model("proj_jade_coin", 0.56f, 0.25f, Fit.ThinZ) ?? Part(Disc(), Look("jade"), new Vector3(0.5f, 0.03f, 0.5f), Quaternion.Euler(90f, 0f, 0f));
+                model.parent.localRotation = Quaternion.Euler(-8f, 0f, 0f); // nearly upright: from the raised play camera it shows as a flat coin
+                modelSpin = new Vector3(0f, 0f, 220f);
+                GroundGlow(go);
+                break;
+            case "bullet_gold":
+                // Goblin King: thick gold crown coins, face first, turning like wheels, a little glitter.
+                model = Model("proj_coin", 0.44f, 0.4f, Fit.ThinZ) ?? Part(Disc(), Look("gold"), new Vector3(0.4f, 0.03f, 0.4f), Quaternion.Euler(90f, 0f, 0f));
+                model.parent.localRotation = Quaternion.Euler(-35f, 0f, 0f);
+                modelSpin = new Vector3(0f, 0f, 200f);
+                trailFx = Vfx.Trail(go.transform, "coinglint");
+                break;
+            case "bullet_rock":
+                // Boar Chief: tumbling boulders throwing off dust.
+                model = Model("proj_boulder", 0.5f, 0.12f, Fit.AsIs) ?? Part(Vfx.Crystal(), Look("rock"), new Vector3(0.5f, 0.4f, 0.22f));
+                model.localRotation = Random.rotation;
+                modelSpin = Random.onUnitSphere * 260f;
+                trailFx = Vfx.Trail(go.transform, "rockdust");
+                break;
+            case "bullet_hex":
+                // The lich's skulls: an ice-crowned skull trailing violet flame, turning after the player.
+                model = Model("proj_skull", 0.48f, 0.35f, Fit.AsIs) ?? Part(Vfx.Crystal(), Look("bone"), Vector3.one * 0.24f);
+                trailFx = Vfx.Trail(go.transform, "hexflame");
+                break;
+            case "bullet_frost":
+                // The lich's ice ring: jagged ice shards, point first, trailing frost mist.
+                model = Model("proj_ice_shard", 0.62f, 0.45f, Fit.AsIs) ?? Part(Vfx.Crystal(), Look("ice"), Vector3.one * 0.2f);
+                trailFx = Vfx.Trail(go.transform, "icemist");
+                break;
+            case "bullet_axe":
+                // Orc Warlord: throwing axes, blade facing you, whirling like pinwheels.
+                model = Model("proj_axe", 0.72f, 0.4f, Fit.ThinZ) ?? Part(Vfx.Crystal(), Look("iron_axe"), new Vector3(0.45f, 0.3f, 0.06f));
+                model.parent.localRotation = Quaternion.Euler(-30f, 0f, 0f);
+                modelSpin = new Vector3(0f, 0f, -540f);
+                break;
+            default:
+                return false;
+        }
+        r.enabled = false; // the sphere was only ever the glowing ball
+        tr.enabled = mat == "bullet_arrow";
+        return true;
+    }
+
+    enum Fit { AsIs, ThinZ }
+
+    /// A Meshy model (Resources/Models/Props/<id>) riding on the shot: `size` across its longest side,
+    /// centred on the shot, faintly self-lit so it reads in the dark rooms (no bloom). The prepped models
+    /// face forward (skulls, the ice shard's point); ThinZ turns the thinnest side forward instead (coins
+    /// and axes show their face). Returns the spinning transform (its parent is a still pivot for a fixed
+    /// tilt), or null when the model is missing.
+    Transform Model(string id, float size, float glow, Fit fit)
+    {
+        var prefab = Resources.Load<GameObject>("Models/Props/" + id);
+        if (!prefab) return null;
+        var spin = Pivot(id);
+        var m = Instantiate(prefab, spin, false);
+        var rs = m.GetComponentsInChildren<Renderer>();
+        var b = Measure(rs);
+        Vector3 e = b.size;
+        if (fit == Fit.ThinZ)
+            m.transform.localRotation = e.x <= e.y && e.x <= e.z ? Quaternion.Euler(0f, 90f, 0f) : e.y <= e.z ? Quaternion.Euler(90f, 0f, 0f) : Quaternion.identity;
+        b = Measure(rs);
+        float k = size / Mathf.Max(b.size.x, b.size.y, b.size.z);
+        m.transform.localScale = Vector3.one * k;
+        m.transform.localPosition = -(b.center - spin.position) * k;
+        foreach (var r in rs)
+        {
+            r.shadowCastingMode = ShadowCastingMode.Off;
+            r.sharedMaterial = SelfLit(id, r.sharedMaterial, glow);
+        }
+        return spin;
+    }
+
+    /// pivot (child of the shot, holds a fixed tilt) -> spin (turns as it flies) -> parts.
+    Transform Pivot(string name)
+    {
+        var pivot = new GameObject(name).transform;
+        pivot.SetParent(transform, false);
+        var spin = new GameObject("spin").transform;
+        spin.SetParent(pivot, false);
+        return spin;
+    }
+
+    static Bounds Measure(Renderer[] rs)
+    {
+        var b = rs[0].bounds;
+        foreach (var r in rs) b.Encapsulate(r.bounds);
+        return b;
+    }
+
+    static Material SelfLit(string id, Material src, float amount)
+    {
+        if (looks.TryGetValue(id, out var m) && m) return m;
+        m = new Material(src) { name = "shot_" + id };
+        LootFx.MakeSelfLit(m, amount);
+        if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.35f);
+        looks[id] = m;
+        return m;
+    }
+
+    /// A plain mesh part under a fresh pivot (procedural shots, and stand-ins when a Meshy model is missing).
+    Transform Part(Mesh mesh, Material mat, Vector3 scale, Quaternion? rot = null)
+    {
+        var spin = Pivot("part");
+        AddMesh(spin, mesh, mat, Vector3.zero, scale, rot ?? Quaternion.identity);
+        return spin;
+    }
+
+    static void AddMesh(Transform parent, Mesh mesh, Material mat, Vector3 pos, Vector3 scale, Quaternion rot)
+    {
+        var go = new GameObject("mesh");
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = pos;
+        go.transform.localRotation = rot;
+        go.transform.localScale = scale;
+        go.AddComponent<MeshFilter>().sharedMesh = mesh;
+        var r = go.AddComponent<MeshRenderer>();
+        r.sharedMaterial = mat;
+        r.shadowCastingMode = ShadowCastingMode.Off;
+    }
+
+    /// An arrow along +Z, 1.2 m (big enough to read head-on): wooden shaft, flat iron head, three red vanes.
+    Transform Arrow()
+    {
+        var spin = Pivot("arrow");
+        spin.localScale = Vector3.one * 1.3f;
+        AddMesh(spin, Disc(), Look("wood"), new Vector3(0f, 0f, -0.08f), new Vector3(0.035f, 0.36f, 0.035f), Quaternion.Euler(90f, 0f, 0f));
+        AddMesh(spin, Vfx.Crystal(), Look("steel"), new Vector3(0f, 0f, 0.34f), new Vector3(0.075f, 0.025f, 0.085f), Quaternion.identity);
+        for (int i = 0; i < 3; i++)
+        {
+            var around = Quaternion.Euler(0f, 0f, 120f * i);
+            AddMesh(spin, Vfx.Crystal(), Look("fletch"), around * new Vector3(0f, 0.04f, -0.36f), new Vector3(0.006f, 0.045f, 0.075f), around);
+        }
+        return spin;
+    }
+
+    /// A fat pistol slug along +Z, 1 long and 0.42 across: flat base, straight jacket, round nose.
+    static Mesh Slug()
+    {
+        if (slug) return slug;
+        // (z, radius) from the base edge to the tip
+        var prof = new[] { new Vector2(-0.5f, 0.17f), new Vector2(-0.47f, 0.21f), new Vector2(0.02f, 0.21f), new Vector2(0.17f, 0.2f),
+                           new Vector2(0.29f, 0.17f), new Vector2(0.38f, 0.13f), new Vector2(0.45f, 0.08f), new Vector2(0.49f, 0.035f), new Vector2(0.5f, 0f) };
+        const int sides = 16;
+        var v = new List<Vector3>();
+        var t = new List<int>();
+        foreach (var p in prof)
+            for (int j = 0; j <= sides; j++)
+            {
+                float a = j * Mathf.PI * 2f / sides;
+                v.Add(new Vector3(Mathf.Cos(a) * p.y, Mathf.Sin(a) * p.y, p.x));
+            }
+        for (int i = 0; i < prof.Length - 1; i++)
+            for (int j = 0; j < sides; j++)
+            {
+                int a = i * (sides + 1) + j, b = a + sides + 1;
+                t.AddRange(new[] { a, a + 1, b, a + 1, b + 1, b });
+            }
+        // The base: its own vertices, so its edge stays sharp.
+        int c = v.Count;
+        v.Add(new Vector3(0f, 0f, -0.5f));
+        for (int j = 0; j <= sides; j++)
+        {
+            float a = j * Mathf.PI * 2f / sides;
+            v.Add(new Vector3(Mathf.Cos(a) * prof[0].y, Mathf.Sin(a) * prof[0].y, -0.5f));
+        }
+        for (int j = 0; j < sides; j++) t.AddRange(new[] { c, c + 2 + j, c + 1 + j });
+        slug = new Mesh { name = "slug" };
+        slug.SetVertices(v);
+        slug.SetTriangles(t, 0);
+        slug.RecalculateNormals();
+        slug.RecalculateBounds();
+        return slug;
+    }
+
+    /// Plain lit materials for the procedural shots and stand-ins, lifted a little so they read in the dark.
+    static Material Look(string name)
+    {
+        if (looks.TryGetValue(name, out var m) && m) return m;
+        var (c, metal, smooth, glow) = name switch
+        {
+            "copper" => (new Color(0.95f, 0.5f, 0.22f), 0.55f, 0.6f, 0.2f),
+            "wood" => (new Color(0.62f, 0.42f, 0.24f), 0f, 0.25f, 0.15f),
+            "steel" => (new Color(0.62f, 0.64f, 0.7f), 0.6f, 0.55f, 0.15f),
+            "fletch" => (new Color(0.85f, 0.18f, 0.12f), 0f, 0.2f, 0.25f),
+            "bone" => (new Color(0.9f, 0.86f, 0.74f), 0f, 0.3f, 0.2f),
+            "jade" => (new Color(0.2f, 0.75f, 0.4f), 0f, 0.6f, 0.25f),
+            "gold" => (new Color(1f, 0.75f, 0.25f), 0.7f, 0.6f, 0.25f),
+            "rock" => (new Color(0.5f, 0.42f, 0.35f), 0f, 0.15f, 0.08f),
+            "ice" => (new Color(0.7f, 0.9f, 1f), 0f, 0.7f, 0.35f),
+            _ => (new Color(0.3f, 0.3f, 0.33f), 0.5f, 0.4f, 0.1f),
+        };
+        m = new Material(Palette.Get("steel")) { name = "shot_" + name };
+        m.color = c;
+        if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
+        if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", metal);
+        if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", smooth);
+        m.EnableKeyword("_EMISSION");
+        m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+        m.SetColor("_EmissionColor", c * glow);
+        looks[name] = m;
+        return m;
     }
 
     static Mesh Disc()
@@ -223,7 +425,7 @@ public class Bullet : MonoBehaviour
         if (returnTo && Boomerang(dt)) return;
 
         Orient();
-        if (spinSpeed != 0f) transform.Rotate(spinAxis, spinSpeed * dt, Space.World);
+        if (model && modelSpin != Vector3.zero) model.Rotate(modelSpin * dt, Space.Self);
         if (burn > 0f && hitsEnemies) Reactions.CheckClouds(transform.position, 0.3f); // flames reaching poison gas
         Vector3 step = velocity * dt;
         if (Physics.Raycast(transform.position, step.normalized, out var rh, step.magnitude, mask, QueryTriggerInteraction.Ignore))
@@ -386,11 +588,10 @@ public class Bullet : MonoBehaviour
 
     void Impact(Vector3 pos, float size)
     {
-        var c = Palette.ColorOf(mat);
+        var c = Palette.ColorOf(Base(mat));
         if (mat == "bullet_frost") { Vfx.Shatter(pos); return; }
         if (mat == "bullet_fire") { Vfx.Sparks(pos, c, 4, 3f); return; }
-        if (mat == "bullet_rock") { Vfx.Puff(pos, new Color(0.55f, 0.47f, 0.38f, 0.6f), 0.7f, 8); Vfx.Sparks(pos, c, 6, 4f); return; }
-        if (mat == "bullet_low") { Vfx.Puff(pos, new Color(0.4f, 1f, 0.3f, 0.5f), 0.6f, 6); return; }
+        if (model) { Break(pos); return; }
         Vfx.Sparks(pos, c, hitsEnemies ? 8 : 5, hitsEnemies ? 6f : 4f);
         size *= 0.6f;
         var fx = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -401,5 +602,42 @@ public class Bullet : MonoBehaviour
         r.sharedMaterial = Palette.Get(mat);
         r.shadowCastingMode = ShadowCastingMode.Off;
         fx.AddComponent<Shrink>().duration = explode > 0f ? 0.3f : 0.15f;
+    }
+
+    /// A real thing hitting something breaks or bounces off: chips, dust, a few sparks, no flash of light.
+    void Break(Vector3 pos)
+    {
+        switch (mat)
+        {
+            case "bullet_low":
+                Vfx.Chips(pos, new Color(0.85f, 0.82f, 0.7f), 7, 3f);
+                Vfx.Puff(pos, new Color(0.35f, 0.75f, 0.3f, 0.45f), 0.6f, 6);
+                break;
+            case "bullet_hex":
+                Vfx.Chips(pos, new Color(0.85f, 0.82f, 0.7f), 8, 3.5f);
+                Vfx.Puff(pos, new Color(0.45f, 0.25f, 0.7f, 0.5f), 0.7f, 7);
+                break;
+            case "bullet_jade":
+                Vfx.Chips(pos, new Color(0.3f, 0.8f, 0.45f), 8, 3.5f);
+                break;
+            case "bullet_gold":
+                Vfx.Chips(pos, new Color(1f, 0.78f, 0.3f), 6, 3f);
+                break;
+            case "bullet_rock":
+                Vfx.Puff(pos, new Color(0.55f, 0.47f, 0.38f, 0.6f), 0.7f, 8);
+                Vfx.Chips(pos, new Color(0.45f, 0.38f, 0.3f), 8, 4f);
+                break;
+            case "bullet_axe":
+                Vfx.Sparks(pos, new Color(1f, 0.75f, 0.45f), 5, 4f);
+                Vfx.Chips(pos, new Color(0.4f, 0.28f, 0.18f), 4, 2.5f);
+                break;
+            case "bullet_arrow":
+                Vfx.Chips(pos, new Color(0.62f, 0.42f, 0.24f), 5, 2.5f);
+                break;
+            default: // the gunner's slug
+                Vfx.Puff(pos, new Color(0.6f, 0.58f, 0.55f, 0.45f), 0.4f, 5);
+                Vfx.Sparks(pos, new Color(1f, 0.7f, 0.35f), 3, 3f);
+                break;
+        }
     }
 }

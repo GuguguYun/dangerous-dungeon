@@ -18,7 +18,8 @@ public partial class Enemy
         _ => "地牢最深处的主人 · 半血后狂暴",
     };
 
-    /// Each boss throws its own thing: the Goblin King gold coins, the Boar Chief rocks, the Orc Warlord axes.
+    /// Each boss throws its own thing: the Goblin King gold coins, the Boar Chief rocks, the lich ice shards,
+    /// the Orc Warlord axes (Bullet.EnemyLook).
     string BossShot => bossKind switch
     {
         BossKind.GoblinKing => "bullet_gold",
@@ -127,7 +128,7 @@ public partial class Enemy
             {
                 burstLeft--;
                 burstTimer = 0.35f * Rage;
-                if (bossKind == BossKind.GoblinKing) Fan(7, 70f, 10f, "bullet_low", 0.4f);
+                if (bossKind == BossKind.GoblinKing) Fan(7, 70f, 10f, "bullet_jade", 0.4f); // knee-high jade coins: jump
                 else Fan(7, 70f, 12f, BossShot);
             }
         }

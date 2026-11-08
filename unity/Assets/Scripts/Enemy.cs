@@ -284,8 +284,8 @@ public partial class Enemy : MonoBehaviour
         return Vector3.Cross(Vector3.up, to).normalized * strafeSign;
     }
 
-    /// Shots fly level at a fixed height above the floor so the player can read them:
-    /// orange at chest height (sidestep or jump), green low orbs (jump), pink boss orbs (chest).
+    /// Shots fly level at a fixed height above the floor so the player can read them: green things skim
+    /// the floor (jump), everything else (bullets, arrows, coins, rocks, skulls, axes) is at chest height.
     float ShotHeight => kind == EnemyKind.Spreader ? 0.4f : 1.0f;
     Vector3 TargetPoint() => new Vector3(TargetPos.x, ShotHeight, TargetPos.z);
     Vector3 Muzzle() => new Vector3(eye.position.x, ShotHeight, eye.position.z);
@@ -360,7 +360,7 @@ public partial class Enemy : MonoBehaviour
 
     void Fan(int n, float arc, float speed, string mat, float height = -1f)
     {
-        if (mat == "bullet_low") Tips.Show("low", "绿色贴地弹：按空格跳过去（时机对了还能触发完美闪避）");
+        if (Bullet.IsLow(mat)) Tips.Show("low", "绿色贴地弹：按空格跳过去（时机对了还能触发完美闪避）");
         Vector3 dir = TargetDir();
         for (int i = 0; i < n; i++)
         {

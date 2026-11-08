@@ -20,6 +20,7 @@ ROTATION = {
     "laser": "z90", "flamer": "z90", "grenade": "z90", "missile": "z90", "boomerang": "z90",
     "thunder": "x90", "frost": "x90", "daggers": "x90", "spear": "y45,x90", "bow": "z90",
     "raven_blade": "z90", "oath_sword": "x90", "star_staff": "x90", "dawn_scepter": "x90",
+    "proj_ice_shard": "z90",  # point first (Unity forward); the skulls already face forward
 }
 state = json.loads((ROOT / "assets/meshy/state.json").read_text())
 names = sys.argv[1:] or [n for n, a in ASSETS.items() if a["kind"] in ("weapon", "prop")]

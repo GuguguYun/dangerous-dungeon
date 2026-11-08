@@ -155,6 +155,26 @@ public static class Vfx
         col.color = g;
     }
 
+    /// Spirit fire: fades in pale, burns green (or violet), darkens and fades out; no flash anywhere.
+    static void SpiritFlames(ParticleSystem ps, bool green)
+    {
+        var col = ps.colorOverLifetime;
+        col.enabled = true;
+        var g = new Gradient();
+        g.SetKeys(green
+                ? new[] { new GradientColorKey(new Color(0.8f, 1f, 0.55f), 0f), new GradientColorKey(new Color(0.3f, 0.95f, 0.3f), 0.35f), new GradientColorKey(new Color(0.05f, 0.4f, 0.15f), 1f) }
+                : new[] { new GradientColorKey(new Color(0.95f, 0.8f, 1f), 0f), new GradientColorKey(new Color(0.6f, 0.3f, 1f), 0.35f), new GradientColorKey(new Color(0.25f, 0.08f, 0.5f), 1f) },
+            new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(0.75f, 0.15f), new GradientAlphaKey(0.45f, 0.6f), new GradientAlphaKey(0f, 1f) });
+        col.color = g;
+    }
+
+    static void Grow(ParticleSystem ps, float to)
+    {
+        var s = ps.sizeOverLifetime;
+        s.enabled = true;
+        s.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 1f, 1f, to));
+    }
+
     static void Burst(ParticleSystem ps, int count)
     {
         var em = ps.emission;
@@ -292,6 +312,24 @@ public static class Vfx
         Finish(ps, 0.3f);
     }
 
+    /// Small solid bits (bone, stone, jade, wood) knocked off a thrown thing: unlit, they just fall.
+    public static void Chips(Vector3 at, Color c, int count, float speed)
+    {
+        var ps = Make("chips", at, AlphaBlend, 0.05f);
+        var m = ps.main;
+        m.startLifetime = new ParticleSystem.MinMaxCurve(0.35f, 0.6f);
+        m.startSpeed = new ParticleSystem.MinMaxCurve(speed * 0.4f, speed);
+        m.startSize = new ParticleSystem.MinMaxCurve(0.05f, 0.1f);
+        m.startColor = Grad(c, c * 0.7f);
+        m.gravityModifier = 1.6f;
+        var sh = ps.shape;
+        sh.shapeType = ParticleSystemShapeType.Sphere;
+        sh.radius = 0.08f;
+        Burst(ps, count);
+        Fade(ps, Color.white, Color.white);
+        Finish(ps, 0.6f);
+    }
+
     public static void Shatter(Vector3 at)
     {
         var c = new Color(0.65f, 0.9f, 1f);
@@ -321,7 +359,7 @@ public static class Vfx
     /// Particles left behind a moving projectile or carried by a burning enemy.
     public static ParticleSystem Trail(Transform parent, string kind)
     {
-        bool smoke = kind == "smoke" || kind == "dust";
+        bool smoke = kind == "smoke" || kind == "dust" || kind == "gunsmoke" || kind == "rockdust" || kind == "icemist";
         var ps = Make("trail_" + kind, parent.position, smoke || kind == "frost" ? AlphaBlend : Additive, 10f, parent);
         ps.transform.localPosition = Vector3.zero;
         var m = ps.main;
@@ -488,6 +526,84 @@ public static class Vfx
                 em.rateOverDistance = 9f;
                 sh.radius = 0.1f;
                 Fade(ps, new Color(1f, 0.95f, 0.7f), new Color(1f, 0.6f, 0.2f));
+                break;
+            // ---- behind enemy shots (Bullet.EnemyLook): sized in metres, on an unscaled shot ----
+            case "gunsmoke":
+                // Gun smoke streaming off a slug: warm grey at its base, cooling and spreading behind.
+                m.startLifetime = new ParticleSystem.MinMaxCurve(0.3f, 0.55f);
+                m.startSpeed = new ParticleSystem.MinMaxCurve(0.05f, 0.25f);
+                m.startSize = new ParticleSystem.MinMaxCurve(0.07f, 0.12f);
+                m.startColor = new Color(0.85f, 0.75f, 0.62f, 0.5f);
+                m.gravityModifier = -0.05f;
+                em.rateOverDistance = 18f;
+                sh.radius = 0.02f;
+                sh.position = new Vector3(0f, 0f, -0.2f);
+                Grow(ps, 2.6f);
+                Fade(ps, new Color(1f, 0.8f, 0.6f), new Color(0.5f, 0.5f, 0.52f));
+                break;
+            case "ghostflame":
+            case "hexflame":
+                // Spirit flame streaming off a flying skull (green: the shaman's, violet: the lich's): one
+                // tongue of fire that rides with it (local space), born at the back of the crown and blown
+                // back and up, so the face stays clear.
+                ps.GetComponent<ParticleSystemRenderer>().sharedMaterial = Fire;
+                m.simulationSpace = ParticleSystemSimulationSpace.Local;
+                m.startRotation = new ParticleSystem.MinMaxCurve(-0.3f, 0.3f);
+                var sway = ps.rotationOverLifetime;
+                sway.enabled = true;
+                sway.z = new ParticleSystem.MinMaxCurve(-0.7f, 0.7f);
+                m.startLifetime = new ParticleSystem.MinMaxCurve(0.28f, 0.45f);
+                m.startSpeed = new ParticleSystem.MinMaxCurve(0.6f, 1.2f);
+                m.startSize = new ParticleSystem.MinMaxCurve(0.28f, 0.46f);
+                em.rateOverTime = 75f;
+                sh.shapeType = ParticleSystemShapeType.Cone;
+                sh.angle = 18f;
+                sh.radius = 0.13f;
+                sh.rotation = new Vector3(0f, 180f, 0f); // blown backwards
+                sh.position = new Vector3(0f, 0.08f, -0.06f);
+                var rise = ps.velocityOverLifetime;
+                rise.enabled = true;
+                rise.space = ParticleSystemSimulationSpace.Local;
+                rise.x = new ParticleSystem.MinMaxCurve(0f);
+                rise.y = new ParticleSystem.MinMaxCurve(0.7f);
+                rise.z = new ParticleSystem.MinMaxCurve(0f);
+                SpiritFlames(ps, kind == "ghostflame");
+                Shrink(ps, 0.3f);
+                break;
+            case "coinglint":
+                // A few soft gold glints left hanging behind a coin (they fade, never blink).
+                m.startLifetime = new ParticleSystem.MinMaxCurve(0.25f, 0.45f);
+                m.startSpeed = new ParticleSystem.MinMaxCurve(0.05f, 0.3f);
+                m.startSize = new ParticleSystem.MinMaxCurve(0.04f, 0.08f);
+                m.startColor = Grad(new Color(1f, 0.9f, 0.55f, 0.6f), new Color(1f, 0.7f, 0.25f, 0.5f));
+                em.rateOverDistance = 4f;
+                sh.radius = 0.15f;
+                Fade(ps, new Color(1f, 0.9f, 0.6f), new Color(1f, 0.6f, 0.2f));
+                break;
+            case "rockdust":
+                // Dust and grit shed by a tumbling boulder.
+                m.startLifetime = new ParticleSystem.MinMaxCurve(0.4f, 0.75f);
+                m.startSpeed = new ParticleSystem.MinMaxCurve(0.1f, 0.4f);
+                m.startSize = new ParticleSystem.MinMaxCurve(0.18f, 0.32f);
+                m.startColor = new Color(0.55f, 0.47f, 0.38f, 0.45f);
+                m.gravityModifier = 0.1f;
+                em.rateOverDistance = 6f;
+                sh.radius = 0.18f;
+                Grow(ps, 1.8f);
+                Fade(ps, new Color(0.62f, 0.54f, 0.44f), new Color(0.42f, 0.38f, 0.32f));
+                break;
+            case "icemist":
+                // Cold mist curling off an ice shard.
+                m.startLifetime = new ParticleSystem.MinMaxCurve(0.3f, 0.55f);
+                m.startSpeed = new ParticleSystem.MinMaxCurve(0.05f, 0.2f);
+                m.startSize = new ParticleSystem.MinMaxCurve(0.14f, 0.24f);
+                m.startColor = new Color(0.85f, 0.95f, 1f, 0.45f);
+                m.gravityModifier = 0.05f;
+                em.rateOverDistance = 9f;
+                sh.radius = 0.06f;
+                sh.position = new Vector3(0f, 0f, -0.15f);
+                Grow(ps, 2f);
+                Fade(ps, new Color(0.9f, 0.97f, 1f), new Color(0.65f, 0.85f, 1f));
                 break;
             case "chill":
                 m.startLifetime = new ParticleSystem.MinMaxCurve(0.5f, 0.9f);
