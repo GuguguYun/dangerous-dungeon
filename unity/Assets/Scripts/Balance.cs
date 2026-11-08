@@ -92,9 +92,9 @@ public static class Balance
     public const int GoblinBomb = 8;        // a goblin's bomb, to goblins standing in it
     public const int MeteorStorm = 24;      // the mage's skill, per meteor
     public const int SpikeTrap = 10, FireTrap = 8, SawTrap = 5, CrackTrap = 5;
-    public static int DroneShot(int floor) => 3 + floor;
+    public static int DroneShot(int floor) => 2 + floor; // one shot every 1.1 s: about 12% of a floor's weapon
 
-    // ---------- mechs: about twice what the floor's weapons do ----------
+    // ---------- mechs: about twice what the floor's weapons do (scaled by FloorMul as they are) ----------
 
     public const int MechGun = 4, MechCannon = 22, MechBlade = 18, MechFist = 30, MechFinisher = 45,
         MechThrust = 30, MechStomp = 25, MechQuake = 20, MechRam = 18, MechWreck = 20, MechMissile = 12, MechDrop = 15;

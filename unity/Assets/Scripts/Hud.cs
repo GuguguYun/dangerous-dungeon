@@ -26,7 +26,9 @@ public class Hud : MonoBehaviour
         public Vector3 pos;
         public string text;
         public bool crit;
-        public float t;
+        public float t;    // since it last changed (it fades from then)
+        public float age;  // since it appeared
+        public int amount, target;
         public Color? color;
     }
 
@@ -65,12 +67,30 @@ public class Hud : MonoBehaviour
         Debug.Log("HUD " + text);
     }
 
-    public void AddDamage(Vector3 pos, int amount, bool crit) =>
-        numbers.Add(new Number { pos = pos + Random.insideUnitSphere * 0.3f, text = crit ? amount + "!" : amount.ToString(), crit = crit });
+    /// A damage number over the enemy. Quick plain hits on the same enemy add up into one number for
+    /// up to 0.6 s (a laser used to put ten 3s a second over a goblin); crits always get their own.
+    public void AddDamage(Vector3 pos, int amount, bool crit, Object target = null)
+    {
+        int key = target ? target.GetInstanceID() : 0;
+        if (!crit && key != 0)
+            for (int i = numbers.Count - 1; i >= 0; i--)
+            {
+                var n = numbers[i];
+                if (n.target != key || n.crit || n.t > 0.25f || n.age > 0.6f) continue;
+                n.amount += amount;
+                n.text = n.amount.ToString();
+                n.t = 0f;
+                numbers[i] = n;
+                return;
+            }
+        numbers.Add(new Number { pos = pos + Random.insideUnitSphere * 0.3f, text = crit ? amount + "!" : amount.ToString(), crit = crit, amount = amount, target = key });
+    }
 
     /// A word that floats up like a damage number (reaction names).
     public void AddText(Vector3 pos, string text, Color c) =>
         numbers.Add(new Number { pos = pos, text = text, crit = true, color = c });
+
+    public int DamageNumbers => numbers.Count;
 
     public void HitMarker() => hitMarker = 0.12f;
     public void Hurt() => hurt = 0.35f;
@@ -147,6 +167,7 @@ public class Hud : MonoBehaviour
         {
             var n = numbers[i];
             n.t += dt;
+            n.age += dt;
             n.pos += Vector3.up * dt * 1.2f;
             numbers[i] = n;
             if (n.t > 0.8f) numbers.RemoveAt(i);

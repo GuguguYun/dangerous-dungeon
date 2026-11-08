@@ -609,6 +609,7 @@ public partial class PlayerController : MonoBehaviour
         // weapons the shop upgrades and a class skill weapon's own boost.
         float mul = (1f + RunState.damageBonus) * (1f + Combo.Bonus);
         if (!InMech) mul *= Weapon.damageMul * Balance.LevelMul(Weapon.level);
+        else mul *= Balance.FloorMul(RunState.floor); // a mech keeps pace with the floor's enemies
         int d = Mathf.Max(1, Mathf.RoundToInt(baseDamage * mul));
         if (ambush)
         {

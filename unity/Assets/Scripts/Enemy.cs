@@ -476,7 +476,7 @@ public partial class Enemy : MonoBehaviour
             anim.Trigger("hit", 2f, 0.12f);
             hitAnimCd = 0.6f;
         }
-        Hud.I?.AddDamage(transform.position + Vector3.up * (cc.height + 0.3f), amount, crit);
+        Hud.I?.AddDamage(transform.position + Vector3.up * (cc.height + 0.3f), amount, crit, this);
         if (amount >= Balance.HeavyHit || crit) TimeControl.HitStop(crit && amount >= Balance.HeavyHit ? 0.07f : 0.045f);
         Hud.I?.HitMarker();
         Sfx.Play("hit", 0.45f, 0.2f);

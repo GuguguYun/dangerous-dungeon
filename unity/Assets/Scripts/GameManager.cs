@@ -868,6 +868,16 @@ public class GameManager : MonoBehaviour
         Check("every weapon really deals its band's DPS (measured within 15%)", measuredOff.Count == 0, string.Join(", ", measuredOff));
         Check("enemy health grows 30% a floor", Balance.EnemyHp(EnemyKind.Gunner, 1) == 24 && Balance.EnemyHp(EnemyKind.Gunner, 4) == Mathf.RoundToInt(24 * 1.9f));
 
+        // A beam's ticks on one enemy add up into one damage number; a crit still gets its own.
+        var tally = Dummy(Ahead(25f));
+        yield return null;
+        int numbers0 = hud.DamageNumbers;
+        for (int i = 0; i < 5; i++) tally.TakeDamage(3, Vector3.forward);
+        int merged = hud.DamageNumbers - numbers0;
+        tally.TakeDamage(3, Vector3.forward, true);
+        Check("quick hits on one enemy add up into one damage number (crits apart)", merged == 1 && hud.DamageNumbers - numbers0 == 2, $"plain={merged} total={hud.DamageNumbers - numbers0}");
+        Destroy(tally.gameObject);
+
 
         RunState.critChance = critWas;
         RunState.fireRateMul = rateWas;
