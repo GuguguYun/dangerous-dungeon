@@ -234,14 +234,16 @@ public class Hud : MonoBehaviour
             return;
         }
 
-        if (GameSettings.flashes && hurt > 0f) Box(new Rect(0, 0, w, h), new Color(0.8f, 0f, 0f, hurt * 0.5f));
+        // Hurt and perfect-dodge cues glow in from the screen's edges only: a full-screen tint flashes
+        // the whole view, which is hard on players prone to 3D sickness.
+        if (GameSettings.flashes && hurt > 0f) UiKit.EdgeGlow(w, h, new Color(0.9f, 0.05f, 0.05f, hurt / 0.35f * 0.55f));
         if (player && player.poisoned > 0f)
         {
             Box(new Rect(0, 0, w, 10), new Color(0.3f, 0.9f, 0.2f, 0.5f));
             Box(new Rect(0, h - 10, w, 10), new Color(0.3f, 0.9f, 0.2f, 0.5f));
             UiKit.Text(new Rect(w / 2 - 100, h / 2 + 44, 200, 26), $"中毒 {player.poisoned:0.0}s", new GUIStyle(center) { fontSize = 18 }, new Color(0.55f, 1f, 0.45f));
         }
-        if (GameSettings.flashes && perfect > 0f) Box(new Rect(0, 0, w, h), new Color(0.3f, 0.9f, 1f, perfect * 0.35f));
+        if (GameSettings.flashes && perfect > 0f) UiKit.EdgeGlow(w, h, new Color(0.3f, 0.9f, 1f, perfect / 0.6f * 0.45f));
         if (GameSettings.showFps) DrawFps(w);
 
         if (player)

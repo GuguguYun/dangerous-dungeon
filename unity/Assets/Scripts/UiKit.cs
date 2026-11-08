@@ -469,6 +469,32 @@ public static class UiKit
             m => $"<size={Mathf.RoundToInt(int.Parse(m.Groups[1].Value) * Scale)}>");
     }
 
+    static Texture2D edge;
+
+    /// A soft coloured glow around the screen's edges, clear in the middle (hurt and dodge cues).
+    public static void EdgeGlow(float w, float h, Color c)
+    {
+        if (!edge)
+        {
+            const int n = 64;
+            edge = new Texture2D(n, n, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                {
+                    // Distance from the centre of an ellipse filling the screen: 0 middle, 1 at the edges.
+                    float dx = (x + 0.5f) / n * 2f - 1f, dy = (y + 0.5f) / n * 2f - 1f;
+                    float d = Mathf.Sqrt(dx * dx * 0.7f + dy * dy * 0.7f);
+                    float a = Mathf.SmoothStep(0f, 1f, (d - 0.55f) / 0.45f);
+                    edge.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+                }
+            edge.Apply();
+        }
+        var prev = GUI.color;
+        GUI.color = Lin(c);
+        GUI.DrawTexture(new Rect(0, 0, w, h), edge, ScaleMode.StretchToFill, true);
+        GUI.color = prev;
+    }
+
     /// A label with a soft dark outline (reads on any background).
     public static void Text(Rect r, string text, GUIStyle style, Color? color = null)
     {
