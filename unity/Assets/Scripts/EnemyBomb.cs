@@ -84,9 +84,10 @@ public class EnemyBomb : MonoBehaviour
         // A lob: straight line plus a parabola on top.
         transform.position = Vector3.Lerp(from, to, k) + Vector3.up * (2.2f * 4f * k * (1f - k));
         transform.Rotate(Vector3.right, 540f * Time.deltaTime, Space.Self);
-        // The inner ring closes in on the outer one: when they meet, it blows.
+        // The inner ring closes in on the outer one: when they meet, it blows. The rings warm from orange
+        // to red as it falls (a steady change, no blinking).
         SetRadius(inner, radius * k);
-        var c = new Color(1f, 0.25f + 0.3f * Mathf.PingPong(t * 6f, 1f), 0.15f, 0.9f) * 2f;
+        var c = new Color(1f, Mathf.Lerp(0.5f, 0.15f, k), 0.12f, 0.9f) * 2f;
         outer.startColor = outer.endColor = c;
         inner.startColor = inner.endColor = c;
         if (k >= 1f) Explode();
@@ -113,8 +114,13 @@ public class EnemyBomb : MonoBehaviour
         CameraShake.Add(0.25f);
         Sfx.Play("explode", 0.6f, 0.15f);
         Vfx.Detach(fuse);
-        Destroy(outer.gameObject);
-        Destroy(inner.gameObject);
         Destroy(gameObject);
+    }
+
+    // The rings live outside the bomb: take them along however it goes (blown up, or cleared by a test).
+    void OnDestroy()
+    {
+        if (outer) Destroy(outer.gameObject);
+        if (inner) Destroy(inner.gameObject);
     }
 }

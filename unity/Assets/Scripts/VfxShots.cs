@@ -3,29 +3,37 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 
-/// -vfxshots <dir>: a quick look at the loot pillars, the energy shields, the potion / crystal pickups
-/// and the assassin's stealth, as close-ups and from the normal play camera, saved as PNGs; then quit.
+/// -vfxshots <dir>: a quick look at the loot pillars, the energy shields, the potion / crystal pickups,
+/// the assassin's stealth and every enemy / boss shot, as close-ups and from the normal play camera,
+/// saved as PNGs; then quit. -vfxpart shots: only the enemy shots.
 /// It hooks itself in (no GameManager change) and takes over once the floor is built. Run with -class
 /// knight so the dome is the knight's own, -class assassin for the stealth. Needs a window
 /// (screenshots), like -shots.
 public class VfxShots : MonoBehaviour
 {
-    string dir;
+    string dir, part = "all";
     PlayerController player;
     Camera cam;
     Hud hud;
+    Dungeon dungeon;
+    Vector3 P, F, R;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Boot()
     {
         var args = System.Environment.GetCommandLineArgs();
+        string part = "all";
+        for (int i = 0; i < args.Length - 1; i++)
+            if (args[i] == "-vfxpart") part = args[i + 1];
         for (int i = 0; i < args.Length - 1; i++)
         {
             if (args[i] != "-vfxshots") continue;
             Application.runInBackground = true;
             var go = new GameObject("VfxShots");
             DontDestroyOnLoad(go);
-            go.AddComponent<VfxShots>().dir = args[i + 1];
+            var v = go.AddComponent<VfxShots>();
+            v.dir = args[i + 1];
+            v.part = part;
         }
     }
 
@@ -41,14 +49,22 @@ public class VfxShots : MonoBehaviour
         cam = player.cam;
         hud = Hud.I;
         hud.screen = Hud.Screen.None;
-        var dungeon = FindAnyObjectByType<Dungeon>();
+        dungeon = FindAnyObjectByType<Dungeon>();
         player.yaw = dungeon.startYaw;
         player.pitch = 12f;
-        Vector3 P = player.transform.position;
+        P = player.transform.position;
         P.y = 0f;
-        Vector3 F = Quaternion.Euler(0f, player.yaw, 0f) * Vector3.forward, R = Quaternion.Euler(0f, player.yaw + 90f, 0f) * Vector3.forward;
+        F = Quaternion.Euler(0f, player.yaw, 0f) * Vector3.forward;
+        R = Quaternion.Euler(0f, player.yaw + 90f, 0f) * Vector3.forward;
         yield return new WaitForSeconds(1f);
+        if (part != "shots") yield return Effects();
+        yield return EnemyShots();
+        Debug.Log("VFXSHOTS done");
+        Application.Quit();
+    }
 
+    IEnumerator Effects()
+    {
         // ---- loot pillars: one of each rarity ----
         var drops = new List<Pickup>();
         for (int r = 0; r < Weapons.RarityColors.Length; r++)
@@ -223,8 +239,118 @@ public class VfxShots : MonoBehaviour
             Look(mid + toDoor * 3.0f + Vector3.up * 1.9f, mid + Vector3.up * 1.2f);
             yield return Shot("shop_close.png");
         }
-        Debug.Log("VFXSHOTS done");
-        Application.Quit();
+        player.Teleport(P);
+        player.yaw = Mathf.Atan2(F.x, F.z) * Mathf.Rad2Deg;
+        PlayCam();
+        yield return new WaitForSeconds(0.5f);
+    }
+
+    // ---- enemy and boss shots: each fired the way its enemy fires it (same material, size, speed, height) ----
+
+    /// id, material, radius, speed, height, pattern (0 = one shot, n > 0 = fan of n over `arc`, n < 0 = ring of -n).
+    static readonly (string id, string mat, float radius, float speed, float height, int pattern, float arc)[] Shots =
+    {
+        ("gunner", "bullet_enemy", 0.16f, 11f, 1.0f, 0, 0f),
+        ("archer", "bullet_arrow", 0.1f, 19f, 1.0f, 0, 0f),
+        ("shaman", "bullet_low", 0.16f, 9f, 0.4f, 5, 50f),
+        ("king_fan", "bullet_jade", 0.16f, 10f, 0.4f, 7, 70f),
+        ("king_ring", "bullet_gold", 0.2f, 9f, 1.0f, -12, 0f),
+        ("boar_ring", "bullet_rock", 0.2f, 8f, 1.0f, -20, 0f),
+        ("lich_skulls", "bullet_hex", 0.22f, 7f, 1.0f, 3, 60f),
+        ("lich_ring", "bullet_frost", 0.2f, 7.5f, 1.0f, -14, 0f),
+        ("orc_fan", "bullet_axe", 0.16f, 12f, 1.0f, 7, 70f),
+        ("orc_ring", "bullet_axe", 0.2f, 9f, 1.0f, -18, 0f),
+    };
+
+    IEnumerator EnemyShots()
+    {
+        player.hp = player.maxHp = 99; // a stray shot must not end the run
+        // Face the longest clear line in the room; the "enemy" stands up to 9 m down it.
+        float far = 0f;
+        for (int i = 0; i < 24; i++)
+        {
+            var d = Quaternion.Euler(0f, i * 15f, 0f) * Vector3.forward;
+            float free = Free(P, d);
+            if (free > far) { far = free; F = d; }
+        }
+        far = Mathf.Min(9f, far - 1.2f);
+        R = Vector3.Cross(Vector3.up, F);
+        player.yaw = Mathf.Atan2(F.x, F.z) * Mathf.Rad2Deg;
+        foreach (var s in Shots)
+        {
+            Vector3 src = P + F * far;
+            src.y = s.height;
+            // 1) From the play camera, fired at the player as in a fight, caught 3 m before it arrives.
+            Clear();
+            PlayCam();
+            yield return new WaitForSeconds(0.25f);
+            Volley(s.mat, s.radius, s.speed, src, new Vector3(P.x, s.height, P.z), s.pattern, s.arc);
+            yield return new WaitForSeconds((far - 3f) / s.speed);
+            yield return Shot($"shot_{s.id}_game.png");
+            // 2) Close-up from the side: two shots crossing 2.2 m in front of a still camera, coming
+            //    from the roomier side.
+            Clear();
+            Vector3 mid = P + F * 3.5f;
+            mid.y = s.height;
+            Vector3 across = Free(mid, -R) >= Free(mid, R) ? R : -R;
+            float run = Mathf.Clamp(Mathf.Min(s.speed * 0.35f, Free(mid, -across) - 1.5f), 0.5f, 4f);
+            Look(mid - F * 2.2f + Vector3.up * 0.35f, mid);
+            Bullet.Fire(mid - across * run, across * s.speed, false, s.radius, s.mat, 4f);
+            Bullet.Fire(mid - across * (run + 1.1f) + F * 0.6f, across * s.speed, false, s.radius, s.mat, 4f);
+            yield return new WaitForSeconds(run / s.speed);
+            yield return Shot($"shot_{s.id}_side.png");
+            // 3) Close-up head-on: coming at a camera at chest height, caught 2.5 m away.
+            Clear();
+            Vector3 eye = P + F * 0.8f + Vector3.up * 1.3f;
+            Look(eye, src + Vector3.up * 0.2f);
+            Vector3 by = new Vector3(eye.x, s.height, eye.z) + R * 0.6f;
+            Bullet.Fire(src, (by - src).normalized * s.speed, false, s.radius, s.mat, 4f);
+            yield return new WaitForSeconds((Vector3.Distance(src, by) - 2.5f) / s.speed);
+            yield return Shot($"shot_{s.id}_front.png");
+        }
+        // The bomber's lob: from the play camera coming down, and close by at the top of the arc.
+        Clear();
+        PlayCam();
+        yield return new WaitForSeconds(0.25f);
+        EnemyBomb.Throw(P + F * far + Vector3.up * 1.4f, P + F * 3.5f + R * 2.5f, 1.0f, 2.2f);
+        yield return new WaitForSeconds(0.7f);
+        yield return Shot("shot_bomber_game.png");
+        Clear();
+        Vector3 land = P + F * 3f;
+        Look(land - F * 2.5f + R * 0.8f + Vector3.up * 1.7f, land + F * 2f + Vector3.up * 2.4f);
+        EnemyBomb.Throw(land + F * 4f + Vector3.up * 1.4f, land, 1.0f, 2.2f);
+        yield return new WaitForSeconds(0.45f);
+        yield return Shot("shot_bomber_side.png");
+        Clear();
+        PlayCam();
+    }
+
+    /// Clear floor from `from` along `dir` (chest height) before a wall, up to 30 m.
+    static float Free(Vector3 from, Vector3 dir) =>
+        Physics.Raycast(new Vector3(from.x, 1f, from.z), dir, out var hit, 30f, Layers.WorldMask, QueryTriggerInteraction.Ignore) ? hit.distance : 30f;
+
+    /// One shot, a fan aimed at `at`, or a ring around `src`, like Enemy.Shoot / Fan / Ring.
+    static void Volley(string mat, float radius, float speed, Vector3 src, Vector3 at, int pattern, float arc)
+    {
+        Vector3 aim = at - src;
+        aim.y = 0f;
+        aim.Normalize();
+        if (pattern == 0) { Bullet.Fire(src, aim * speed, false, radius, mat, 4f); return; }
+        int n = Mathf.Abs(pattern);
+        for (int i = 0; i < n; i++)
+        {
+            var d = pattern > 0
+                ? Quaternion.Euler(0f, -arc / 2f + arc * i / (n - 1), 0f) * aim
+                : Quaternion.Euler(0f, 360f * i / n, 0f) * aim;
+            Bullet.Fire(src, d * speed, false, radius, mat, 4f);
+        }
+    }
+
+    /// Removes every enemy shot and bomb still in the air.
+    static void Clear()
+    {
+        foreach (var b in Bullet.Live.ToArray()) if (b && !b.HitsEnemies) Destroy(b.gameObject);
+        foreach (var b in FindObjectsByType<EnemyBomb>(FindObjectsSortMode.None)) Destroy(b.gameObject);
     }
 
     /// Waits for the top of a jump.
