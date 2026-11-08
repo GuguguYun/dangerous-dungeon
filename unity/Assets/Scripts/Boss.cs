@@ -108,7 +108,7 @@ public partial class Enemy
         if (telegraphT > 0f)
         {
             telegraphT -= dt;
-            DrawLine(transform.position, transform.position + chargeDir * 26f, Mathf.PingPong(Time.time * 6f, 1f));
+            DrawLine(transform.position, transform.position + chargeDir * 26f, 0.6f); // steady: a pulsing line flickers
             if (telegraphT <= 0f)
             {
                 HideTelegraph();

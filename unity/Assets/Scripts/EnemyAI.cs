@@ -187,7 +187,7 @@ public partial class Enemy
         }
         sight.enabled = true;
         sight.widthMultiplier = 0.035f;
-        var c = new Color(1f, 0.2f, 0.15f, 0.4f + 0.2f * Mathf.Sin(Time.time * 12f));
+        var c = new Color(1f, 0.2f, 0.15f, 0.5f); // steady: a pulsing line flickers
         sight.startColor = sight.endColor = c;
         sight.SetPosition(0, a);
         sight.SetPosition(1, b);

@@ -592,16 +592,9 @@ public class Bullet : MonoBehaviour
         if (mat == "bullet_frost") { Vfx.Shatter(pos); return; }
         if (mat == "bullet_fire") { Vfx.Sparks(pos, c, 4, 3f); return; }
         if (model) { Break(pos); return; }
+        // Sparks and a little dust; no glowing ball flashing up where it hits (the user doesn't want orbs).
         Vfx.Sparks(pos, c, hitsEnemies ? 8 : 5, hitsEnemies ? 6f : 4f);
-        size *= 0.6f;
-        var fx = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        DestroyImmediate(fx.GetComponent<Collider>());
-        fx.transform.position = pos;
-        fx.transform.localScale = Vector3.one * size * 2f;
-        var r = fx.GetComponent<MeshRenderer>();
-        r.sharedMaterial = Palette.Get(mat);
-        r.shadowCastingMode = ShadowCastingMode.Off;
-        fx.AddComponent<Shrink>().duration = explode > 0f ? 0.3f : 0.15f;
+        Vfx.Puff(pos, new Color(0.55f, 0.52f, 0.5f, 0.35f), Mathf.Max(0.25f, size * 0.8f), 3);
     }
 
     /// A real thing hitting something breaks or bounces off: chips, dust, a few sparks, no flash of light.
