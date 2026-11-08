@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public enum EnemyKind { Gunner, Charger, Spreader, Boss, Bomber, Archer }
+public enum EnemyKind { Gunner, Charger, Spreader, Boss, Bomber, Archer, Guard }
 
 /// Placeholder enemies. Gunner keeps mid range and fires orbs; Charger rushes and hits on contact;
 /// Spreader fires fans; Boss cycles ring / burst / charge attacks and summons help.
@@ -108,6 +108,9 @@ public partial class Enemy : MonoBehaviour
             case EnemyKind.Archer:
                 maxHp = 6 + floor * 2; speed = 3.0f; bodyMat = "enemy_charger"; shootTimer += 0.5f;
                 break;
+            case EnemyKind.Guard:
+                maxHp = 12 + floor * 3; speed = 2.4f; bodyMat = "enemy_body";
+                break;
             case EnemyKind.Boss:
                 bodyMat = "enemy_boss"; scale = 2.3f;
                 SetupBoss(floor);
@@ -122,7 +125,7 @@ public partial class Enemy : MonoBehaviour
 
     void BuildVisual(float scale)
     {
-        string id = kind == EnemyKind.Boss ? BossModel() : kind.ToString().ToLower();
+        string id = kind == EnemyKind.Boss ? BossModel() : kind == EnemyKind.Guard ? GuardModel : kind.ToString().ToLower();
         // The denser second-round minion when it has been imported.
         if (kind != EnemyKind.Boss && Resources.Load<GameObject>($"Models/Chars/{id}_hq/rigged")) id += "_hq";
         anim = CharacterAnim.Spawn(id, model, Layers.Enemy);
@@ -141,8 +144,10 @@ public partial class Enemy : MonoBehaviour
             else if (kind == EnemyKind.Spreader) Hold("thunder");
             else if (kind == EnemyKind.Archer) Hold("bow", "lefthand");
             else if (kind == EnemyKind.Bomber) HoldBomb();
+            else if (kind == EnemyKind.Guard) BuildGuardShield(h);
             return;
         }
+        if (kind == EnemyKind.Guard) BuildGuardShield(1.6f);
         body = Part(PrimitiveType.Capsule, new Vector3(0f, 0.8f, 0f) * scale, new Vector3(0.9f, 0.8f, 0.9f) * scale, bodyMat);
         eye = Part(PrimitiveType.Sphere, new Vector3(0f, 1.25f, 0.4f) * scale, Vector3.one * 0.26f * scale, "enemy_eye").transform;
         if (kind == EnemyKind.Charger)
@@ -208,11 +213,11 @@ public partial class Enemy : MonoBehaviour
                 move = BossThink(to, dist, dt);
                 faceDir = chargeT > 0f ? chargeDir : leaping ? new Vector3(leapVel.x, 0f, leapVel.z) : (dist > 0.01f ? to / dist : faceDir);
             }
-            else move = MinionThink(to, dist, dt);
+            else move = kind == EnemyKind.Guard ? GuardThink(to, dist, dt) : MinionThink(to, dist, dt);
 
             // Bodies only hurt when they mean to: bosses always, chargers during the lunge.
             float reach = cc.radius + 0.75f;
-            bool contact = kind == EnemyKind.Boss || (kind == EnemyKind.Charger && Lunging);
+            bool contact = kind == EnemyKind.Boss || ((kind == EnemyKind.Charger || kind == EnemyKind.Guard) && Lunging);
             float realDist = Vector3.Distance(new Vector3(target.transform.position.x, 0f, target.transform.position.z), new Vector3(transform.position.x, 0f, transform.position.z));
             if (contact && contactCd <= 0f && realDist < reach)
             {
@@ -233,6 +238,7 @@ public partial class Enemy : MonoBehaviour
         cc.Move((move * speed * (slowT > 0f ? slowMul : 1f) + knock + Vector3.up * vy) * dt);
         LastMove = move;
         Face(dt);
+        GuardTick(dt);
         hitAnimCd -= dt;
         if (anim)
         {
@@ -439,6 +445,7 @@ public partial class Enemy : MonoBehaviour
     {
         if (dead) return;
         if (kind == EnemyKind.Boss) amount = ModifyIncoming(amount);
+        amount = GuardBlock(amount, hitDir, at); // the shield guard's tower shield, from the front
         amount = AbsorbWithShield(amount, hitDir, at);
         amount = Reactions.Shatter(this, amount); // a heavy hit on a frozen enemy shatters the ice
         if (amount <= 0)

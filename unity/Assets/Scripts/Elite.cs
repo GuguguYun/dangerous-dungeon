@@ -39,6 +39,7 @@ public partial class Enemy
         EnemyKind.Spreader => "鬼火萨满",
         EnemyKind.Bomber => "炸药哥布林",
         EnemyKind.Archer => "骸骨弓手",
+        EnemyKind.Guard => "哥布林盾卫",
         _ => displayName,
     };
 

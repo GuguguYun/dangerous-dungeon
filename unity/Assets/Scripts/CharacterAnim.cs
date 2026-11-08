@@ -26,7 +26,7 @@ public class CharacterAnim : MonoBehaviour
         { "assassin", 1.55f }, { "mage", 1.5f }, { "priest", 1.45f },
         { "gunner_hq", 1.3f }, { "charger_hq", 1.7f }, { "spreader_hq", 1.3f },
         { "light_mech", 2.1f }, { "heavy_mech", 2.5f },
-        { "merchant", 1.3f }, { "bomber", 1.3f }, { "archer", 1.45f }, { "lich", 2.8f },
+        { "merchant", 1.3f }, { "bomber", 1.3f }, { "archer", 1.45f }, { "shield_goblin", 1.5f }, { "lich", 2.8f },
     };
 
     public static CharacterAnim Spawn(string id, Transform parent, int layer)

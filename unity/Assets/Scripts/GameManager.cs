@@ -792,30 +792,51 @@ public class GameManager : MonoBehaviour
         Vector3 fwdDir = Quaternion.Euler(0f, player.yaw, 0f) * Vector3.forward;
         player.hp = player.maxHp = 40;
 
-        // Knight: the shield eats bullets and blocks damage.
+        // Knight: the oath sword and shield; the shield takes three hits, nothing can be swapped meanwhile.
         skill.Setup(player, Classes.Get("knight"));
-        Check("knight shield starts", skill.TryUse() && player.shielded);
+        string before = player.Weapon.id;
+        Check("knight skill draws the oath sword and shield", skill.TryUse() && player.Weapon.id == "oath_sword" && player.guardCharges == PlayerController.GuardMax,
+            $"weapon={player.Weapon.id} blocks={player.guardCharges}");
         int taken = player.damageTaken;
-        var orb = Bullet.Fire(new Vector3(player.transform.position.x, 1f, player.transform.position.z) + fwdDir * 6f, -fwdDir * 11f, false, 0.16f, "bullet_enemy", 3f);
-        yield return new WaitForSeconds(0.8f);
-        Check("shield cancels bullets and blocks damage", orb == null && player.damageTaken == taken, $"taken={player.damageTaken - taken}");
+        yield return new WaitForSeconds(0.7f); // past any hit invulnerability from earlier checks
+        for (int i = 0; i < PlayerController.GuardMax; i++)
+        {
+            player.TakeDamage(1);
+            yield return new WaitForSeconds(0.4f);
+        }
+        Check("the oath shield blocks three hits", player.damageTaken == taken && player.guardCharges == 0, $"taken={player.damageTaken - taken} left={player.guardCharges}");
+        player.TakeDamage(1);
+        Check("the fourth hit gets through", player.damageTaken == taken + 1);
+        player.Swap();
+        Check("no swapping while a skill weapon is out", player.Weapon.id == "oath_sword");
         Check("skill goes on cooldown", !skill.TryUse() && skill.cooldownLeft > 0f);
-        yield return new WaitForSeconds(3.2f);
-        Check("shield ends after its duration", !player.shielded);
+        Check("skill weapons never drop, sell or turn up in chests", Weapons.All.TrueForAll(w => !w.IsSkillWeapon) && Weapons.SkillWeapons.Count == 4);
+        yield return new WaitForSeconds(PlayerSkill.OathTime - 1f);
+        Check("the old weapon comes back when the skill ends", player.Weapon.id == before && !player.HoldingSkillWeapon, $"weapon={player.Weapon.id}");
 
-        // Assassin: enemies lose track and swing at a decoy; the first hit ends stealth.
+        // Assassin: enemies lose track and swing at a decoy; the raven blade blinks to its target and
+        // cutting does not end stealth.
         skill.Setup(player, Classes.Get("assassin"));
         var g = Dummy(player.transform.position + fwdDir * 7f, EnemyKind.Gunner);
         g.target = player;
         yield return new WaitForSeconds(0.4f);
         skill.TryUse();
-        yield return new WaitForSeconds(1.8f);
+        Check("stealth puts the raven blade in hand", player.Weapon.id == "raven_blade");
+        yield return new WaitForSeconds(1.2f);
         float off = Vector3.Distance(g.TargetPos, player.transform.position);
         Check("stealth: enemies aim at a decoy, not the player", player.Stealthed && off > 0.5f, $"decoy {off:F1} m away");
+        var mark = Dummy(player.transform.position + fwdDir * 5f); // no target: it stands still
+        Vector3 start = player.transform.position;
+        yield return new WaitForSeconds(0.1f);
         player.Attack();
-        yield return null;
-        Check("attacking ends stealth", !player.Stealthed);
+        yield return new WaitForSeconds(0.4f);
+        float moved = Vector3.Distance(player.transform.position, start);
+        Check("the raven blade blinks to the enemy and cuts it", moved > 2f && mark.hp < 100, $"moved {moved:F1} m, hp={mark.hp}");
+        Check("cutting does not end stealth", player.Stealthed);
         Destroy(g.gameObject);
+        Destroy(mark.gameObject);
+        yield return new WaitForSeconds(PlayerSkill.RavenTime);
+        Check("stealth and the blade end together", !player.Stealthed && !player.HoldingSkillWeapon);
 
         // Mage: meteors fall on the crosshair area.
         skill.Setup(player, Classes.Get("mage"));
@@ -826,6 +847,13 @@ public class GameManager : MonoBehaviour
         yield return new WaitForSeconds(2.6f);
         Check("meteor storm hits the target area", target.hp < 100, $"hp={target.hp}");
         Destroy(target.gameObject);
+        var staffTarget = Dummy(CrosshairGround());
+        yield return new WaitForSeconds(0.3f);
+        Check("the storm puts the star staff in hand", player.Weapon.id == "star_staff");
+        player.Attack();
+        yield return new WaitForSeconds(1.2f);
+        Check("the star staff drops a meteor on the crosshair", staffTarget.hp < 100, $"hp={staffTarget.hp}");
+        Destroy(staffTarget.gameObject);
 
         // Priest: sanctuary heals hp and armor.
         skill.Setup(player, Classes.Get("priest"));
@@ -835,6 +863,18 @@ public class GameManager : MonoBehaviour
         yield return new WaitForSeconds(2.2f);
         Check("sanctuary restores hp and armor", player.hp >= 2 && player.armor >= 2, $"hp={player.hp} armor={player.armor}");
         yield return new WaitForSeconds(3f);
+        // The dawn scepter's light gives armour back while it is on an enemy.
+        player.GrantSkillWeapon("dawn_scepter", 3f);
+        yield return AimAt(4f);
+        var lit = Dummy(CrosshairGround());
+        player.armor = 0;
+        yield return new WaitForSeconds(0.3f);
+        player.testTrigger = true;
+        yield return new WaitForSeconds(1.6f);
+        player.testTrigger = false;
+        Check("the dawn scepter's beam burns and restores armour", lit.hp < 100 && player.armor >= 1, $"hp={lit.hp} armor={player.armor}");
+        Destroy(lit.gameObject);
+        player.EndSkillWeapon();
 
         skill.Setup(player, Classes.Get(RunState.classId));
         player.hp = player.maxHp = RunState.maxHp;
@@ -1234,6 +1274,22 @@ public class GameManager : MonoBehaviour
         for (float u = 0; u < 7f && archer.shots == 0; u += Time.deltaTime) yield return null;
         Check("a skeleton archer aims, then looses an arrow", archer.shots > 0 && archer.aims > 0, $"aims={archer.aims} shots={archer.shots}");
         Destroy(archer.gameObject);
+
+        // The shield guard turns its tower shield to you: hits from the front glance off, from behind
+        // they land, and a heavy blow knocks the shield aside. (Held in place: speed 0, out of bash range.)
+        var guard = Dummy(home + fwdDir * 6f, EnemyKind.Guard);
+        guard.speed = 0f;
+        guard.target = player;
+        Vector3 toPlayer = -fwdDir;
+        for (float u = 0; u < 4f && Vector3.Dot(guard.transform.forward, toPlayer) < 0.95f; u += Time.deltaTime) yield return null;
+        int ghp = guard.hp;
+        guard.TakeDamage(3, fwdDir);
+        Check("a shield guard blocks hits on its shield", guard.Guarding && guard.hp == ghp && guard.blocks > 0, $"hp {ghp}->{guard.hp} blocks={guard.blocks}");
+        guard.TakeDamage(3, guard.transform.forward);
+        Check("hits in its back get through", guard.hp == ghp - 3, $"hp {ghp}->{guard.hp}");
+        guard.TakeDamage(10, fwdDir);
+        Check("a heavy blow breaks its guard", !guard.Guarding && guard.hp < ghp - 3, $"guarding={guard.Guarding} hp={guard.hp}");
+        Destroy(guard.gameObject);
         foreach (var b in FindObjectsByType<EnemyBomb>(FindObjectsSortMode.None)) Destroy(b.gameObject);
 
         player.hp = player.maxHp = RunState.maxHp;
@@ -1549,7 +1605,8 @@ public class GameManager : MonoBehaviour
         hud.enabled = false;
         player.controlEnabled = false;
         player.externalCamera = true;
-        var all = Weapons.All;
+        var all = new System.Collections.Generic.List<WeaponDef>(Weapons.All);
+        all.AddRange(Weapons.SkillWeapons); // the class skills' weapons (and the oath shield) too
         int sheets = (all.Count + 5) / 6;
         for (int sheet = 0; sheet < sheets; sheet++)
         {
@@ -1558,7 +1615,8 @@ public class GameManager : MonoBehaviour
             for (int row = 0; row < rows; row++)
             {
                 var w = all[sheet * 6 + row];
-                player.Equip(w.Clone());
+                if (w.IsSkillWeapon) player.GrantSkillWeapon(w.id, 60f);
+                else player.Equip(w.Clone());
                 player.energy = player.maxEnergy;
                 player.Teleport(dungeon.playerStart);
                 Vector3 pos = player.transform.position;
@@ -1816,7 +1874,10 @@ public class GameManager : MonoBehaviour
             Vector3 nf = Quaternion.Euler(0f, player.yaw, 0f) * Vector3.forward, nr = Quaternion.Euler(0f, player.yaw + 90f, 0f) * Vector3.forward;
             var bomber = Dummy(np + nf * 4.5f - nr * 1.6f, EnemyKind.Bomber);
             var archer = Dummy(np + nf * 4.5f + nr * 1.6f, EnemyKind.Archer);
-            yield return new WaitForSeconds(0.5f);
+            var guard = Dummy(np + nf * 6.5f, EnemyKind.Guard);
+            guard.speed = 0f;
+            guard.target = player; // turns its shield to the camera
+            yield return new WaitForSeconds(2.5f);
             EnemyBomb.Throw(bomber.transform.position + Vector3.up * 1.4f, np + nf * 1.8f, 1.2f, 2.2f);
             player.pitch = 10f;
             yield return new WaitForSeconds(0.6f);
@@ -1824,6 +1885,7 @@ public class GameManager : MonoBehaviour
             yield return new WaitForSeconds(0.8f);
             Destroy(bomber.gameObject);
             Destroy(archer.gameObject);
+            Destroy(guard.gameObject);
         }
 
         // Loot: three drops of rising rarity with their light pillars.

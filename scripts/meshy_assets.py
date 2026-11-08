@@ -203,6 +203,26 @@ ASSETS = {
     "tower_shield": dict(kind="prop", size=1.15, polycount=4000, prompt=(
         "A big tall rectangular tower shield, front view, dark wooden planks bound with thick riveted iron "
         "bands and an iron rim, a painted red goblin skull emblem in the middle, battered and chipped. ")),
+    # round 13: the assassin's own blade, only drawn during 鸦影遁 (never dropped or sold)
+    "raven_blade": dict(kind="weapon", length=1.0, polycount=3000, prompt=(
+        "A long elegant curved shadow sabre made of overlapping black raven feathers, the single-edged blade "
+        "glowing deep violet along its edge with wisps of purple smoke, a small silver raven-skull guard, "
+        "a short black leather grip. ")),
+    # round 14: the knight's oath sword and shield, only drawn during 誓约壁垒
+    "oath_sword": dict(kind="weapon", length=1.05, polycount=3000, prompt=(
+        "A heroic one-handed knight's arming sword, straight polished silver blade with a glowing golden rune "
+        "line down the middle, a royal blue and gold cross guard shaped like small wings, a blue leather "
+        "grip and a round gold pommel with a sapphire. ")),
+    "oath_shield": dict(kind="prop", size=0.75, polycount=4000, prompt=(
+        "A knight's heater shield, front view, royal blue enamel face with a golden lion head crest in the "
+        "middle, a thick polished gold rim with rivets, slightly curved. ")),
+    # round 15: the mage's and the priest's skill staves
+    "star_staff": dict(kind="weapon", length=1.4, polycount=3000, prompt=(
+        "A tall fire mage staff, a twisted dark wood shaft wrapped with gold bands, the head is a golden claw "
+        "holding a burning rock meteor with glowing orange cracks and small flames, red ribbons tied below. ")),
+    "dawn_scepter": dict(kind="weapon", length=1.3, polycount=3000, prompt=(
+        "A holy priest scepter, a white and gold shaft with pearl inlays, the head is a radiant golden sun disk "
+        "with pointed rays around a glowing warm white crystal, small white feathered wings below the head. ")),
     # tileable textures for the Blender dungeon kit (image only)
     "tex_floor": dict(kind="texture", prompt=(
         "Seamless tileable texture of square stone floor flagstones, 2 by 2 large slabs with dark grout, "
