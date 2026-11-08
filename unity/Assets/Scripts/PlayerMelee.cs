@@ -63,7 +63,16 @@ public partial class PlayerController
             body.Trigger("slash", body.Length("slash") / swing, 0.2f);
         }
         if (smear) smear.Swing(swing, SmearColor(w));
-        Sfx.Play("slash", 0.55f, 0.15f, 1.1f); // the swish now; the hit sounds when it lands
+        // The swish now, the hit when it lands: the soft synthesised swish at each weapon's level from
+        // before the recorded clips (the hammer has only its smash). No recorded blade "shing": its metal
+        // ring sits at 2-6 kHz, where the ear is most sensitive, and the user found it piercing.
+        switch (w.id)
+        {
+            case "hammer": break;
+            case "spear": Sfx.Play("slash", 0.7f, 0.05f); break;
+            case "daggers": case "raven_blade": Sfx.Play("slash", 0.5f, 0.2f); break;
+            default: Sfx.Play("slash", 0.8f); break;
+        }
         Later(HitDelay("slash", swing), () => MeleeHit(w, heavy, atYaw));
     }
 

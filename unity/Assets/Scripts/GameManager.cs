@@ -479,6 +479,10 @@ public class GameManager : MonoBehaviour
         Destroy(streakDummy.gameObject);
         player.hp = player.maxHp;
         Check("music tracks load", Resources.Load<AudioClip>("Music/explore") && Resources.Load<AudioClip>("Music/battle"));
+        // The user found the recorded blade "shing" piercing: swings use the soft synthesised swish only.
+        bool recordedSlash = Resources.Load<AudioClip>("Sfx/slash");
+        for (int i = 1; i <= 8; i++) recordedSlash |= Resources.Load<AudioClip>($"Sfx/slash_{i}");
+        Check("swings use the soft synthesised swish (no recorded blade clips)", !recordedSlash);
         int fires = 0, crackling = 0;
         foreach (var f in dungeon.GetComponentsInChildren<Flicker>())
         {
