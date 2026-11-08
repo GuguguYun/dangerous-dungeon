@@ -33,6 +33,8 @@ public partial class PlayerController
     int barrel;
     float mechComboT, afterimageT;
     GameObject[] mechArm;
+    BladeSmear mechSmear;      // the light mech's energy blade leaves a smear when it swings
+    float bladeShowUntil;      // a right-click swing in gun mode shows the blade for the swing
     Quaternion mechVisualBase;
     readonly System.Collections.Generic.HashSet<Enemy> rammed = new System.Collections.Generic.HashSet<Enemy>();
 
@@ -68,6 +70,7 @@ public partial class PlayerController
         handsOnWeapon = false;
         mechVisualBase = mechVisual.transform.localRotation;
         mechArm = MechArm.Build(anim, d);
+        if (!d.heavy && mechArm.Length > 0 && mechArm[0]) mechSmear = BladeSmear.Attach(mechArm[0].transform, 0.15f, d.height * 0.62f);
         SetMechBlade(false, true);
         mechCombo = 0;
 
@@ -175,6 +178,9 @@ public partial class PlayerController
         if (heatIdle > 0.25f) heat = Mathf.Max(0f, heat - 0.6f * dt);
         if (overheated && heat < 0.35f) overheated = false;
         if (Time.time - mechComboT > 0.9f) mechCombo = 0;
+        // A swing from gun mode showed the blade; put it away once the swing is over.
+        if (!mechBlade && mechArm != null && Time.time >= bladeShowUntil && mechArm.Length > 0 && mechArm[0] && mechArm[0].activeSelf)
+            foreach (var g in mechArm) if (g) g.SetActive(false);
 
         // Light mech boost: lean into the boost and leave fading ghosts behind.
         if (mechVisual && !HeavyMech)
@@ -331,9 +337,10 @@ public partial class PlayerController
 
     void SetMechBlade(bool on, bool quiet)
     {
+        if (!on) bladeShowUntil = 0f; // putting it away wins over a swing still in progress
         mechBlade = on;
         mechCombo = 0;
-        if (mechArm != null) foreach (var g in mechArm) if (g) g.SetActive(on);
+        if (mechArm != null) foreach (var g in mechArm) if (g) g.SetActive(on || Time.time < bladeShowUntil);
         if (quiet) return;
         Sfx.Play(on ? "swap_melee" : "swap_gun", 0.8f, 0.05f, 0.8f);
         Hud.I?.Show(on ? $"近战模式：{mechDef.melee}" : $"射击模式：{mechDef.ranged}", 0.9f);
@@ -358,11 +365,30 @@ public partial class PlayerController
             return;
         }
         model.rotation = Quaternion.LookRotation(fwd);
-        Vector3 origin = transform.position + Vector3.up * 1.2f;
         float reach = HeavyMech ? 3.4f : 3.6f, arc = HeavyMech ? 110f : 150f;
         int baseDmg = HeavyMech ? (finisher ? 18 : 12) : 7;
         mechMeleeCd = HeavyMech ? (finisher ? 0.9f : 0.55f) : 0.3f;
+        // The arm swings now; the blow lands when the fist or blade comes through in the clip.
+        string clip = HeavyMech ? "swing" : "slash";
+        float swing = HeavyMech ? 0.7f : 0.38f;
+        if (body) body.Trigger(clip, body.Length(clip) / swing, HeavyMech ? 0.3f : 0.2f);
+        if (!HeavyMech)
+        {
+            bladeShowUntil = Time.time + swing;
+            if (mechArm != null) foreach (var g in mechArm) if (g) g.SetActive(true);
+            if (mechSmear) mechSmear.Swing(swing, new Color(mechDef.color.r, mechDef.color.g, mechDef.color.b, 0.55f));
+            Sfx.Play("slash", 0.9f, 0.05f);
+        }
+        float atYaw = yaw;
+        Later(HitDelay(clip, swing), () => MechBlow(Quaternion.Euler(0f, atYaw, 0f) * Vector3.forward, reach, arc, baseDmg, finisher));
+    }
+
+    void MechBlow(Vector3 fwd, float reach, float arc, int baseDmg, bool finisher)
+    {
+        if (!InMech) return;
+        Vector3 origin = transform.position + Vector3.up * 1.2f;
         var hit = new System.Collections.Generic.HashSet<Enemy>();
+        int landed = 0;
         foreach (var c in Physics.OverlapSphere(origin, reach, Layers.EnemyMask, QueryTriggerInteraction.Ignore))
         {
             var e = c.GetComponentInParent<Enemy>();
@@ -372,6 +398,8 @@ public partial class PlayerController
             if (Vector3.Angle(fwd, to) > arc / 2f && to.magnitude > 1.2f) continue;
             e.TakeDamage(RollDamage(baseDmg, out bool crit), to.normalized, crit, HeavyMech ? 9f : 4f);
             if (HeavyMech) e.Knock(to.normalized * 12f);
+            Vfx.Sparks(e.AimPoint, HeavyMech ? new Color(1f, 0.8f, 0.4f) : mechDef.color, 7, 4.5f);
+            landed++;
         }
         if (HeavyMech)
         {
@@ -383,7 +411,6 @@ public partial class PlayerController
             Vfx.Ring(impact, 1.8f, mechDef.color);
             Vfx.Sparks(impact + Vector3.up, new Color(1f, 0.8f, 0.4f), 14, 6f);
             Vfx.Puff(impact + Vector3.up * 0.5f, new Color(0.6f, 0.55f, 0.5f, 0.6f), 1f, 8);
-            if (body) body.Trigger("swing", body.Length("swing") / 0.7f, 0.3f);
             CameraShake.Add(0.3f);
             Sfx.Play("smash", 1f, 0.1f, 0.8f);
             if (finisher)
@@ -404,10 +431,7 @@ public partial class PlayerController
                 Vector3 to = b.transform.position - origin;
                 if (to.magnitude <= reach + 0.5f && Vector3.Angle(fwd, new Vector3(to.x, 0f, to.z)) <= arc / 2f) b.Cancel();
             }
-            SlashFx.Spawn(origin, yaw, reach, arc, mechDef.color, swingIndex++ % 2 == 0 ? 25f : -25f, 0f, 0.18f, 0.7f);
-            if (body) body.Trigger("slash", body.Length("slash") / 0.38f, 0.2f);
-            Sfx.Play("slash", 0.9f, 0.05f);
-            CameraShake.Add(hit.Count > 0 ? 0.15f : 0.05f);
+            CameraShake.Add(landed > 0 ? 0.15f : 0.05f);
         }
         nextCrit = false;
     }
@@ -430,25 +454,32 @@ public partial class PlayerController
         dashDir = dir;
         dashSpeed = 18f;
         dashT = Mathf.Clamp((best - 1.6f) / dashSpeed, 0.06f, 0.22f);
-        Vector3 origin = transform.position + Vector3.up * 1.2f;
-        const float reach = 5.2f;
-        var pierced = new System.Collections.Generic.HashSet<Enemy>();
-        foreach (var c in Physics.OverlapCapsule(origin, origin + dir * reach, 0.9f, Layers.EnemyMask, QueryTriggerInteraction.Ignore))
-        {
-            var e = c.GetComponentInParent<Enemy>();
-            if (!e || e.dead || !pierced.Add(e)) continue;
-            e.TakeDamage(RollDamage(12, out bool crit), dir, crit, 7f);
-            e.Knock(dir * 9f);
-        }
-        foreach (var b in Bullet.Live.ToArray())
-            if (!b.HitsEnemies && Vector3.Distance(b.transform.position, origin + dir * reach * 0.5f) < reach * 0.6f) b.Cancel();
-        float thrustYaw = Quaternion.LookRotation(dir).eulerAngles.y;
-        SlashFx.Spawn(origin, thrustYaw, reach, 22f, mechDef.color, 0f, 0f, 0.22f, 0.9f);
-        Vfx.Sparks(origin + dir * reach, mechDef.color, 12, 6f);
-        if (body) body.Trigger("slash", body.Length("slash") / 0.3f, 0.15f);
-        CameraShake.Add(0.18f);
+        float thrust = dashT + 0.06f;
+        if (body) body.Trigger("slash", body.Length("slash") / thrust, 0.15f);
+        bladeShowUntil = Time.time + thrust + 0.2f;
+        if (mechArm != null) foreach (var g in mechArm) if (g) g.SetActive(true);
+        if (mechSmear) mechSmear.Swing(thrust, new Color(mechDef.color.r, mechDef.color.g, mechDef.color.b, 0.6f));
         Sfx.Play("slash", 1f, 0.05f, 0.85f);
-        nextCrit = false;
+        // Close the gap first; the blade runs the target (and anything just past it) through on arrival.
+        Later(thrust, () =>
+        {
+            if (!InMech) return;
+            Vector3 origin = transform.position + Vector3.up * 1.2f;
+            const float reach = 3.2f;
+            var pierced = new System.Collections.Generic.HashSet<Enemy>();
+            foreach (var c in Physics.OverlapCapsule(origin - dir * 1.5f, origin + dir * reach, 0.9f, Layers.EnemyMask, QueryTriggerInteraction.Ignore))
+            {
+                var e = c.GetComponentInParent<Enemy>();
+                if (!e || e.dead || !pierced.Add(e)) continue;
+                e.TakeDamage(RollDamage(12, out bool crit), dir, crit, 7f);
+                e.Knock(dir * 9f);
+                Vfx.Sparks(e.AimPoint, mechDef.color, 8, 5f);
+            }
+            foreach (var b in Bullet.Live.ToArray())
+                if (!b.HitsEnemies && Vector3.Distance(b.transform.position, origin + dir * reach * 0.5f) < reach * 0.7f) b.Cancel();
+            CameraShake.Add(0.18f);
+            nextCrit = false;
+        });
     }
 
     /// F: the light mech overdrives (double fire rate, no heat), the heavy fires a missile salvo.

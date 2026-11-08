@@ -217,6 +217,7 @@ public partial class PlayerController : MonoBehaviour
         }
         muzzle.localPosition = Weapon.melee ? new Vector3(0f, 0f, 0.4f) : new Vector3(0f, b.center.y, b.max.z);
         SetupGrip();
+        AttachSmear(any ? b.max.z : 0.8f);
     }
 
     public void Swap()
@@ -473,7 +474,7 @@ public partial class PlayerController : MonoBehaviour
             // A light mech boosting keeps facing the crosshair (no spinning round to dash backwards).
             if (aiming || !body || (InMech && !HeavyMech && dashT > 0f)) faceDir = fwd;
             else if (h.sqrMagnitude > 0.5f) faceDir = h.normalized;
-            model.rotation = Quaternion.Slerp(model.rotation, Quaternion.LookRotation(faceDir), 1f - Mathf.Exp(-15f * dt));
+            if (spinT <= 0f) model.rotation = Quaternion.Slerp(model.rotation, Quaternion.LookRotation(faceDir), 1f - Mathf.Exp(-15f * dt)); // the whirlwind turns it itself
             if (body)
             {
                 float speed01 = h.magnitude / Speed;
@@ -719,31 +720,34 @@ public partial class PlayerController : MonoBehaviour
                 break;
             }
             case "hammer":
-                Slam(Mathf.RoundToInt(RollDamage(w.damage, out _) * (2f + c) * RunState.meleeMul), 3.5f + 1.5f * c);
+            {
+                // Overhead: the floor cracks when the hammer comes down, not when the button is let go.
+                int dmg = Mathf.RoundToInt(RollDamage(w.damage, out _) * (2f + c) * RunState.meleeMul);
+                float radius = 3.5f + 1.5f * c, swing = 0.55f;
+                if (body) body.Trigger("slash", body.Length("slash") / swing, swing);
+                if (smear) smear.Swing(swing, SmearColor(w));
+                Later(HitDelay("slash", swing), () => Slam(dmg, radius));
                 break;
+            }
             case "spear":
             {
-                // Lunge: dash along the view and skewer everything on the line.
+                // Lunge: dash along the view; everything on the line is skewered as you pass it.
+                Vector3 start = transform.position;
                 Dash(fwd);
-                var heavy = w.Clone();
-                heavy.reach = 6f;
-                heavy.arc = 30f;
-                heavy.damage = Mathf.RoundToInt(w.damage * (2f + c));
-                Melee(heavy, true);
+                if (body) body.Trigger("slash", body.Length("slash") / 0.32f, 0.32f);
+                if (smear) smear.Swing(0.32f, SmearColor(w));
+                StartCoroutine(Lunge(w, start, fwd, Mathf.RoundToInt(w.damage * (2f + c))));
                 break;
             }
-            default: // sword: a wide heavy slash
-            {
-                var heavy = w.Clone();
-                heavy.reach = w.reach + 1.2f;
-                heavy.arc = Mathf.Min(360f, w.arc + 60f);
-                heavy.damage = Mathf.RoundToInt(w.damage * (2f + c));
-                Melee(heavy, true);
+            default: // sword: a whirlwind, hitting three times as the blade comes round
+                StartCoroutine(Whirlwind(w, Mathf.RoundToInt(w.damage * (2f + c)), w.reach + 1.2f));
                 break;
-            }
         }
-        if (!w.melee) Vfx.MuzzleFlash(from, aim, Palette.ColorOf(w.mat));
-        CameraShake.Add(0.25f + 0.2f * c);
+        if (!w.melee)
+        {
+            Vfx.MuzzleFlash(from, aim, Palette.ColorOf(w.mat));
+            CameraShake.Add(0.25f + 0.2f * c);
+        }
         Sfx.Play(w.melee ? "slash" : "rocket", 0.9f, 0.05f);
         nextCrit = false;
         Debug.Log($"CHARGED {w.id} {c:F2}");
@@ -765,7 +769,6 @@ public partial class PlayerController : MonoBehaviour
                 col.attachedRigidbody.AddExplosionForce(6f, transform.position, radius * 1.4f, 0.5f, ForceMode.VelocityChange);
         Vfx.Ring(transform.position, radius, new Color(1f, 0.85f, 0.4f));
         MeleeFx(Weapon, transform.position + Vector3.up, true);
-        if (body) body.Trigger("slash", 2f, 0.2f);
     }
 
     /// Bow: damage x1..x4 with the charge; a full charge also pierces three enemies.
@@ -986,19 +989,17 @@ public partial class PlayerController : MonoBehaviour
 
     int swingIndex;
 
-    /// Each melee weapon draws its own swing: sword diagonal arcs (whirlwind when heavy),
-    /// hammer overhead smash with a ground impact, spear forward streak, daggers crossed X slashes.
+    /// What a melee blow does where it lands (the swing itself is the blade's smear, see PlayerMelee):
+    /// the hammer cracks the floor with a ring of dust, sparks and a few small arcs; the spear's tip
+    /// sparks; blades need nothing more than the sparks on whatever they hit.
     void MeleeFx(WeaponDef w, Vector3 origin, bool heavy)
     {
-        swingIndex++;
         Vector3 fwd = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
         switch (w.id)
         {
             case "hammer":
             {
                 Vector3 impact = transform.position + fwd * Mathf.Min(w.reach * 0.6f, 2.2f);
-                // A thin overhead arc band (not a filled fan, which reads as a wall in front of the camera).
-                SlashFx.Spawn(transform.position + Vector3.up * 0.2f, yaw, w.reach * 0.75f, 100f, new Color(0.6f, 0.5f, 0.2f), 0f, 90f, 0.18f, w.reach * 0.75f * 0.65f);
                 Vfx.Ring(impact, heavy ? 2.5f : 1.6f, new Color(1f, 0.8f, 0.35f));
                 Vfx.Puff(impact, new Color(0.55f, 0.5f, 0.45f, 0.6f), heavy ? 1.2f : 0.8f, heavy ? 10 : 6);
                 Vfx.Sparks(impact + Vector3.up * 0.2f, new Color(1f, 0.9f, 0.4f), heavy ? 18 : 10, 6f);
@@ -1010,75 +1011,9 @@ public partial class PlayerController : MonoBehaviour
                 break;
             }
             case "spear":
-                SlashFx.Spawn(origin, yaw, w.reach + (heavy ? 1f : 0.3f), heavy ? 16f : 9f, new Color(1f, 0.9f, 0.6f), 0f, 0f, heavy ? 0.22f : 0.14f, 0.4f);
                 Vfx.Sparks(origin + fwd * w.reach, new Color(1f, 0.95f, 0.7f), 6, 3f);
-                Sfx.Play("slash", 0.7f, 0.05f);
                 break;
-            case "daggers":
-            case "raven_blade": // the assassin's blade: the same violet X, wider
-            {
-                var c = w.id == "raven_blade" ? new Color(0.6f, 0.3f, 1f) : new Color(0.75f, 0.45f, 1f);
-                for (int i = 0; i < 2; i++)
-                {
-                    float tilt = (i % 2 == 0 ? 45f : -45f) + Random.Range(-15f, 15f);
-                    SlashFx.Spawn(origin + Random.insideUnitSphere * 0.08f, yaw + Random.Range(-15f, 15f), w.reach, 70f, c, tilt, 0f, 0.12f, 0.5f);
-                }
-                Sfx.Play("slash", 0.5f, 0.2f);
-                break;
-            }
-            default: // sword (the knight's oath sword in gold)
-            {
-                var c = w.id == "oath_sword" ? new Color(1f, 0.8f, 0.35f) : new Color(0.55f, 0.85f, 1f);
-                if (heavy)
-                {
-                    SlashFx.Spawn(origin, yaw, w.reach, 360f, c, 0f, 0f, 0.3f, 0.8f);
-                    SlashFx.Spawn(origin + Vector3.up * 0.3f, yaw + 180f, w.reach * 0.85f, 360f, c, 0f, 0f, 0.3f, 0.8f);
-                }
-                else
-                {
-                    // Alternate rising-left and rising-right diagonals.
-                    float tilt = swingIndex % 2 == 0 ? 28f : -28f;
-                    SlashFx.Spawn(origin, yaw, w.reach, w.arc, c, tilt, 0f, 0.18f, 0.7f);
-                }
-                Vfx.Sparks(origin + fwd * w.reach * 0.8f, c, 6, 4f);
-                Sfx.Play("slash", 0.8f);
-                break;
-            }
         }
-    }
-
-    void Melee(WeaponDef w, bool heavy = false)
-    {
-        swingT = body ? 0f : 0.18f;
-        if (body)
-        {
-            model.rotation = Quaternion.LookRotation(Quaternion.Euler(0f, yaw, 0f) * Vector3.forward);
-            body.Trigger("slash", body.Length("slash") / Mathf.Max(0.25f, w.interval / RunState.fireRateMul), 0.2f);
-        }
-        Vector3 fwd = Quaternion.Euler(0f, yaw, 0f) * Vector3.forward;
-        Vector3 origin = transform.position + Vector3.up * 1.0f;
-        var hit = new System.Collections.Generic.HashSet<Enemy>();
-        foreach (var c in Physics.OverlapSphere(origin, w.reach, Layers.EnemyMask, QueryTriggerInteraction.Ignore))
-        {
-            var e = c.GetComponentInParent<Enemy>();
-            if (!e || e.dead || !hit.Add(e)) continue;
-            Vector3 to = e.transform.position - transform.position;
-            to.y = 0f;
-            if (Vector3.Angle(fwd, to) > w.arc / 2f && to.magnitude > 1f) continue;
-            int dmg = Mathf.RoundToInt(RollDamage(w.damage, out bool crit) * RunState.meleeMul);
-            e.TakeDamage(dmg, to.normalized, crit);
-        }
-        if (RunState.meleeMul > 1f || w.id == "sword" || w.id == "oath_sword")
-        {
-            foreach (var b in Bullet.Live.ToArray())
-            {
-                if (b.HitsEnemies) continue;
-                Vector3 to = b.transform.position - origin;
-                if (to.magnitude <= w.reach + 0.5f && Vector3.Angle(fwd, new Vector3(to.x, 0f, to.z)) <= w.arc / 2f) b.Cancel();
-            }
-        }
-        MeleeFx(w, origin, heavy);
-        CameraShake.Add(hit.Count > 0 ? 0.15f : 0.05f);
     }
 
     void ClearBoomerang() => boomerangOut = false;

@@ -110,6 +110,39 @@ public class CharacterAnim : MonoBehaviour
 
     public bool Has(string clip) => anim && anim.GetClip(clip) != null;
 
+    readonly Dictionary<string, float> peaks = new Dictionary<string, float>();
+
+    /// The moment in a clip (seconds, at normal speed) when a bone moves fastest relative to the body:
+    /// when a swing or a punch lands. Hits are timed to it so the damage comes with the blow, not
+    /// before the arm moves. Measured once per clip by sampling it.
+    public float PeakTime(string clip, string bone)
+    {
+        string key = clip + "/" + bone;
+        if (peaks.TryGetValue(key, out var t)) return t;
+        var c = Has(clip) ? anim.GetClip(clip) : null;
+        Transform b = null;
+        foreach (var x in GetComponentsInChildren<Transform>()) if (x.name == bone) { b = x; break; }
+        if (!c || !b) return peaks[key] = 0f;
+        const int n = 40;
+        float best = -1f;
+        t = c.length * 0.4f;
+        Vector3 prev = Vector3.zero;
+        for (int i = 0; i <= n; i++)
+        {
+            float time = c.length * i / n;
+            c.SampleAnimation(gameObject, time);
+            Vector3 p = transform.InverseTransformPoint(b.position);
+            if (i > 0 && (p - prev).sqrMagnitude > best)
+            {
+                best = (p - prev).sqrMagnitude;
+                t = time - c.length / n * 0.5f;
+            }
+            prev = p;
+        }
+        Debug.Log($"ANIM {name} {clip}: {bone} fastest at {t:F2}s of {c.length:F2}s");
+        return peaks[key] = Mathf.Clamp(t, 0f, c.length);
+    }
+
     public float Length(string clip) => Has(clip) ? anim[clip].length : 0f;
 
     /// The looping state when nothing else plays: idle, walk or run.

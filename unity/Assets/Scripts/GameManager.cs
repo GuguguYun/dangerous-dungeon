@@ -371,7 +371,7 @@ public class GameManager : MonoBehaviour
         var orb = Bullet.Fire(Ahead(1.5f) + Vector3.up * 1.0f, Vector3.zero, false, 0.16f, "bullet_enemy", 5f);
         yield return null;
         player.Attack();
-        yield return null;
+        yield return new WaitForSeconds(0.45f); // the blow lands when the blade comes through
         Check("sword hits the enemy in front", near.hp < 100, $"hp={near.hp}");
         Check("sword cancels an enemy bullet", orb == null);
         Destroy(near.gameObject);
@@ -744,7 +744,7 @@ public class GameManager : MonoBehaviour
         var off = Dummy(player.transform.position + Quaternion.Euler(0f, 45f, 0f) * fwdDir * 4f);
         yield return new WaitForSeconds(0.4f);
         player.Attack();
-        yield return null;
+        yield return new WaitForSeconds(0.5f);
         Check("spear: reaches 4 m ahead but not 45 deg off", front.hp < 100 && off.hp == 100, $"front={front.hp} off={off.hp}");
         Destroy(front.gameObject);
         Destroy(off.gameObject);
@@ -1006,7 +1006,7 @@ public class GameManager : MonoBehaviour
         var behind = Dummy(player.transform.position - fwdDir * 2.5f);
         yield return new WaitForSeconds(0.4f);
         yield return Hold(1.4f);
-        yield return new WaitForSeconds(0.3f);
+        yield return new WaitForSeconds(0.7f); // the slam lands with the hammer
         Check("hammer: charged slam hits enemies behind you", behind.hp < 100, $"hp={behind.hp}");
         Destroy(behind.gameObject);
 
@@ -1379,7 +1379,7 @@ public class GameManager : MonoBehaviour
         if (shop == null) yield break;
         var wares = new System.Collections.Generic.List<ShopItem>(ShopItem.Live);
         var keeper = GameObject.Find("merchant");
-        Check("the shop has a merchant and five wares", keeper && wares.Count == 5, $"merchant={(bool)keeper} wares={wares.Count}");
+        Check("the shop has a merchant and six wares, one a mech beacon", keeper && wares.Count == 6 && wares.Exists(x => x.kind == ShopItem.Kind.Mech), $"merchant={(bool)keeper} wares={wares.Count}");
         if (!keeper || wares.Count == 0) yield break;
         Vector3 toDoor = shop.Center - keeper.transform.position;
         toDoor.y = 0f;
@@ -1418,6 +1418,13 @@ public class GameManager : MonoBehaviour
         Check("the weapon upgrade adds +1 damage for the run", upgrade.Buy(player) && player.Weapon.damage == dmg0 + 1 && RunState.LevelOf(player.Weapon.id) == lvl0 + 1 && player.Weapon.Title.Contains("+"),
             $"damage {dmg0} -> {player.Weapon.damage} title={player.Weapon.Title}");
         Check("upgrades never touch the shared weapon table", Weapons.Get(player.Weapon.id).damage == dmg0 - lvl0, $"table={Weapons.Get(player.Weapon.id).damage}");
+        // The mech beacon: the only way besides chests to get a mech.
+        var beacon = wares.Find(w => w.kind == ShopItem.Kind.Mech);
+        RunState.gold = 100;
+        int parkedBefore = ParkedMech.Live.Count;
+        Check("the mech beacon calls a mech in", beacon.Buy(player) && ParkedMech.Live.Count == parkedBefore + 1, $"parked {parkedBefore} -> {ParkedMech.Live.Count}");
+        yield return new WaitForSeconds(1.2f);
+        foreach (var m in ParkedMech.Live.ToArray()) if (m) Destroy(m.gameObject);
         RunState.gold = g0;
         player.hp = player.maxHp;
         player.Teleport(dungeon.playerStart);
@@ -1492,7 +1499,7 @@ public class GameManager : MonoBehaviour
         yield return new WaitForSeconds(0.3f);
         var orb = Bullet.Fire(Ahead(1.6f) + Vector3.up * 1.0f, Vector3.zero, false, 0.16f, "bullet_enemy", 5f);
         player.MechMelee();
-        yield return null;
+        yield return new WaitForSeconds(0.45f);
         Check("the plasma blade hits in front", near.hp < 100, $"hp={near.hp}");
         Check("the plasma blade cuts enemy shots", orb == null);
         Destroy(near.gameObject);
@@ -1576,17 +1583,6 @@ public class GameManager : MonoBehaviour
         yield return null;
         Check("a destroyed mech throws the pilot out unhurt", !player.InMech && player.hp == hp0 && !player.dead, $"in={player.InMech} hp={player.hp}/{hp0}");
 
-        // Drops: about one cleared room in two or three gives a mech, never long droughts.
-        float pity = RunState.mechPity;
-        RunState.mechPity = 0f;
-        int drops = 0, drought = 0, worst = 0;
-        for (int i = 0; i < 600; i++)
-        {
-            if (Mechs.RollDrop()) { drops++; drought = 0; }
-            else worst = Mathf.Max(worst, ++drought);
-        }
-        RunState.mechPity = pity;
-        Check("mech drop chance rises after each room without one", drops > 180 && drops < 330 && worst <= 5, $"drops={drops}/600 longest miss={worst}");
 
         player.Teleport(home);
         player.hp = player.maxHp;
@@ -1858,7 +1854,7 @@ public class GameManager : MonoBehaviour
 
         player.Swap();
         player.Attack();
-        yield return new WaitForSeconds(0.06f);
+        yield return new WaitForSeconds(0.2f); // mid-swing: the blade and its smear
         yield return Shot("04_melee.png");
 
         var boss = Dummy(c + new Vector3(0f, 0f, 5f), EnemyKind.Boss);
@@ -1910,7 +1906,7 @@ public class GameManager : MonoBehaviour
         {
             player.Equip(Weapons.Get(id));
             player.Attack();
-            yield return new WaitForSeconds(0.07f);
+            yield return new WaitForSeconds(0.16f);
             yield return Shot($"16_melee_{id}.png");
             yield return new WaitForSeconds(0.5f);
         }
