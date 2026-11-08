@@ -124,6 +124,7 @@ public static class Weapons
 
     /// The bow: seconds to a full charge, and what a full charge multiplies the damage by.
     public const float ChargeTime = 0.8f, FullCharge = 5f;
+    public const float FullDrawRadius = 0.5f; // how wide a fully drawn arrow hits (metres either side of its line)
 
     public static WeaponDef Get(string id) => All.Find(w => w.id == id) ?? SkillWeapons.Find(w => w.id == id);
 
@@ -162,6 +163,40 @@ public static class Weapons
     static float Weight(WeaponDef w) => Mathf.Pow(0.6f, Mathf.Max(0, w.rarity - RunState.floor));
 
     /// The weapon's look: a Meshy model if one was imported, else a coloured box.
+    /// Where the hand closes on a blade, as a share of its length from the butt (measured on the prep
+    /// previews). The models' origin sits at 0.3 (blender/prep_static.py), which on the swords and daggers
+    /// is the crossguard: the right hand disappeared inside it. The hammer and spear are held on the shaft
+    /// there already.
+    static float GripAt(string id) => id switch
+    {
+        "sword" => 0.21f,       // grip 10-26 %, guard 28-35 %: the right hand under the guard, the left below it
+        "oath_sword" => 0.23f,  // grip 15-32 %
+        "daggers" => 0.21f,     // grip 10-32 %
+        "raven_blade" => 0.15f, // grip 5-24 %
+        _ => -1f,
+    };
+
+    /// Slide a blade along its length so its grip, not its crossguard, sits on the holder's origin.
+    static void SeatGrip(WeaponDef w, GameObject go, Transform parent)
+    {
+        float at = GripAt(w.id);
+        if (at < 0f || !parent) return;
+        float lo = float.MaxValue, hi = float.MinValue;
+        foreach (var r in go.GetComponentsInChildren<Renderer>())
+        {
+            var m = parent.worldToLocalMatrix * r.transform.localToWorldMatrix;
+            var b = r.localBounds;
+            for (int i = 0; i < 8; i++)
+            {
+                var c = new Vector3((i & 1) == 0 ? b.min.x : b.max.x, (i & 2) == 0 ? b.min.y : b.max.y, (i & 4) == 0 ? b.min.z : b.max.z);
+                float z = m.MultiplyPoint3x4(c).z;
+                lo = Mathf.Min(lo, z);
+                hi = Mathf.Max(hi, z);
+            }
+        }
+        if (hi > lo) go.transform.localPosition -= new Vector3(0f, 0f, lo + at * (hi - lo));
+    }
+
     public static GameObject MakeVisual(WeaponDef w, Transform parent, int layer)
     {
         var prefab = Resources.Load<GameObject>("Models/Weapons/" + w.id);
@@ -169,6 +204,7 @@ public static class Weapons
         if (prefab)
         {
             go = Object.Instantiate(prefab, parent, false);
+            SeatGrip(w, go, parent);
         }
         else
         {

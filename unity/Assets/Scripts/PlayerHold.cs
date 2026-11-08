@@ -355,6 +355,7 @@ public partial class PlayerController
 
     public Transform BoneForTest(string name) => Bone(name);
     public Transform WeaponPivotForTest => weaponPivot;
+    public GameObject WeaponVisualForTest => weaponVisual;
 
     /// Two-bone IK for one arm: Holden's analytic solver in the arm's current bend plane (exact from
     /// any starting pose), then a twist about the shoulder-to-target axis so the elbow points at the pole.

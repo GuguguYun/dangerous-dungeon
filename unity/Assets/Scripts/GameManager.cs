@@ -736,7 +736,10 @@ public class GameManager : MonoBehaviour
         yield return new WaitForSeconds(0.4f);
         yield return Hold(0.6f);
         Check("flamer: burns the target", d.Burning && d.hp < 100, $"burning={d.Burning} hp={d.hp} dist={Vector3.Distance(d.transform.position, player.transform.position):F1}");
+        bool roaring = player.FlameRoarOn;
         Destroy(d.gameObject);
+        yield return new WaitForSeconds(1f);
+        Check("flamer sounds like fire (the recording) while it fires, then fades", roaring && !player.FlameRoarOn, $"while={roaring} after={player.FlameRoarOn}");
 
         // Frost shards slow.
         player.Equip(Weapons.Get("frost"));
@@ -1138,6 +1141,27 @@ public class GameManager : MonoBehaviour
             Check("two-hand grip: right hand on the grip, left hand on the barrel",
                 Vector3.Distance(rh.position, pv.position) < 0.25f && Vector3.Distance(lh.position, fore) < 0.3f,
                 $"right {Vector3.Distance(rh.position, pv.position):F2} m, left {Vector3.Distance(lh.position, fore):F2} m | ik {player.ikDebugLeft} now={Time.frameCount}");
+            // Blades are held by the grip: the hand sat on the crossguard once and vanished inside it.
+            foreach (var (id, from, to) in new[] { ("sword", 0.1f, 0.27f), ("oath_sword", 0.15f, 0.32f), ("daggers", 0.1f, 0.32f), ("raven_blade", 0.05f, 0.24f) })
+            {
+                player.Equip(Weapons.Get(id).Clone());
+                yield return null;
+                var piv = player.WeaponPivotForTest;
+                float lo = float.MaxValue, hi = float.MinValue;
+                foreach (var r in player.WeaponVisualForTest.GetComponentsInChildren<Renderer>())
+                {
+                    var m = piv.worldToLocalMatrix * r.transform.localToWorldMatrix;
+                    var b = r.localBounds;
+                    for (int i = 0; i < 8; i++)
+                    {
+                        float z = m.MultiplyPoint3x4(new Vector3((i & 1) == 0 ? b.min.x : b.max.x, (i & 2) == 0 ? b.min.y : b.max.y, (i & 4) == 0 ? b.min.z : b.max.z)).z;
+                        lo = Mathf.Min(lo, z);
+                        hi = Mathf.Max(hi, z);
+                    }
+                }
+                float k = -lo / Mathf.Max(0.01f, hi - lo); // where the hand is, from the butt
+                Check($"{id}: held by the grip, not the crossguard", k > from && k < to, $"hand at {k * 100f:0}% of its length (grip {from * 100f:0}-{to * 100f:0}%)");
+            }
             player.Equip(Weapons.Get("bow"));
             yield return null;
             yield return null;
@@ -2071,6 +2095,17 @@ public class GameManager : MonoBehaviour
             player.testTrigger = false;
             yield return new WaitForSeconds(0.8f);
         }
+        // The bow drawn in full (the bead ring round the crosshair, gold motes gathering), then the arrow loosed.
+        player.Equip(Weapons.Get("bow"));
+        player.energy = player.maxEnergy;
+        player.testTrigger = true;
+        yield return new WaitForSeconds(Weapons.ChargeTime + 0.2f);
+        yield return Shot("06b_bow_drawn.png");
+        player.testTrigger = false;
+        yield return null;
+        yield return null;
+        yield return Shot("06c_bow_arrow.png");
+        yield return new WaitForSeconds(0.8f);
         // Physics: an explosive barrel line goes up and throws the enemies standing by it.
         foreach (var e in FindObjectsByType<Enemy>(FindObjectsSortMode.None)) Destroy(e.gameObject);
         Vector3 fw = Vector3.forward, sd = Vector3.right;
@@ -2085,7 +2120,8 @@ public class GameManager : MonoBehaviour
         PhysicsProp.Make(Kit.Spawn("crate", row + fw * 2.5f + sd * 4f, Quaternion.identity, null), 18f, 9);
         player.pitch = 8f;
         yield return new WaitForSeconds(0.8f);
-        first.Hit(5, first.transform.position, fw);
+        if (first) first.Hit(5, first.transform.position, fw);
+        else Debug.Log("SHOTS physics: the first barrel went off before it was shot (see the PROP line)");
         yield return new WaitForSeconds(0.32f);
         yield return Shot("14_physics.png");
         yield return new WaitForSeconds(0.6f);

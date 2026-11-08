@@ -88,6 +88,40 @@ public static class UiKit
         return t;
     }
 
+    /// A capsule (a circle when w == h) along the longer side, filled, with an inner border; antialiased,
+    /// stored linear like Round. Drawn white-filled and tinted (Tinted), the border stays dark.
+    public static Texture2D Capsule(int w, int h, Color fill, Color border, float borderWidth)
+    {
+        var t = new Texture2D(w, h, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+        var px = new Color[w * h];
+        float r = Mathf.Min(w, h) / 2f;
+        Vector2 a = w < h ? new Vector2(w / 2f, r) : new Vector2(r, h / 2f);
+        Vector2 b = w < h ? new Vector2(w / 2f, h - r) : new Vector2(w - r, h / 2f);
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                var p = new Vector2(x + 0.5f, y + 0.5f);
+                float k = Mathf.Clamp01(Vector2.Dot(p - a, b - a) / Mathf.Max(0.0001f, (b - a).sqrMagnitude));
+                float d = Vector2.Distance(p, a + (b - a) * k) - r; // <0 inside
+                float inside = Mathf.Clamp01(0.5f - d);
+                float rim = Mathf.Clamp01(d + borderWidth + 0.5f);
+                var c = Lin(Color.Lerp(fill, border, rim));
+                c.a *= inside;
+                px[y * w + x] = c;
+            }
+        t.SetPixels(px);
+        t.Apply();
+        return t;
+    }
+
+    /// A texture drawn tinted by `c` (as authored: converted for the linear project).
+    public static void Tinted(Rect r, Texture t, Color c)
+    {
+        GUI.color = Lin(c);
+        GUI.DrawTexture(r, t);
+        GUI.color = Color.white;
+    }
+
     // ---- painted art ----
     static readonly Dictionary<string, Texture2D> art = new Dictionary<string, Texture2D>();
     static Dictionary<string, Rect> layout;

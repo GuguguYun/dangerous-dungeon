@@ -90,6 +90,9 @@ public partial class PlayerController : MonoBehaviour
     bool prevTrigger, boomerangOut;
     float holdT;
     Light chargeLight;
+    AudioSource roar;  // the flamethrower's fire, looping while it fires
+    float flamingAt = -1f;
+    ParticleSystem gather; // motes drawn in to a drawn bow's arrow
     float charge, energyAcc, beamTick;
     LineRenderer beam, beamGlow;
     Light beamLight;
@@ -315,6 +318,7 @@ public partial class PlayerController : MonoBehaviour
 
     void Update()
     {
+        FlameRoar();
         if (Time.timeScale == 0f) return;
         float dt = Time.deltaTime;
         fireCd -= dt;
@@ -627,7 +631,12 @@ public partial class PlayerController : MonoBehaviour
         switch (w.kind)
         {
             case WeaponKind.Charge:
-                if (trigger && fireCd <= 0f) charge = Mathf.Min(1f, charge + dt / Weapons.ChargeTime);
+                if (trigger && fireCd <= 0f)
+                {
+                    float before = charge;
+                    charge = Mathf.Min(1f, charge + dt / Weapons.ChargeTime);
+                    if (before < 1f && charge >= 1f) FullyDrawn();
+                }
                 else if (!trigger && prevTrigger && charge > 0f) { FireCharged(w, charge); charge = 0f; }
                 break;
             case WeaponKind.Beam:
@@ -706,8 +715,50 @@ public partial class PlayerController : MonoBehaviour
         return false;
     }
 
+    /// The flamethrower's sound: the fire recording (as the braziers'), up while it fires and fading when
+    /// it stops, silent while the game is paused. (It was bursts of synthesised hiss, which the user
+    /// found piercing.)
+    void FlameRoar()
+    {
+        bool on = Time.timeScale > 0f && Time.unscaledTime - flamingAt < 0.15f && !dead;
+        if (!roar)
+        {
+            var clip = on ? Sfx.Clip("fire") : null;
+            if (!clip) return;
+            roar = gameObject.AddComponent<AudioSource>();
+            roar.clip = clip;
+            roar.loop = true;
+            roar.spatialBlend = 0f;
+            roar.volume = 0f;
+            roar.Play();
+        }
+        roar.volume = Mathf.MoveTowards(roar.volume, on ? 0.9f : 0f, Time.unscaledDeltaTime * (on ? 6f : 2.5f));
+    }
+
+    /// Is the flamethrower's fire sounding now (the recording, not a synthesised hiss)?
+    public bool FlameRoarOn => roar && roar.isPlaying && roar.volume > 0.05f && roar.clip && roar.clip.length > 10f;
+
+    /// The bow at full draw: a puff of gold at the arrow and a soft chime.
+    void FullyDrawn()
+    {
+        Vfx.Sparks(muzzle.position, Bullet.ArrowGold, 10, 2.5f);
+        Sfx.Play("pickup", 0.35f, 0f);
+    }
+
     void ChargeGlow(WeaponDef w)
     {
+        // Gold motes drawn in to the arrow as the bow is drawn (more the further it is drawn).
+        if (w.kind == WeaponKind.Charge && charge > 0f)
+        {
+            if (!gather) gather = Vfx.Trail(muzzle, "gather");
+            var em = gather.emission;
+            em.rateOverTime = 10f + 40f * charge;
+        }
+        else if (gather)
+        {
+            Vfx.Detach(gather, 0.5f);
+            gather = null;
+        }
         if (charge <= 0f)
         {
             if (chargeLight) chargeLight.enabled = false;
@@ -806,11 +857,15 @@ public partial class PlayerController : MonoBehaviour
         Vector3 from = muzzle.position;
         Vector3 aim = (AimPoint() - from).normalized;
         int dmg = RollDamage(Mathf.RoundToInt(w.damage * (1f + (Weapons.FullCharge - 1f) * c)), out bool crit);
-        var b = Bullet.Fire(from, aim * w.speed * (1f + c), true, w.radius * (1f + c), w.mat, 3f, dmg, 0f, crit);
+        // The further it was drawn, the wider it hits: a full draw takes anyone within half a metre of
+        // its line (aiming a thin arrow across the room was too hard).
+        var b = Bullet.Fire(from, aim * w.speed * (1f + c), true, Mathf.Lerp(Bullet.MinPlayerShot, Weapons.FullDrawRadius, c), w.mat, 3f, dmg, 0f, crit);
+        b.Empower(c);
         if (c >= 0.95f) b.pierce = 3;
         nextCrit = false;
         CameraShake.Add(0.05f + 0.15f * c);
-        Sfx.Play("laser", 0.4f + 0.4f * c, 0.05f);
+        if (c >= 0.5f) Vfx.Sparks(from, Bullet.ArrowGold, (int)(12 * c), 4f);
+        Sfx.Play("slash", 0.5f + 0.3f * c, 0.05f, 0.85f); // a soft whoosh (no square-wave laser zap)
     }
 
     /// Laser: a continuous ray to the crosshair, damage every interval while energy lasts.
@@ -1005,7 +1060,7 @@ public partial class PlayerController : MonoBehaviour
                     f.burn = 2f;
                 }
                 FlameCone(w, from, aim);
-                if (Random.value < 0.3f) Sfx.Play("rocket", 0.25f, 0.3f);
+                flamingAt = Time.unscaledTime;
                 return;
             case WeaponKind.Grenade:
             {

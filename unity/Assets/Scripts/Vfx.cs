@@ -605,6 +605,18 @@ public static class Vfx
                 Grow(ps, 2f);
                 Fade(ps, new Color(0.9f, 0.97f, 1f), new Color(0.65f, 0.85f, 1f));
                 break;
+            case "gather":
+                // Gold motes drawn in to a drawn bow's arrow (born on a small sphere, moving inward).
+                m.simulationSpace = ParticleSystemSimulationSpace.Local;
+                m.startLifetime = 0.3f;
+                m.startSpeed = -1.4f;
+                m.startSize = new ParticleSystem.MinMaxCurve(0.03f, 0.07f);
+                m.startColor = Grad(new Color(1f, 0.92f, 0.6f, 0.8f), new Color(1f, 0.75f, 0.3f, 0.7f));
+                em.rateOverTime = 10f;
+                sh.radius = 0.45f;
+                sh.radiusThickness = 0f; // on the surface
+                Fade(ps, new Color(1f, 0.95f, 0.7f), new Color(1f, 0.7f, 0.25f));
+                break;
             case "chill":
                 m.startLifetime = new ParticleSystem.MinMaxCurve(0.5f, 0.9f);
                 m.startSpeed = new ParticleSystem.MinMaxCurve(0.1f, 0.5f);

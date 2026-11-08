@@ -30,7 +30,10 @@ public class Bullet : MonoBehaviour
     ParticleSystem trailFx; // smoke, frost mist or flames riding along
     int mask;
     string mat;
-    float radius;
+    float radius;           // how wide it hits (the player's shots: never under MinPlayerShot)
+    float look;             // how wide it looks up close (Fire's radius as given)
+    Vector3 baseScale;      // its size up close; it grows with distance from the camera (SizeForCamera)
+    float farSize;          // small shots: how wide they read (radius); 0 = big enough already, never grows
     float closest = 99f;
     bool dodgeChecked;
     float travelled;
@@ -38,20 +41,33 @@ public class Bullet : MonoBehaviour
     Transform model;        // enemy shots: the real thing riding on the shot (bullet, arrow, skull, coin, axe ...)
     Vector3 modelSpin;      // its turn about its own axes, degrees per second
     readonly HashSet<Enemy> hit = new HashSet<Enemy>();
+    float power;            // the player's arrow: how far the bow was drawn (0..1)
+    public static readonly Color ArrowGold = new Color(1f, 0.82f, 0.4f);
     static Mesh disc, slug;
     static Material groundGlow;
     static readonly Dictionary<string, Material> looks = new Dictionary<string, Material>();
 
     public bool HitsEnemies => hitsEnemies;
 
+    /// The player's shots hit enemies with at least this radius (metres), whatever their look: a thin
+    /// tracer hit only on the line through its centre, which made aiming hard.
+    public const float MinPlayerShot = 0.14f;
+
+    /// Far shots look this wide per metre from the camera at least (radius): about 16 px across at 15 m,
+    /// so small shots stay visible far off, while up close they keep their own size (a tracer leaving the
+    /// gun next to the camera must not swell into a ball).
+    const float FarLook = 0.012f;
+
     public static Bullet Fire(Vector3 from, Vector3 velocity, bool hitsEnemies, float radius, string mat,
         float life = 3f, int damage = 1, float explode = 0f, bool crit = false)
     {
+        float look = radius;
+        if (hitsEnemies) radius = Mathf.Max(radius, MinPlayerShot);
         var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         DestroyImmediate(go.GetComponent<Collider>());
         go.name = "bullet";
         go.transform.position = from;
-        go.transform.localScale = Vector3.one * radius * 2f;
+        go.transform.localScale = Vector3.one * look * 2f;
         var r = go.GetComponent<MeshRenderer>();
         r.sharedMaterial = Palette.Get(Base(mat));
         r.shadowCastingMode = ShadowCastingMode.Off;
@@ -59,7 +75,7 @@ public class Bullet : MonoBehaviour
         var tr = go.AddComponent<TrailRenderer>();
         tr.sharedMaterial = Palette.Trail(Base(mat));
         tr.time = 0.12f;
-        tr.startWidth = radius * 1.6f;
+        tr.startWidth = look * 1.6f;
         tr.endWidth = 0f;
         var c = Palette.ColorOf(Base(mat));
         tr.startColor = c;
@@ -73,10 +89,13 @@ public class Bullet : MonoBehaviour
         b.life = life;
         b.mat = mat;
         b.radius = radius;
+        b.look = look;
         b.damage = damage;
         b.explode = explode;
         b.crit = crit;
         b.Style(go, r, tr);
+        b.baseScale = go.transform.localScale;
+        if (!b.model) b.farSize = look;
         return b;
     }
 
@@ -106,12 +125,12 @@ public class Bullet : MonoBehaviour
                 break;
             case "bullet_arrow":
                 stretch = 9f;
-                go.transform.localScale = new Vector3(radius, radius, radius * 2f);
+                go.transform.localScale = new Vector3(look, look, look * 2f);
                 break;
             case "bullet_frost":
                 stretch = 1f;
                 go.GetComponent<MeshFilter>().sharedMesh = Vfx.Crystal();
-                go.transform.localScale = Vector3.one * radius * 1.8f;
+                go.transform.localScale = Vector3.one * look * 1.8f;
                 trailFx = Vfx.Trail(go.transform, "frost");
                 break;
             case "bullet_fire":
@@ -126,7 +145,7 @@ public class Bullet : MonoBehaviour
                 break;
         }
         if (stretch > 0f && mat != "bullet_frost")
-            go.transform.localScale = new Vector3(go.transform.localScale.x, go.transform.localScale.y, radius * 2f * stretch);
+            go.transform.localScale = new Vector3(go.transform.localScale.x, go.transform.localScale.y, look * 2f * stretch);
         Orient();
     }
 
@@ -146,16 +165,18 @@ public class Bullet : MonoBehaviour
         {
             case "bullet_enemy":
                 // Goblin gunner: a fat copper-jacketed slug trailing gun smoke.
-                model = Part(Slug(), Look("copper"), new Vector3(0.19f, 0.19f, 0.46f));
+                model = Part(Slug(), Look("copper"), new Vector3(0.25f, 0.25f, 0.55f));
+                farSize = 0.125f;
                 trailFx = Vfx.Trail(go.transform, "gunsmoke");
                 break;
             case "bullet_arrow":
                 // Skeleton archer: a wooden arrow, iron head first, red fletching, a faint streak of air.
                 model = Arrow();
+                farSize = 0.1f; // a thin shaft: head on it is little more than its point
                 tr.sharedMaterial = Palette.Trail("bullet_arrow");
-                tr.time = 0.07f;
-                tr.startWidth = 0.035f;
-                tr.startColor = new Color(1f, 0.95f, 0.85f, 0.3f);
+                tr.time = 0.08f;
+                tr.startWidth = 0.06f;
+                tr.startColor = new Color(1f, 0.95f, 0.85f, 0.4f);
                 break;
             case "bullet_low":
                 // Ghost-fire shaman: a horned beast skull wreathed in green flame, with a glow on the floor under it.
@@ -286,11 +307,11 @@ public class Bullet : MonoBehaviour
         r.shadowCastingMode = ShadowCastingMode.Off;
     }
 
-    /// An arrow along +Z, 1.2 m (big enough to read head-on): wooden shaft, flat iron head, three red vanes.
+    /// An arrow along +Z, 1.2 m at scale 1 (scaled up to read head-on): wooden shaft, flat iron head, three red vanes.
     Transform Arrow()
     {
         var spin = Pivot("arrow");
-        spin.localScale = Vector3.one * 1.3f;
+        spin.localScale = Vector3.one * 1.6f;
         AddMesh(spin, Disc(), Look("wood"), new Vector3(0f, 0f, -0.08f), new Vector3(0.035f, 0.36f, 0.035f), Quaternion.Euler(90f, 0f, 0f));
         AddMesh(spin, Vfx.Crystal(), Look("steel"), new Vector3(0f, 0f, 0.34f), new Vector3(0.075f, 0.025f, 0.085f), Quaternion.identity);
         for (int i = 0; i < 3; i++)
@@ -403,6 +424,24 @@ public class Bullet : MonoBehaviour
 
     void OnDestroy() => Vfx.Detach(trailFx);
 
+    /// The player's arrow, drawn `c` of the way (0..1): bigger the further it was drawn, with a gold
+    /// streak about as wide as what it hits (Fire was given the matching radius), gold glints behind a
+    /// well-drawn one, and gold sparks wherever it goes through someone.
+    public void Empower(float c)
+    {
+        power = c;
+        if (model) model.localScale = Vector3.one * (1.7f + 1.3f * c);
+        var tr = GetComponent<TrailRenderer>();
+        tr.time = 0.1f + 0.15f * c;
+        tr.startWidth = Mathf.Lerp(0.07f, radius * 1.4f, c);
+        tr.startColor = Color.Lerp(new Color(1f, 0.95f, 0.85f, 0.4f), new Color(ArrowGold.r, ArrowGold.g, ArrowGold.b, 0.55f), c);
+        tr.endColor = new Color(ArrowGold.r, ArrowGold.g, ArrowGold.b, 0f);
+        if (c < 0.5f) return;
+        trailFx = Vfx.Trail(transform, "glitter");
+        var em = trailFx.emission;
+        em.rateOverDistance = 3f; // the arrow flies fast: a few glints per metre is plenty
+    }
+
     void OnEnable() => Live.Add(this);
     void OnDisable() => Live.Remove(this);
 
@@ -426,10 +465,21 @@ public class Bullet : MonoBehaviour
         if (returnTo && Boomerang(dt)) return;
 
         Orient();
+        SizeForCamera();
         if (model && modelSpin != Vector3.zero) model.Rotate(modelSpin * dt, Space.Self);
         if (burn > 0f && hitsEnemies) Reactions.CheckClouds(transform.position, 0.3f); // flames reaching poison gas
         Vector3 step = velocity * dt;
-        if (Physics.Raycast(transform.position, step.normalized, out var rh, step.magnitude, mask, QueryTriggerInteraction.Ignore))
+        bool got = Physics.Raycast(transform.position, step.normalized, out var rh, step.magnitude, mask, QueryTriggerInteraction.Ignore);
+        // The player's shots hit enemies with their whole width, not just the line through their centre
+        // (walls still stop them on that line, so they don't snag on corners).
+        if (hitsEnemies && (mask & Layers.EnemyMask) != 0
+            && Physics.SphereCast(transform.position, radius, step.normalized, out var sh, step.magnitude, Layers.EnemyMask, QueryTriggerInteraction.Ignore)
+            && (!got || sh.distance < rh.distance))
+        {
+            rh = sh;
+            got = true;
+        }
+        if (got)
         {
             if (OnHit(rh)) return;
         }
@@ -477,8 +527,8 @@ public class Bullet : MonoBehaviour
         var e = rh.collider.GetComponentInParent<Enemy>();
         if (!e || e.dead || hit.Contains(e))
         {
-            // Already hit this one (pierce / boomerang): slip past it.
-            transform.position = rh.point + velocity.normalized * 0.6f;
+            // Already hit this one (pierce / boomerang): slip past it, along the line of flight.
+            transform.position += velocity.normalized * (rh.distance + 0.6f);
             return false;
         }
         if (explode > 0f) { Detonate(rh.point); return true; }
@@ -489,12 +539,25 @@ public class Bullet : MonoBehaviour
         if (returnTo || pierce > 0)
         {
             if (!returnTo) pierce--;
-            transform.position = rh.point + velocity.normalized * 0.6f;
+            if (power > 0f) Vfx.Sparks(rh.point, ArrowGold, 10 + (int)(10 * power), 5f);
+            transform.position += velocity.normalized * (rh.distance + 0.6f);
             return false;
         }
+        if (power > 0f) Vfx.Sparks(rh.point, ArrowGold, 10 + (int)(10 * power), 5f);
         Impact(rh.point, radius * 3f);
         Destroy(gameObject);
         return true;
+    }
+
+    /// Small shots far from the camera grow to stay visible (see FarLook); flames are particles and stay.
+    void SizeForCamera()
+    {
+        var cam = Camera.main;
+        if (!cam || farSize <= 0f || mat == "bullet_fire") return;
+        float grow = Mathf.Max(1f, Vector3.Distance(cam.transform.position, transform.position) * FarLook / farSize);
+        transform.localScale = baseScale * grow;
+        var tr = GetComponent<TrailRenderer>();
+        if (tr) tr.widthMultiplier = grow;
     }
 
     void Steer(float dt)

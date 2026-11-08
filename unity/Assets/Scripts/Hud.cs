@@ -92,7 +92,13 @@ public partial class Hud : MonoBehaviour
 
     public int DamageNumbers => numbers.Count;
 
-    public void HitMarker() => hitMarker = 0.12f;
+    const float HitMarkerTime = 0.15f;
+    bool hitCrit;
+    public void HitMarker(bool crit = false)
+    {
+        hitMarker = HitMarkerTime;
+        hitCrit = crit;
+    }
     public void Hurt() => hurt = 0.35f;
 
     public void BossBanner(string name, string subtitle)
@@ -868,34 +874,69 @@ public partial class Hud : MonoBehaviour
         else UiKit.DrawMedal(medal, IconStudio.I ? IconStudio.I.ClassView(cls.id) : null, 1f, backdrop, new Rect(0.14f, 0.42f, 0.72f, 0.58f));
     }
 
+    static Texture2D reticleDot, reticleTick;
+
+    /// The crosshair, in the HUD's own style (gold with a dark ink rim, like the frames): a dot and four
+    /// short ticks. A hit flashes four diagonal ticks (gold and bigger for a crit); charging fills a ring
+    /// of gold beads around it; the stamina pips (and a light mech's heat) are the HUD's own bars.
     void DrawCrosshair(float w, float h)
     {
-        var c = hitMarker > 0f ? new Color(1f, 0.3f, 0.3f) : new Color(1f, 1f, 1f, 0.9f);
-        float s = hitMarker > 0f ? 14f : 10f;
-        Box(new Rect(w / 2 - s, h / 2 - 1, s * 2, 2), c);
-        Box(new Rect(w / 2 - 1, h / 2 - s, 2, s * 2), c);
+        if (!reticleDot)
+        {
+            reticleDot = UiKit.Capsule(24, 24, Color.white, UiKit.Ink, 5f);
+            reticleTick = UiKit.Capsule(16, 44, Color.white, UiKit.Ink, 4.5f);
+        }
+        var c = new Vector2(w / 2, h / 2);
+        UiKit.Tinted(new Rect(c.x - 3.5f, c.y - 3.5f, 7f, 7f), reticleDot, UiKit.Gold);
+        for (int i = 0; i < 4; i++) Tick(c, 90f * i, 7f, 12f, 5f, UiKit.Gold);
+        if (hitMarker > 0f)
+        {
+            float k = hitMarker / HitMarkerTime; // 1 -> 0: the ticks drift out as they fade
+            var hc = hitCrit ? new Color(1f, 0.86f, 0.4f) : new Color(1f, 0.45f, 0.32f);
+            hc.a = Mathf.Clamp01(k * 2f);
+            for (int i = 0; i < 4; i++)
+                Tick(c, 45f + 90f * i, (hitCrit ? 10f : 9f) + 3f * (1f - k), hitCrit ? 14f : 11f, hitCrit ? 5.5f : 4.5f, hc);
+        }
         if (!player) return;
+        float below = 28f;
         if (player.Charge > 0f)
         {
-            // Bow charge: a bar that fills above the stamina pips, gold when full.
-            Box(new Rect(w / 2 - 40, h / 2 + 16, 80, 6), new Color(0f, 0f, 0f, 0.5f));
-            Box(new Rect(w / 2 - 40, h / 2 + 16, 80 * player.Charge, 6), player.Charge >= 0.95f ? new Color(1f, 0.8f, 0.2f) : Color.white);
+            // Charging (the bow, a charged swing or shot): beads light up clockwise from the top.
+            const int beads = 20;
+            const float ring = 30f;
+            bool full = player.Charge >= 0.95f;
+            for (int i = 0; i < beads; i++)
+            {
+                float a = (i + 0.5f) / beads * 2f * Mathf.PI;
+                var p = c + new Vector2(Mathf.Sin(a), -Mathf.Cos(a)) * ring;
+                float lit = Mathf.Clamp01(player.Charge * beads - i);
+                float s = full ? 7f : 6f;
+                var col = lit > 0f ? new Color(full ? 1f : UiKit.Gold.r, full ? 0.9f : UiKit.Gold.g, full ? 0.6f : UiKit.Gold.b, 0.45f + 0.55f * lit)
+                                    : new Color(0.25f, 0.25f, 0.3f, 0.5f);
+                UiKit.Tinted(new Rect(p.x - s / 2f, p.y - s / 2f, s, s), reticleDot, col);
+            }
+            below = 42f;
         }
         // Light mech: the cannon's heat under the crosshair, red when it has overheated.
         if (player.InMech && !player.mechDef.heavy && (player.heat > 0.01f || player.overheated))
         {
-            Box(new Rect(w / 2 - 40, h / 2 + 16, 80, 6), new Color(0f, 0f, 0f, 0.5f));
-            Box(new Rect(w / 2 - 40, h / 2 + 16, 80 * player.heat, 6), player.overheated ? new Color(1f, 0.35f, 0.25f) : new Color(1f, 0.8f, 0.4f));
+            UiKit.Bar(new Rect(w / 2 - 44, h / 2 + below - 12, 88, 10), player.heat, 1f, player.overheated ? new Color(1f, 0.35f, 0.25f) : new Color(1f, 0.8f, 0.4f));
+            below += 2f;
         }
         // Stamina pips under the crosshair: each jump or dash spends one (a mech's boost charges).
         int n = player.maxStamina;
-        float pw = 22f, gap = 5f, x0 = w / 2 - (n * pw + (n - 1) * gap) / 2, y = h / 2 + 28;
-        for (int i = 0; i < n; i++)
-        {
-            float fill = Mathf.Clamp01(player.stamina - i);
-            Box(new Rect(x0 + i * (pw + gap), y, pw, 6), new Color(0f, 0f, 0f, 0.45f));
-            Box(new Rect(x0 + i * (pw + gap), y, pw * fill, 6), fill >= 1f ? new Color(0.45f, 0.95f, 1f, 0.95f) : new Color(0.45f, 0.95f, 1f, 0.45f));
-        }
+        float pw = 24f, gap = 3f, total = n * pw + (n - 1) * gap;
+        UiKit.Bar(new Rect(w / 2 - total / 2 - 2, h / 2 + below, total + 4, 11), player.stamina, n, new Color(0.45f, 0.95f, 1f, 0.95f), n);
+    }
+
+    /// One tick of the crosshair: `len` long and `width` wide, starting `from` out from the centre, at
+    /// `angle` degrees clockwise from straight up. (Rotated in the HUD's own units, under its scale.)
+    void Tick(Vector2 c, float angle, float from, float len, float width, Color col)
+    {
+        var m = GUI.matrix;
+        GUI.matrix = m * Matrix4x4.TRS(c, Quaternion.Euler(0f, 0f, angle), Vector3.one) * Matrix4x4.TRS(-c, Quaternion.identity, Vector3.one);
+        UiKit.Tinted(new Rect(c.x - width / 2f, c.y - from - len, width, len), reticleTick, col);
+        GUI.matrix = m;
     }
 
     /// The hit streak on the right: count and damage bonus, fading as the 2 s window runs out.

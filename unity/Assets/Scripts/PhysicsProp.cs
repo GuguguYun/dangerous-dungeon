@@ -72,6 +72,7 @@ public class PhysicsProp : MonoBehaviour
     {
         if (broken) return;
         broken = true;
+        if (!RunState.SaveProgress) Debug.Log($"PROP {name} broke at {transform.position}"); // scripted runs: the stack says by what
         Vector3 at = transform.position + Vector3.up * 0.5f;
         if (explosive) Invoke(nameof(Explode), 0.08f); // a beat so chains ripple instead of popping at once
         else Destroy(gameObject);
