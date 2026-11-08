@@ -358,7 +358,7 @@ public static class BuildScript
             if (sh) Save(new Material(sh) { name = file }, $"{dir}/{file}.mat");
             Debug.Log($"SETUP {file} shader found={(bool)sh}");
         }
-        // The Meshy potion and energy crystal, self-lit (their texture as emission), saved so the
+        // The Meshy potion, energy crystal and shop/altar wares, self-lit (their texture as emission), saved so the
         // emissive Lit variant ships in the build. The round potion gets smooth normals (its remesh is
         // faceted); the crystal keeps its hard facets.
         if (AssetImporter.GetAtPath($"Assets/Resources/Models/Props/{LootFx.PotionModel}.fbx") is ModelImporter potion
@@ -368,7 +368,8 @@ public static class BuildScript
             potion.normalSmoothingAngle = 75f;
             potion.SaveAndReimport();
         }
-        foreach (var (id, amount) in new[] { (LootFx.PotionModel, 0.3f), (LootFx.CrystalModel, 1.1f) })
+        foreach (var (id, amount) in new[] { (LootFx.PotionModel, 0.3f), (LootFx.CrystalModel, 1.1f),
+                     (ShopItem.UpgradeModel, 0.3f), (ShopItem.BlessingModel, 0.08f), (Altar.HeartModel, 0.3f) })
         {
             var model = AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/Resources/Models/Props/{id}.fbx");
             var r = model ? model.GetComponentInChildren<Renderer>() : null;

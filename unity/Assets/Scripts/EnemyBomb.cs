@@ -12,13 +12,9 @@ public class EnemyBomb : MonoBehaviour
 
     public static EnemyBomb Throw(Vector3 from, Vector3 target, float flight, float radius)
     {
-        var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        Destroy(go.GetComponent<Collider>());
-        go.name = "enemy_bomb";
+        var go = new GameObject("enemy_bomb");
         go.transform.position = from;
-        go.transform.localScale = Vector3.one * 0.32f;
-        var r = go.GetComponent<Renderer>();
-        r.sharedMaterial = Palette.Get("iron");
+        Model(go.transform, 0.36f);
         var b = go.AddComponent<EnemyBomb>();
         b.from = from;
         b.to = new Vector3(target.x, 0.05f, target.z);
@@ -30,6 +26,32 @@ public class EnemyBomb : MonoBehaviour
         Tips.Show("bomb", "红圈是炸弹的落点：赶紧走出圈子");
         Sfx.Play("slash", 0.4f, 0.2f);
         return b;
+    }
+
+    public const string BombModel = "bomb";
+
+    /// The bomb itself, about `size` across and centred on parent: the Meshy bomb with its fuse, or a
+    /// black iron ball if the model is missing.
+    public static void Model(Transform parent, float size)
+    {
+        if (Props.Has(BombModel))
+        {
+            var m = Props.Spawn(BombModel, parent.position, parent.rotation, parent, false);
+            m.transform.localScale = Vector3.one * (size / 0.34f); // the prop is made 0.34 m across
+            var bounds = new Bounds();
+            bool first = true;
+            foreach (var r in m.GetComponentsInChildren<Renderer>())
+            {
+                if (first) { bounds = r.bounds; first = false; } else bounds.Encapsulate(r.bounds);
+            }
+            m.transform.position -= bounds.center - parent.position;
+            return;
+        }
+        var ball = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        Destroy(ball.GetComponent<Collider>());
+        ball.transform.SetParent(parent, false);
+        ball.transform.localScale = Vector3.one * size;
+        ball.GetComponent<Renderer>().sharedMaterial = Palette.Get("iron");
     }
 
     static LineRenderer Ring(Vector3 at, float r, float width)

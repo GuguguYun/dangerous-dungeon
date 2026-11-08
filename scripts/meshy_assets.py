@@ -182,6 +182,27 @@ ASSETS = {
         "A chunk of glowing blue energy crystal: one big chunky faceted crystal shard pointing straight up with "
         "three smaller shards fused around its base, bright sapphire blue with a glowing cyan inner core and "
         "white edge highlights, no rock, no stand, no base. ")),
+    # round 11: the last glowing balls (shop blessing and upgrade wares, the blood altar's offering, bombs)
+    "blessing_scroll": dict(kind="prop", size=0.6, polycount=4000, prompt=(
+        "A chunky stylized magic blessing scroll, half unrolled, cream parchment covered in glowing golden "
+        "runes, ornate gold-capped wooden rollers on both ends, a red ribbon with a round red wax seal. ")),
+    "smith_anvil": dict(kind="prop", size=0.6, polycount=4000, prompt=(
+        "A small chunky stylized blacksmith anvil of dark iron with a short smithing hammer lying across its "
+        "top, a red-hot glowing orange sword blade resting on the anvil, toy-like proportions. ")),
+    "blood_heart": dict(kind="prop", size=0.55, polycount=4000, prompt=(
+        "A large glowing crimson heart-shaped ruby crystal wrapped in thorny dark gold vines, faceted, deep "
+        "blood red with a bright inner glow, no stand, no base. ")),
+    "bomb": dict(kind="prop", size=0.34, polycount=3000, prompt=(
+        "A classic cartoon round black iron bomb with a brass cap on top and a short twisted rope fuse, "
+        "a few rivets, chunky stylized. ")),
+    # round 12: the shield guard (blocks shots from the front; flank it or break its guard)
+    "shield_goblin": dict(kind="char", height=1.5, polycount=30000, texture="4k", pbr=True, prompt=(
+        "A stocky armored hobgoblin shield guard enemy for a 3D action game, about 3 heads tall, dark olive "
+        "green skin, heavy dented iron helmet with a nose guard and small horns, chainmail shirt under a "
+        "rusty iron breastplate, thick leather bracers, big iron boots, a determined scowl, no weapon. ")),
+    "tower_shield": dict(kind="prop", size=1.15, polycount=4000, prompt=(
+        "A big tall rectangular tower shield, front view, dark wooden planks bound with thick riveted iron "
+        "bands and an iron rim, a painted red goblin skull emblem in the middle, battered and chipped. ")),
     # tileable textures for the Blender dungeon kit (image only)
     "tex_floor": dict(kind="texture", prompt=(
         "Seamless tileable texture of square stone floor flagstones, 2 by 2 large slabs with dark grout, "
@@ -203,6 +224,7 @@ ANIMS = {
     "bomber": {"idle": 89, "throw": 421, "hit": 178, "die": 8},
     "lich": {"idle": 89, "cast": 129, "slam": 127, "hit": 178, "die": 8, "taunt": 88},
     "archer": {"idle": 89, "shoot": 224, "hit": 178, "die": 8},
+    "shield_goblin": {"idle": 89, "bash": 4, "hit": 178, "die": 8},
     "light_mech": {"idle": 89, "shoot": 98, "slash": 97, "hit": 178},
     "heavy_mech": {"idle": 89, "shoot": 98, "swing": 128, "stomp": 86, "hit": 178},
     "gunner_hq": {"idle": 89, "shoot": 104, "hit": 178, "die": 8},

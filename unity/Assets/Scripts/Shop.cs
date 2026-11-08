@@ -7,6 +7,7 @@ public class ShopItem : MonoBehaviour
     public enum Kind { Weapon, Potion, Energy, Buff, Upgrade }
 
     public static readonly List<ShopItem> Live = new List<ShopItem>();
+    public const string UpgradeModel = "smith_anvil", BlessingModel = "blessing_scroll";
     public Kind kind;
     public int price;
     public WeaponDef weapon;
@@ -47,14 +48,10 @@ public class ShopItem : MonoBehaviour
 
     public static ShopItem Create(Kind kind, Vector3 at, Transform parent, WeaponDef w = null, BuffDef b = null)
     {
-        // A stone pedestal with the ware floating and turning above it.
-        var stand = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        // A carved stone pedestal (the dungeon's pillar, cut down) with the ware floating and turning above it.
+        var stand = Kit.Spawn("pillar", at, Quaternion.identity, parent);
         stand.name = "pedestal";
-        stand.layer = Layers.World;
-        stand.transform.SetParent(parent, false);
-        stand.transform.position = at + Vector3.up * 0.45f;
-        stand.transform.localScale = new Vector3(0.8f, 0.9f, 0.8f);
-        stand.GetComponent<Renderer>().sharedMaterial = Palette.Get("trim");
+        stand.transform.localScale = new Vector3(0.8f / 1.1f, 0.9f / 4.85f, 0.8f / 1.1f);
 
         var go = new GameObject("shop_" + kind);
         go.transform.SetParent(parent, false);
@@ -83,8 +80,15 @@ public class ShopItem : MonoBehaviour
             // The same Meshy potion and energy crystal that drop on the floor, a size up on the pedestal.
             case Kind.Potion: if (!LootFx.PickupModel(LootFx.PotionModel, item.visual, 1.3f, true)) Orb(item.visual, 0.42f, "pickup_health"); break;
             case Kind.Energy: if (!LootFx.PickupModel(LootFx.CrystalModel, item.visual, 1.75f, true)) Orb(item.visual, 0.32f, "pickup_energy"); break;
-            case Kind.Upgrade: Orb(item.visual, 0.3f, "embers"); break;
-            default: Orb(item.visual, 0.3f, "pickup_gold"); break;
+            // A smith's anvil for the weapon upgrade, a blessing scroll for the random blessing.
+            case Kind.Upgrade: if (!LootFx.PickupModel(UpgradeModel, item.visual, 1.2f, true)) Orb(item.visual, 0.3f, "embers"); break;
+            default:
+                // The scroll is modelled lying open; stand it up so its face turns towards you.
+                var upright = new GameObject("upright").transform;
+                upright.SetParent(item.visual, false);
+                upright.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                if (!LootFx.PickupModel(BlessingModel, upright, 1.25f, true)) Orb(item.visual, 0.3f, "pickup_gold");
+                break;
         }
         item.glow = new GameObject("glow").AddComponent<Light>();
         item.glow.transform.SetParent(go.transform, false);

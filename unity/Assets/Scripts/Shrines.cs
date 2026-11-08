@@ -34,6 +34,7 @@ public class Altar : Interactable
     Transform orb;
     Light glow;
 
+    public const string HeartModel = "blood_heart";
     public override string Title => "血之祭坛";
     public override string Desc => used ? "祭坛已经沉寂" : "献出 2 点生命上限，从三份祝福中选一份";
     public override Color Tint => new Color(1f, 0.3f, 0.3f);
@@ -47,20 +48,28 @@ public class Altar : Interactable
         var stone = Kit.Spawn("pillar", at, Quaternion.Euler(0f, 45f, 0f), go.transform);
         stone.transform.localScale = new Vector3(1.6f, 0.33f, 1.6f);
         var a = go.AddComponent<Altar>();
-        var o = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        Destroy(o.GetComponent<Collider>());
-        o.transform.SetParent(go.transform, false);
-        o.transform.localPosition = Vector3.up * 1.7f;
-        o.transform.localScale = Vector3.one * 0.5f;
-        o.GetComponent<Renderer>().sharedMaterial = Palette.Get("pickup_health");
-        a.orb = o.transform;
+        // The offering floats over the stone: a crimson heart crystal (a red ball if it is missing).
+        var o = new GameObject("offering").transform;
+        o.SetParent(go.transform, false);
+        o.localPosition = Vector3.up * 1.7f;
+        if (!LootFx.PickupModel(HeartModel, o, 1.6f, true))
+        {
+            var ball = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            Destroy(ball.GetComponent<Collider>());
+            ball.transform.SetParent(o, false);
+            ball.transform.localScale = Vector3.one * 0.5f;
+            ball.GetComponent<Renderer>().sharedMaterial = Palette.Get("pickup_health");
+        }
+        a.orb = o;
         a.glow = Glow(go.transform, Vector3.up * 1.8f, new Color(1f, 0.25f, 0.25f), 6f, 4f);
         return a;
     }
 
     void Update()
     {
-        if (orb) orb.localPosition = Vector3.up * (1.7f + Mathf.Sin(Time.time * 2f) * 0.12f);
+        if (!orb) return;
+        orb.localPosition = Vector3.up * (1.7f + Mathf.Sin(Time.time * 2f) * 0.12f);
+        orb.localRotation = Quaternion.Euler(0f, Time.time * 40f, 0f);
     }
 
     public override void Use(PlayerController p)
