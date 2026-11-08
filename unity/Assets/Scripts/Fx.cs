@@ -16,7 +16,8 @@ public static class Fx
         }
         Vfx.Sparks(b, Palette.ColorOf("lightning"), 16, 8f);
         Vfx.Ring(b - Vector3.up * 0.8f, 1.2f, Palette.ColorOf("lightning"));
-        Vfx.Flash(b, Palette.ColorOf("lightning"), 8f, 7f, 0.14f);
-        Vfx.Flash(Vector3.Lerp(a, b, 0.5f), Palette.ColorOf("lightning"), 4f, 6f, 0.1f);
+        // Gentle light flashes (they were twice as bright; with rapid casting the room pulsed).
+        Vfx.Flash(b, Palette.ColorOf("lightning"), 4f, 7f, 0.14f);
+        Vfx.Flash(Vector3.Lerp(a, b, 0.5f), Palette.ColorOf("lightning"), 2f, 6f, 0.1f);
     }
 }

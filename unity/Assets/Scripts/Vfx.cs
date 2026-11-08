@@ -226,7 +226,7 @@ public static class Vfx
         Burst(ps, 6);
         Shrink(ps);
         Finish(ps, 0.06f);
-        Flash(at, c, 2.5f, 4f, 0.06f);
+        MuzzleGlow.Pulse(at, c); // a steady swell under rapid fire, not a per-shot strobe
     }
 
     public static void Explosion(Vector3 at, float radius)

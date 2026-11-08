@@ -59,13 +59,14 @@ public class Bolt : MonoBehaviour
         jitterT -= Time.deltaTime;
         if (jitterT <= 0f)
         {
-            jitterT = 0.03f;
+            jitterT = 0.06f; // crackles, but not frantically
             Jitter();
         }
         float fade = 1f - t / Life;
         core.widthMultiplier *= 0.98f;
-        // Flicker as it fades: lightning strobes rather than dimming smoothly.
-        float flick = Random.value < 0.25f ? 0.35f : 1f;
+        // A smooth fade: a random strobe here (it used to dim at random frames) is hard on players
+        // prone to 3D sickness, and the thunder staff fires one every 0.45 s.
+        const float flick = 1f;
         glow.startColor = glow.endColor = Palette.ColorOf("lightning") * 3f * new Color(1f, 1f, 1f, 0.7f * fade * flick);
         halo.startColor = halo.endColor = Palette.ColorOf("lightning") * 1.5f * new Color(1f, 1f, 1f, 0.18f * fade * flick);
         core.startColor = core.endColor = Color.white * 4f * new Color(1f, 1f, 1f, Mathf.Clamp01(fade * 1.5f) * flick);
