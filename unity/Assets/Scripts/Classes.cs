@@ -46,7 +46,7 @@ public static class Classes
             stamina = 3, speed = 6f, energyRegen = 2f, trait = "每秒自动回复 2 点能量",
             skill = SkillKind.Meteor, skillName = "天火坠", cooldown = 15f,
             skillDesc = "准星处落下 8 颗燃烧陨石，并握住焚星杖 6 秒：每次施法在准星处再砸一颗陨石" },
-        new ClassDef { id = "priest", name = "晨辉牧师", model = "priest", desc = "续航之王，越打越稳",
+        new ClassDef { id = "priest", name = "晨辉牧师", model = "priest2", desc = "续航之王，越打越稳", // the second priest: a face that holds up close
             maxHp = 6, maxArmor = 4, maxEnergy = 220, weapons = new[] { "pistol", "spear" },
             stamina = 4, speed = 6f, hpRegenEvery = 15f, trait = "每 15 秒自动回复 1 点生命",
             skill = SkillKind.Sanctuary, skillName = "晨光圣域", cooldown = 16f,

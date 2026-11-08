@@ -11,7 +11,7 @@ using UnityEngine;
 /// uses in place of the imported mesh.
 public static class RobeFix
 {
-    static readonly string[] Robed = { "priest", "mage" };
+    static readonly string[] Robed = { "priest", "priest2", "mage" };
 
     public static void Run()
     {

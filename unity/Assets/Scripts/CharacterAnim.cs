@@ -27,7 +27,7 @@ public class CharacterAnim : MonoBehaviour
     {
         { "hero", 1.5f }, { "gunner", 1.3f }, { "charger", 1.7f }, { "spreader", 1.3f }, { "boss", 3.0f },
         { "hero_hq", 1.5f }, { "boss_hq", 3.0f }, { "goblin_king", 2.4f }, { "boar_chief", 3.0f },
-        { "assassin", 1.55f }, { "mage", 1.5f }, { "priest", 1.45f },
+        { "assassin", 1.55f }, { "mage", 1.5f }, { "priest", 1.45f }, { "priest2", 1.45f },
         { "gunner_hq", 1.3f }, { "charger_hq", 1.7f }, { "spreader_hq", 1.3f },
         { "light_mech", 2.1f }, { "heavy_mech", 2.5f },
         { "merchant", 1.3f }, { "bomber", 1.3f }, { "archer", 1.45f }, { "shield_goblin", 1.5f }, { "lich", 2.8f },

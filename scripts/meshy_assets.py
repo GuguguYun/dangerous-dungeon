@@ -246,6 +246,14 @@ ASSETS = {
     "proj_ice_shard": dict(kind="prop", size=0.6, polycount=2000, prompt=(
         "A single long jagged spike of pale blue ice lying on its side, a sharp pointed icicle shard with "
         "several flat facets and frosted white edges, painted solid, not see-through. ")),
+    # round 16: the priest again, for a face worth looking at in the HUD medallion (the first one's
+    # face came out grey with painted smudges and small dull eyes)
+    "priest2": dict(kind="char", height=1.4, polycount=30000, texture="4k", pbr=True, prompt=(
+        "A small holy priestess hero for a 3D action game, about 3 heads tall, a pretty cute young face "
+        "with big bright sky-blue eyes with clear highlights, rosy cheeks, warm peachy skin, a small gentle "
+        "smile, clean smooth face with no shadows painted on it, long golden blonde hair in a single braid "
+        "over the shoulder with a neat fringe, a thin golden halo circlet floating above the head, long white "
+        "and gold robe, blue sash, no weapon. ")),
     # tileable textures for the Blender dungeon kit (image only)
     "tex_floor": dict(kind="texture", prompt=(
         "Seamless tileable texture of square stone floor flagstones, 2 by 2 large slabs with dark grout, "
@@ -276,6 +284,7 @@ ANIMS = {
     "assassin": {"idle": 89, "shoot": 98, "dodge": 158, "hit": 178, "die": 8, "slash": 92, "cast": 125},
     "mage": {"idle": 89, "shoot": 98, "dodge": 158, "hit": 178, "die": 8, "slash": 97, "cast": 129},
     "priest": {"idle": 89, "shoot": 98, "dodge": 158, "hit": 178, "die": 8, "slash": 97, "cast": 126},
+    "priest2": {"idle": 89, "shoot": 98, "dodge": 158, "hit": 178, "die": 8, "slash": 97, "cast": 126},
     "hero_hq": {"idle": 89, "shoot": 98, "dodge": 158, "hit": 178, "die": 8, "slash": 97},
     "boss_hq": {"walk": 119, "slam": 127, "swing": 128, "hit": 178, "die": 8, "taunt": 88},
     "goblin_king": {"idle": 89, "slam": 86, "cast": 125, "hit": 178, "die": 8, "taunt": 88},
