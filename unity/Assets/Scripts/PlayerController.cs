@@ -530,7 +530,9 @@ public partial class PlayerController : MonoBehaviour
         else weaponPivot.localRotation = weaponRest;
 
         Color c = body ? Color.white : Palette.ColorOf("player_body");
-        if (invuln > 0f && !dead && ((int)(invuln * 20f)) % 2 == 0) c = new Color(1f, 0.4f, 0.4f);
+        // Hurt: one soft red tint that fades over a third of a second. (It used to blink red/white at
+        // 10 Hz through the whole invulnerability, a strobe that brings on 3D sickness.)
+        if (!dead && sinceHit < 0.35f) c = Color.Lerp(new Color(1f, 0.55f, 0.55f), c, sinceHit / 0.35f);
         mpb.SetColor("_Color", c);
         mpb.SetColor("_BaseColor", c);
         if (bodyRenderer && (body || !InMech)) bodyRenderer.SetPropertyBlock(mpb); // the blocky stand-in mech keeps its colours
@@ -692,7 +694,8 @@ public partial class PlayerController : MonoBehaviour
         chargeLight.enabled = true;
         chargeLight.transform.position = muzzle.position;
         chargeLight.color = charge >= 1f ? new Color(1f, 0.8f, 0.3f) : Weapons.RarityColors[w.rarity];
-        chargeLight.intensity = 1f + charge * 4f + (charge >= 1f ? Mathf.PingPong(Time.time * 12f, 2f) : 0f);
+        // Fully charged: a slow swell (about once a second), never a flicker.
+        chargeLight.intensity = 1f + charge * 4f + (charge >= 1f ? 0.8f * (1f + Mathf.Sin(Time.time * 6f)) : 0f);
     }
 
     /// The heavy version of each chargeable weapon, scaled by how long it was charged (0.25..1).
@@ -835,7 +838,7 @@ public partial class PlayerController : MonoBehaviour
         beamGlow.SetPosition(1, end);
         beamLight.color = Palette.ColorOf(w.mat);
         beamLight.transform.position = end - dir * 0.3f;
-        beamLight.intensity = 3f + Random.value;
+        beamLight.intensity = 3.5f; // steady (a random value each frame strobed the room)
         beamSparkT -= dt;
         if (beamSparkT <= 0f)
         {

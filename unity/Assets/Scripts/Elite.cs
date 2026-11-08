@@ -214,7 +214,7 @@ public class DelayedBlast : MonoBehaviour
         Sfx.Play("rocket", 0.5f, 0.1f);
         for (float t = 0f; t < delay; t += Time.deltaTime)
         {
-            float pulse = Mathf.PingPong(t * 10f, 1f);
+            float pulse = 0.5f + 0.5f * Mathf.Sin(t * 16f); // ~2.5 Hz: urgent but not a strobe
             ring.startColor = ring.endColor = new Color(1f, 0.3f + 0.4f * pulse, 0.1f) * 3f;
             ring.widthMultiplier = 0.1f + 0.12f * pulse;
             glow.intensity = 2f + 6f * t / delay;

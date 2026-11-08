@@ -75,7 +75,7 @@ public class FirePit : Trap
                 }
                 break;
             case Phase.Burning:
-                glow.intensity = 6f + Mathf.PingPong(Time.time * 20f, 2f);
+                glow.intensity = 6.5f + 0.6f * Mathf.Sin(Time.time * 4f); // a slow roar, not a strobe
                 tick -= Time.deltaTime;
                 if (tick <= 0f)
                 {
