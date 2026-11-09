@@ -409,7 +409,7 @@ public partial class Hud : MonoBehaviour
         if (Btn(new Rect(bx, by, bw, RunSave.Has ? 48 : 60), RunSave.Has ? "新的冒险" : "开始冒险", button)) Begin?.Invoke();
         by += RunSave.Has ? 58f : 70f;
         if (Btn(new Rect(bx, by, bw, 48), "武器图鉴", button)) OpenCodex();
-        if (Btn(new Rect(bx, by + 58, bw, 48), "设置 · 防晕 3D", button)) OpenSettings();
+        if (Btn(new Rect(bx, by + 58, bw, 48), "设置", button)) OpenSettings();
         if (Quit != null && Btn(new Rect(bx, by + 116, bw, 48), "退出游戏", button)) Quit();
         if (PlayerPrefs.HasKey("best_floor"))
         {
@@ -418,14 +418,31 @@ public partial class Hud : MonoBehaviour
             UiKit.Text(new Rect(0, by + 168, w, 28), $"<color=#F7CC75>最佳纪录</color>  {PlayerPrefs.GetString("best_class")} · {result} · 用时 {bt / 60}:{bt % 60:00} · 击杀 {PlayerPrefs.GetInt("best_kills")}",
                 new GUIStyle(small) { fontSize = 18 });
         }
-        // Controls in a small panel at the bottom (text kept clear of the gold frame's corners).
+        // The controls at the bottom, as key caps: each key and what it does, nothing else (how dodging
+        // works comes up as tips the first time it matters). Two rows, kept clear of the gold frame's corners.
         var cr = new Rect(w / 2 - 430, h - 146, 860, 100);
         UiKit.DrawPanel(cr);
-        var cs = new GUIStyle(left) { fontSize = 16, wordWrap = true, alignment = TextAnchor.UpperLeft };
-        UiKit.Text(new Rect(cr.x + 44, cr.y + 18, 390, 70), "<color=#F7CC75>操作</color>\nWASD 移动 · 鼠标瞄准 · 左键攻击\nQ 换武器 · E 拾取/购买/搭乘 · 右键或 F 技能", cs);
-        UiKit.Text(new Rect(cr.x + 450, cr.y + 18, 390, 70), "<color=#F7CC75>闪避</color>\n空格跳：时机对了子弹从脚下穿过\nShift 冲刺躲子弹 · 贴身躲开触发「完美闪避」", cs);
-        UiKit.Text(new Rect(0, h - 40, w, 30), "角色、敌人、武器、道具：Meshy 生成 · 场景：Blender · 音效：Kenney 等（CC0）· 音乐：OpenGameArt（CC0）", small);
+        var keyStyle = new GUIStyle(center) { fontSize = 15, fontStyle = FontStyle.Normal };
+        var actStyle = new GUIStyle(left) { fontSize = 17 };
+        float cellW = (cr.width - 88f) / 5f;
+        for (int i = 0; i < TitleKeys.Length; i++)
+        {
+            var (key, act) = TitleKeys[i];
+            float x = cr.x + 44f + (i % 5) * cellW, y = cr.y + 20f + (i / 5) * 34f;
+            float kw = 16f;
+            foreach (char ch in key) kw += ch < 0x80 ? 9f : 16f;
+            var cap = new Rect(x, y, Mathf.Max(30f, kw), 26f);
+            UiKit.Inset(cap, UiKit.Gold * new Color(1f, 1f, 1f, 0.7f));
+            UiKit.Text(cap, key, keyStyle, UiKit.Gold);
+            UiKit.Text(new Rect(cap.xMax + 8f, y, cellW - cap.width - 8f, 26f), act, actStyle, UiKit.Paper);
+        }
     }
+
+    static readonly (string key, string act)[] TitleKeys =
+    {
+        ("WASD", "移动"), ("鼠标", "瞄准"), ("左键", "攻击"), ("右键/F", "技能"), ("Q", "换武器"),
+        ("空格", "跳跃"), ("Shift", "冲刺"), ("E", "互动"), ("Esc", "暂停"),
+    };
 
     static readonly Color InkColor = new Color(0.24f, 0.14f, 0.07f);
 
@@ -755,28 +772,30 @@ public partial class Hud : MonoBehaviour
     void DrawSettings(float w, float h)
     {
         UiKit.Rect(new Rect(0, 0, w, h), new Color(0.02f, 0.02f, 0.05f, 0.85f));
-        var panel = new Rect(w / 2 - 370, 78, 740, h - 158);
+        // The rows below (16 on the Mac, 13 in a browser), squeezed on short windows; the panel fits them.
+        int rows = GameSettings.Web ? 13 : 16;
+        float row = Mathf.Clamp((h - 218f) / rows, 26f, 38f);
+        var panel = new Rect(w / 2 - 370, 78, 740, rows * row + 52f);
         UiKit.DrawPanel(panel);
-        UiKit.DrawBanner(new Rect(w / 2 - 300, 4, 600, 92), "设置 · 防晕 3D", new GUIStyle(title) { fontSize = 34 });
-        // Seventeen rows plus the note; squeeze the rows on short windows.
-        float x = w / 2 - 330, y = 104, row = Mathf.Clamp((panel.height - 120f) / 17f, 26f, 38f);
-        GameSettings.fov = Mathf.Round(SliderRow(y, x, "视野 FOV（大一些更不晕）", GameSettings.fov, 55f, 90f, $"{GameSettings.fov:0}°")); y += row;
+        UiKit.DrawBanner(new Rect(w / 2 - 300, 4, 600, 92), "设置", new GUIStyle(title) { fontSize = 34 });
+        float x = w / 2 - 330, y = 104;
+        GameSettings.fov = Mathf.Round(SliderRow(y, x, "视野", GameSettings.fov, 55f, 90f, $"{GameSettings.fov:0}°")); y += row;
         GameSettings.sensitivity = SliderRow(y, x, "鼠标灵敏度", GameSettings.sensitivity, 0.3f, 3f, $"{GameSettings.sensitivity:0.0}×"); y += row;
-        GameSettings.invertX = ToggleRow(y, x, "水平反转（像拖动画布）", GameSettings.invertX); y += row;
+        GameSettings.invertX = ToggleRow(y, x, "水平反转", GameSettings.invertX); y += row;
         GameSettings.invertY = ToggleRow(y, x, "垂直反转", GameSettings.invertY); y += row;
         GameSettings.shake = SliderRow(y, x, "屏幕震动", GameSettings.shake, 0f, 1f, $"{GameSettings.shake * 100f:0}%"); y += row;
         GameSettings.flashes = ToggleRow(y, x, "受伤 / 闪避闪屏", GameSettings.flashes); y += row;
         if (!GameSettings.Web) // in a browser the page sets the frame pacing and the window size
         {
-            GameSettings.vsync = ToggleRow(y, x, "垂直同步（会增加延迟）", GameSettings.vsync); y += row;
+            GameSettings.vsync = ToggleRow(y, x, "垂直同步", GameSettings.vsync); y += row;
             int capIndex = Mathf.Max(0, System.Array.IndexOf(GameSettings.FpsCaps, GameSettings.fpsCap));
             GameSettings.fpsCap = GameSettings.FpsCaps[ChoiceRow(y, x, "帧率上限", capIndex, GameSettings.FpsCapNames)]; y += row;
         }
-        GameSettings.renderScale = Mathf.Round(SliderRow(y, x, "渲染分辨率（低了帧数高）", GameSettings.renderScale, 0.6f, 1f, $"{GameSettings.renderScale * 100f:0}%") * 20f) / 20f; y += row;
-        GameSettings.smaa = ToggleRow(y, x, "SMAA 抗锯齿（更柔，更糊）", GameSettings.smaa); y += row;
+        GameSettings.renderScale = Mathf.Round(SliderRow(y, x, "渲染分辨率", GameSettings.renderScale, 0.6f, 1f, $"{GameSettings.renderScale * 100f:0}%") * 20f) / 20f; y += row;
+        GameSettings.smaa = ToggleRow(y, x, "SMAA 抗锯齿", GameSettings.smaa); y += row;
         GameSettings.bloom = ToggleRow(y, x, "泛光", GameSettings.bloom); y += row;
         GameSettings.vignette = ToggleRow(y, x, "暗角", GameSettings.vignette); y += row;
-        GameSettings.showFps = ToggleRow(y, x, "显示帧率（目标 ≥ 80）", GameSettings.showFps); y += row;
+        GameSettings.showFps = ToggleRow(y, x, "显示帧率", GameSettings.showFps); y += row;
         GameSettings.music = SliderRow(y, x, "音乐音量", GameSettings.music, 0f, 1f, $"{GameSettings.music * 100f:0}%"); y += row;
         uiDraft = Mathf.Round(SliderRow(y, x, "界面大小", uiDraft, 0.8f, 1.5f, $"{uiDraft * 100f:0}%") * 20f) / 20f; y += row;
         if (GUIUtility.hotControl == 0) GameSettings.uiScale = uiDraft;
@@ -786,11 +805,6 @@ public partial class Hud : MonoBehaviour
             if (win != GameSettings.window) { GameSettings.window = win; GameSettings.ApplyWindow(); }
             y += row;
         }
-        y += 6;
-        UiKit.Fill(new Rect(x, y, 660, 1.5f), new Color(0.85f, 0.65f, 0.3f, 0.5f));
-        Label(new Rect(x, y + 6, 660, 64),
-            "依据「解决晕 3D」：降延迟（关垂直同步、帧率 ≥ 80）、不用鼠标平滑、画面别太大（建议窗口宽度不超过观看距离的一半）、关运动模糊和景深、视野调大、减少闪烁和抖动。",
-            new GUIStyle(small) { fontSize = 15, wordWrap = true });
         if (GUI.changed) SettingsChanged?.Invoke();
         if (Btn(new Rect(w / 2 - 110, h - 70, 220, 50), "返回", button) || Input.GetKeyDown(KeyCode.Escape))
         {
@@ -1149,7 +1163,7 @@ public partial class Hud : MonoBehaviour
         var half = new GUIStyle(button) { fontSize = Mathf.RoundToInt((button.fontSize > 0 ? button.fontSize : 13) * 0.8f) }; // clear of the end caps
         if (screen == Screen.Pause && Btn(new Rect(w / 2 - 140, y + 70, 136, 56), "重新开始", half)) Restart?.Invoke();
         if (screen == Screen.Pause && Btn(new Rect(w / 2 + 4, y + 70, 136, 56), "武器图鉴", half)) OpenCodex();
-        if (screen == Screen.Pause && Btn(new Rect(w / 2 - 140, y + 140, 280, 56), "设置 · 防晕 3D", button)) OpenSettings();
+        if (screen == Screen.Pause && Btn(new Rect(w / 2 - 140, y + 140, 280, 56), "设置", button)) OpenSettings();
         if (Quit != null && Btn(new Rect(w / 2 - 140, y + (screen == Screen.Pause ? 210 : 70), 280, 56), "退出游戏", button)) Quit();
     }
 

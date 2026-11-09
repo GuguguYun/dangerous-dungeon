@@ -81,7 +81,7 @@ public partial class Hud
         for (int i = 0; i < weapons.Count; i++)
             Cell(weapons[i], gridX + (i % cols) * (cw + gap), gridY + (i / cols) * (ch + gap), RunState.Known(weapons[i].id));
         float skillY = gridY + ((weapons.Count + cols - 1) / cols) * (ch + gap) + 4f;
-        UiKit.Text(new Rect(gridX, skillY, gridW, 24), "职业专属 · 只在技能期间握在手里", new GUIStyle(left) { fontSize = 15 }, UiKit.Gold);
+        UiKit.Text(new Rect(gridX, skillY, gridW, 24), "职业专属武器", new GUIStyle(left) { fontSize = 15 }, UiKit.Gold);
         for (int i = 0; i < Weapons.SkillWeapons.Count; i++)
             Cell(Weapons.SkillWeapons[i], gridX + i * (cw + gap), skillY + 28f, true);
 
