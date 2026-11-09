@@ -45,6 +45,13 @@ public class Soak : MonoBehaviour
 
     public IEnumerator Run()
     {
+        // With a window the frame costs below are worth measuring: uncapped, or a 60 fps cap's idle wait
+        // counts as work. (Without one the cap stays: thousands of frames a second would be meaningless.)
+        if (SystemInfo.graphicsDeviceType != UnityEngine.Rendering.GraphicsDeviceType.Null)
+        {
+            Application.targetFrameRate = -1;
+            QualitySettings.vSyncCount = 0;
+        }
         yield return new WaitForSeconds(0.5f);
         var fights = dungeon.combatRooms.FindAll(r => !r.boss);
         fights.AddRange(dungeon.trialRooms);
@@ -120,7 +127,10 @@ public class Soak : MonoBehaviour
         var flagged = new HashSet<(Enemy, string)>();
         var insideFor = new Dictionary<Enemy, int>();
         float t = 0f, empty = 0f, nextLook = 0f;
-        int enemies = 0;
+        int enemies = 0, most = 0;
+        cpu.Clear();
+        gpu.Clear();
+        frames.Clear();
         while (room.state == Room.State.Fighting && t < 150f)
         {
             Enemy target = null;
@@ -148,6 +158,23 @@ public class Soak : MonoBehaviour
                 if (t - seen[e] > (e.kind == EnemyKind.Boss ? 16f : 7f)) e.TakeDamage(9999, (e.transform.position - player.transform.position).normalized);
             }
             if (t >= nextLook) nextLook = t + 0.25f;
+            most = Mathf.Max(most, seen.Count - Dead(seen));
+            // The work in each frame (not the capped frame rate): with a window this is the real cost.
+            float ms = Time.unscaledDeltaTime * 1000f;
+            frames.Add(ms);
+            // A hitch: what happened in the frame before (its work is what this frame waited for).
+            int gcNow = System.GC.CollectionCount(0), aliveNow = Enemy.Live.Count, bulletsNow = Bullet.Live.Count;
+            if (ms > 25f && t > 0.05f)
+                Debug.Log($"SOAK hitch {ms:F0} ms at {t:F2} s {where}: gc {(gcNow > gcWas ? "yes" : "no")}, enemies {aliveWas}->{aliveNow}, shots {bulletsWas}->{bulletsNow}, weapon {player.Weapon?.id}");
+            gcWas = gcNow;
+            aliveWas = aliveNow;
+            bulletsWas = bulletsNow;
+            FrameTimingManager.CaptureFrameTimings();
+            if (FrameTimingManager.GetLatestTimings(1, timing) > 0 && timing[0].cpuMainThreadFrameTime > 0)
+            {
+                cpu.Add((float)timing[0].cpuMainThreadFrameTime);
+                gpu.Add((float)timing[0].gpuFrameTime);
+            }
 
             // The hero: topped up, aiming at the nearest enemy and firing (released now and then, so
             // charged weapons let go).
@@ -172,7 +199,39 @@ public class Soak : MonoBehaviour
         if (room.state == Room.State.Fighting && empty <= 5f)
             Issue($"{where} not cleared after {t:F0} s (alive={room.alive}, wave {room.waveIndex + 1}/{room.waves.Length})");
         Debug.Log($"SOAK fight floor={RunState.floor} {where} enemies={enemies} {room.state} in {t:F1} s");
+        if (cpu.Count > 0)
+            Debug.Log($"SOAK frames floor={RunState.floor} {where} most alive={most} frame avg {Avg(frames):F2} / 1% worst {Worst(frames):F2} ms,"
+                + $" {frames.FindAll(f => f > 25f).Count} over 25 ms; cpu avg {Avg(cpu):F2} / 1% worst {Worst(cpu):F2} ms, gpu avg {Avg(gpu):F2} / 1% worst {Worst(gpu):F2} ms over {cpu.Count} frames");
         yield return new WaitForSeconds(0.4f);
+    }
+
+    readonly List<float> cpu = new List<float>(), gpu = new List<float>(), frames = new List<float>();
+    readonly FrameTiming[] timing = new FrameTiming[1];
+    int gcWas, aliveWas, bulletsWas;
+
+    static int Dead(Dictionary<Enemy, float> seen)
+    {
+        int n = 0;
+        foreach (var e in seen.Keys) if (!e || e.dead) n++;
+        return n;
+    }
+
+    static float Avg(List<float> v)
+    {
+        float sum = 0f;
+        foreach (var x in v) sum += x;
+        return sum / v.Count;
+    }
+
+    /// The mean of the slowest 1% of frames.
+    static float Worst(List<float> v)
+    {
+        var sorted = new List<float>(v);
+        sorted.Sort();
+        int n = Mathf.Max(1, sorted.Count / 100);
+        float sum = 0f;
+        for (int i = sorted.Count - n; i < sorted.Count; i++) sum += sorted[i];
+        return sum / n;
     }
 
     /// Where a live enemy is: inside its room, above the floor, not inside solid stone.

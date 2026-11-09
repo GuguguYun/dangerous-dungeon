@@ -617,7 +617,7 @@ public class GameManager : MonoBehaviour
                     if (!e.dead) e.TakeDamage(999, Vector3.forward);
                 yield return new WaitForSeconds(0.1f);
             }
-            yield return new WaitForSeconds(1.8f);
+            yield return new WaitForSeconds(2.6f); // the next wave: 1 s, its marks 0.7 s, appearing 0.1 s apart
         }
         Check("room clears after all waves", room.state == Room.State.Cleared && !room.GatesClosed(), $"state={room.state} wave={room.waveIndex}");
         Check("kills counted", RunState.kills >= room.waves[0].Length, $"kills={RunState.kills}");

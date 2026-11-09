@@ -57,19 +57,23 @@ public class Room : MonoBehaviour
 
     void SpawnWave()
     {
+        // One after another, 0.1 s apart: a wave appearing in a single frame (seven Meshy characters set up
+        // at once, the first time on a floor) stalled that frame for 45 ms.
+        int n = 0;
         foreach (var kind in waves[waveIndex])
         {
             if (kind == EnemyKind.Boss) Spawn(kind, Center() + new Vector3(0f, 0.1f, 0f));
-            else StartCoroutine(SpawnAfterWarning(kind, SpawnPoint()));
+            else StartCoroutine(SpawnAfterWarning(kind, SpawnPoint(), delay: Mathf.Min(0.1f * n++, 0.8f)));
         }
     }
 
     /// Mark the spot first so nothing pops up unannounced next to the player. (warn false: a slime's
     /// halves come out of its body, on the next frame: never in the middle of a loop over the live enemies.)
-    System.Collections.IEnumerator SpawnAfterWarning(EnemyKind kind, Vector3 at, bool mini = false, bool warn = true)
+    System.Collections.IEnumerator SpawnAfterWarning(EnemyKind kind, Vector3 at, bool mini = false, bool warn = true, float delay = 0f)
     {
         alive++; // counted at once, so the room can't think it is clear in between
         hud.enemiesLeft = alive;
+        if (delay > 0f) yield return new WaitForSeconds(delay);
         if (warn)
         {
             var marker = SpawnMarker.Create(at);
