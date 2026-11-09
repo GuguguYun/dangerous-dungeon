@@ -60,6 +60,57 @@ public static class BuildScript
         if (report.summary.result != BuildResult.Succeeded) EditorApplication.Exit(1);
     }
 
+    /// The browser version, for the /3d-games pages (landing-mini-games): the same game as a WebGL build
+    /// in MESHY_WEB_PATH (default Builds/web/meshy-dungeon, which names the files). Uncompressed files: the CDN's content policy allows no
+    /// blob: scripts, which Unity's loader would make when it unpacks compressed files itself. Textures
+    /// capped at 1024 for the web only (Meshy's 2K–4K maps are most of the download).
+    [MenuItem("Meshy/Build Web")]
+    public static void BuildWeb()
+    {
+        Setup();
+        CapWebTextures(1024);
+        PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Disabled;
+        PlayerSettings.WebGL.decompressionFallback = false;
+        PlayerSettings.WebGL.dataCaching = true;
+        PlayerSettings.WebGL.nameFilesAsHashes = false;
+        PlayerSettings.WebGL.template = "APPLICATION:Minimal";
+        PlayerSettings.WebGL.exceptionSupport = WebGLExceptionSupport.ExplicitlyThrownExceptionsOnly;
+        var options = new BuildPlayerOptions
+        {
+            scenes = new[] { ScenePath },
+            locationPathName = System.Environment.GetEnvironmentVariable("MESHY_WEB_PATH") is string other && other.Length > 0 ? other : "Builds/web/meshy-dungeon",
+            target = BuildTarget.WebGL,
+            options = BuildOptions.None,
+        };
+        var report = BuildPipeline.BuildPlayer(options);
+        Debug.Log($"BUILD {report.summary.result} errors={report.summary.totalErrors} size={report.summary.totalSize}");
+        if (report.summary.result != BuildResult.Succeeded) EditorApplication.Exit(1);
+    }
+
+    static void CapWebTextures(int max)
+    {
+        int changed = 0;
+        AssetDatabase.StartAssetEditing();
+        try
+        {
+            foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { "Assets/Resources" }))
+            {
+                if (!(AssetImporter.GetAtPath(AssetDatabase.GUIDToAssetPath(guid)) is TextureImporter ti)) continue;
+                var web = ti.GetPlatformTextureSettings("WebGL");
+                int size = Mathf.Min(ti.maxTextureSize, max);
+                if (web.overridden && web.maxTextureSize == size) continue;
+                web.overridden = true;
+                web.maxTextureSize = size;
+                web.format = TextureImporterFormat.Automatic;
+                ti.SetPlatformTextureSettings(web);
+                ti.SaveAndReimport();
+                changed++;
+            }
+        }
+        finally { AssetDatabase.StopAssetEditing(); }
+        Debug.Log($"SETUP web texture cap {max}: {changed} changed");
+    }
+
     /// URP with Forward+ (many brazier lights) and SSAO; post-processing is added at runtime.
     static void SetupUrp()
     {

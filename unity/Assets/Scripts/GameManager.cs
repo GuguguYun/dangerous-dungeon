@@ -67,7 +67,7 @@ public class GameManager : MonoBehaviour
         hud = new GameObject("Hud").AddComponent<Hud>();
         hud.Resume = () => SetPaused(false);
         hud.Restart = NewRun;
-        hud.Quit = Application.Quit;
+        hud.Quit = GameSettings.Web ? null : Application.Quit; // a browser tab has nothing to quit to
         hud.Begin = () => hud.screen = Hud.Screen.ClassSelect;
         hud.Continue = () =>
         {
@@ -235,9 +235,21 @@ public class GameManager : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             if (hud.screen == Hud.Screen.None) SetPaused(true);
-            else if (hud.screen == Hud.Screen.Pause) SetPaused(false);
+            else if (hud.screen == Hud.Screen.Pause && Time.unscaledTime - lockLostAt > 0.4f) SetPaused(false);
         }
+        // In a browser Esc first ends the mouse lock and may never reach the game: losing the lock in a
+        // fight pauses it, and the same Esc arriving a moment later doesn't resume it.
+        bool locked = Cursor.lockState == CursorLockMode.Locked;
+        if (GameSettings.Web && wasLocked && !locked && hud.screen == Hud.Screen.None)
+        {
+            SetPaused(true);
+            lockLostAt = Time.unscaledTime;
+        }
+        wasLocked = locked;
     }
+
+    bool wasLocked;
+    float lockLostAt = -1f;
 
     void ParseArgs()
     {

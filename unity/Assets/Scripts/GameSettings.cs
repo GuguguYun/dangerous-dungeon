@@ -7,6 +7,9 @@ using UnityEngine.Rendering.Universal;
 /// wider FOV, raw mouse input, moderate shake.
 public static class GameSettings
 {
+    /// The browser build: the page owns the window size and paces the frames, and there is nothing to quit to.
+    public static readonly bool Web = Application.platform == RuntimePlatform.WebGLPlayer;
+
     public static float fov = 68f;
     public static float sensitivity = 1f;
     public static bool invertX, invertY;
@@ -78,7 +81,13 @@ public static class GameSettings
     /// Frame pacing, quality and the camera/post settings that live outside the scene objects.
     public static void ApplyDisplay(Camera cam, Volume post, bool scripted)
     {
-        if (!scripted)
+        if (Web)
+        {
+            // The browser draws once per display refresh; a frame cap there only adds stutter.
+            QualitySettings.vSyncCount = 0;
+            Application.targetFrameRate = -1;
+        }
+        else if (!scripted)
         {
             QualitySettings.vSyncCount = vsync ? 1 : 0;
             int refresh = Mathf.Max(60, Mathf.RoundToInt((float)Screen.currentResolution.refreshRateRatio.value));
@@ -101,6 +110,7 @@ public static class GameSettings
 
     public static void ApplyWindow()
     {
+        if (Web) return;
         var w = Windows[Mathf.Clamp(window, 0, Windows.Length - 1)];
         var screen = Screen.currentResolution;
         if (w == Vector2.zero)

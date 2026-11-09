@@ -411,7 +411,7 @@ public partial class Hud : MonoBehaviour
         by += RunSave.Has ? 58f : 70f;
         if (Btn(new Rect(bx, by, bw, 48), "武器图鉴", button)) OpenCodex();
         if (Btn(new Rect(bx, by + 58, bw, 48), "设置 · 防晕 3D", button)) OpenSettings();
-        if (Btn(new Rect(bx, by + 116, bw, 48), "退出游戏", button)) Quit?.Invoke();
+        if (Quit != null && Btn(new Rect(bx, by + 116, bw, 48), "退出游戏", button)) Quit();
         if (PlayerPrefs.HasKey("best_floor"))
         {
             int bt = PlayerPrefs.GetInt("best_time");
@@ -767,9 +767,12 @@ public partial class Hud : MonoBehaviour
         GameSettings.invertY = ToggleRow(y, x, "垂直反转", GameSettings.invertY); y += row;
         GameSettings.shake = SliderRow(y, x, "屏幕震动", GameSettings.shake, 0f, 1f, $"{GameSettings.shake * 100f:0}%"); y += row;
         GameSettings.flashes = ToggleRow(y, x, "受伤 / 闪避闪屏", GameSettings.flashes); y += row;
-        GameSettings.vsync = ToggleRow(y, x, "垂直同步（会增加延迟）", GameSettings.vsync); y += row;
-        int capIndex = Mathf.Max(0, System.Array.IndexOf(GameSettings.FpsCaps, GameSettings.fpsCap));
-        GameSettings.fpsCap = GameSettings.FpsCaps[ChoiceRow(y, x, "帧率上限", capIndex, GameSettings.FpsCapNames)]; y += row;
+        if (!GameSettings.Web) // in a browser the page sets the frame pacing and the window size
+        {
+            GameSettings.vsync = ToggleRow(y, x, "垂直同步（会增加延迟）", GameSettings.vsync); y += row;
+            int capIndex = Mathf.Max(0, System.Array.IndexOf(GameSettings.FpsCaps, GameSettings.fpsCap));
+            GameSettings.fpsCap = GameSettings.FpsCaps[ChoiceRow(y, x, "帧率上限", capIndex, GameSettings.FpsCapNames)]; y += row;
+        }
         GameSettings.renderScale = Mathf.Round(SliderRow(y, x, "渲染分辨率（低了帧数高）", GameSettings.renderScale, 0.6f, 1f, $"{GameSettings.renderScale * 100f:0}%") * 20f) / 20f; y += row;
         GameSettings.smaa = ToggleRow(y, x, "SMAA 抗锯齿（更柔，更糊）", GameSettings.smaa); y += row;
         GameSettings.bloom = ToggleRow(y, x, "泛光", GameSettings.bloom); y += row;
@@ -778,9 +781,13 @@ public partial class Hud : MonoBehaviour
         GameSettings.music = SliderRow(y, x, "音乐音量", GameSettings.music, 0f, 1f, $"{GameSettings.music * 100f:0}%"); y += row;
         uiDraft = Mathf.Round(SliderRow(y, x, "界面大小", uiDraft, 0.8f, 1.5f, $"{uiDraft * 100f:0}%") * 20f) / 20f; y += row;
         if (GUIUtility.hotControl == 0) GameSettings.uiScale = uiDraft;
-        int win = ChoiceRow(y, x, "窗口大小", GameSettings.window, GameSettings.WindowNames);
-        if (win != GameSettings.window) { GameSettings.window = win; GameSettings.ApplyWindow(); }
-        y += row + 6;
+        if (!GameSettings.Web)
+        {
+            int win = ChoiceRow(y, x, "窗口大小", GameSettings.window, GameSettings.WindowNames);
+            if (win != GameSettings.window) { GameSettings.window = win; GameSettings.ApplyWindow(); }
+            y += row;
+        }
+        y += 6;
         UiKit.Fill(new Rect(x, y, 660, 1.5f), new Color(0.85f, 0.65f, 0.3f, 0.5f));
         Label(new Rect(x, y + 6, 660, 64),
             "依据「解决晕 3D」：降延迟（关垂直同步、帧率 ≥ 80）、不用鼠标平滑、画面别太大（建议窗口宽度不超过观看距离的一半）、关运动模糊和景深、视野调大、减少闪烁和抖动。",
@@ -1144,7 +1151,7 @@ public partial class Hud : MonoBehaviour
         if (screen == Screen.Pause && Btn(new Rect(w / 2 - 140, y + 70, 136, 56), "重新开始", half)) Restart?.Invoke();
         if (screen == Screen.Pause && Btn(new Rect(w / 2 + 4, y + 70, 136, 56), "武器图鉴", half)) OpenCodex();
         if (screen == Screen.Pause && Btn(new Rect(w / 2 - 140, y + 140, 280, 56), "设置 · 防晕 3D", button)) OpenSettings();
-        if (Btn(new Rect(w / 2 - 140, y + (screen == Screen.Pause ? 210 : 70), 280, 56), "退出游戏", button)) Quit?.Invoke();
+        if (Quit != null && Btn(new Rect(w / 2 - 140, y + (screen == Screen.Pause ? 210 : 70), 280, 56), "退出游戏", button)) Quit();
     }
 
     /// End-of-run card: time, progress, combat numbers, the weapons you carried and the buffs you chose.
