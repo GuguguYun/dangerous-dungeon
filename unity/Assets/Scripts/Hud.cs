@@ -133,10 +133,9 @@ public partial class Hud : MonoBehaviour
 
     void Init()
     {
-        // The game's own 模境体 (scripts/build_font.py: ZCOOL KuaiLe with Noto Sans SC fill-ins, both OFL);
-        // Noto Sans SC alone if it is missing. Unity cannot resolve macOS system CJK fonts by name.
+        // The game's own 模境体 (scripts/build_font.py: ZCOOL KuaiLe with Noto Sans SC fill-ins, both OFL).
+        // Unity cannot resolve macOS system CJK fonts by name, so there is no fallback to them.
         font = Resources.Load<Font>("Fonts/MoJingTi");
-        if (!font) font = Resources.Load<Font>("Fonts/NotoSansSC-Regular");
         left = new GUIStyle { font = font, fontSize = 22, alignment = TextAnchor.MiddleLeft };
         left.normal.textColor = Color.white;
         center = new GUIStyle(left) { fontSize = 40, alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
@@ -393,9 +392,9 @@ public partial class Hud : MonoBehaviour
         if (swatch) DrawSwatches();
         UiKit.Vignette(w, h);
         var t = new GUIStyle(title) { fontSize = 96 };
-        UiKit.Title(new Rect(0, h * 0.12f, w, 110), "模境迷城", t);
-        UiKit.Text(new Rect(0, h * 0.12f + 104, w, 30), "M E S H Y   D U N G E O N", new GUIStyle(small) { fontSize = 18 }, new Color(0.85f, 0.85f, 0.95f, 0.85f));
-        UiKit.Text(new Rect(0, h * 0.12f + 140, w, 30), "提示词铸成的迷城每晚都会重生 —— 带上武器，闯到最深处", new GUIStyle(small) { fontSize = 20 });
+        UiKit.Title(new Rect(0, h * 0.12f, w, 110), "危险地牢", t);
+        UiKit.Text(new Rect(0, h * 0.12f + 104, w, 30), "D A N G E R O U S   D U N G E O N", new GUIStyle(small) { fontSize = 18 }, new Color(0.85f, 0.85f, 0.95f, 0.85f));
+        UiKit.Text(new Rect(0, h * 0.12f + 140, w, 30), "地牢每晚都会重生 —— 带上武器，闯到最深处", new GUIStyle(small) { fontSize = 20 });
         // The buttons sit between the tagline and the controls panel (laid out for a page 750 tall):
         // a run left unfinished comes first.
         float bw = 320, bx = w / 2 - bw / 2, by = h * 0.12f + 180f;

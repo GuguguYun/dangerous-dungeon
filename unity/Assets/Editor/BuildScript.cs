@@ -13,13 +13,16 @@ public static class BuildScript
     const string ScenePath = "Assets/Scenes/Main.unity";
     const string KitPath = "Assets/Resources/Kit/dungeon_kit.fbx";
     const string PaletteDir = "Assets/Resources/Palette";
-    public const string AppPath = "Builds/MeshyDungeon.app";
+    public const string AppPath = "Builds/DangerousDungeon.app";
+    // Meshy's animation FBXs, outside Resources (see ConfigureCharacters).
+    const string ClipSource = "Assets/CharClips";
+    static readonly string[] ClipFiles = { "actions", "walking", "running" };
 
     [MenuItem("Meshy/Setup Project")]
     public static void Setup()
     {
-        PlayerSettings.companyName = "Meshy";
-        PlayerSettings.productName = "Meshy Dungeon";
+        PlayerSettings.companyName = "tianyaoguan-lab";
+        PlayerSettings.productName = "Dangerous Dungeon";
         PlayerSettings.colorSpace = ColorSpace.Linear;
         PlayerSettings.defaultScreenWidth = 1600;
         PlayerSettings.defaultScreenHeight = 900;
@@ -61,14 +64,14 @@ public static class BuildScript
     }
 
     /// The browser version, for the /3d-games pages (landing-mini-games): the same game as a WebGL build
-    /// in MESHY_WEB_PATH (default Builds/web/meshy-dungeon, which names the files). Uncompressed files: the CDN's content policy allows no
-    /// blob: scripts, which Unity's loader would make when it unpacks compressed files itself. Textures
-    /// capped at 1024 for the web only (Meshy's 2K–4K maps are most of the download).
+    /// in MESHY_WEB_PATH (default Builds/web/dangerous-dungeon, which names the files). Uncompressed files: the CDN's content policy allows no
+    /// blob: scripts, which Unity's loader would make when it unpacks compressed files itself. Smaller,
+    /// crunched textures for the web only (Meshy's 2K–4K maps are most of the download).
     [MenuItem("Meshy/Build Web")]
     public static void BuildWeb()
     {
         Setup();
-        CapWebTextures(1024);
+        ShrinkWebTextures();
         PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Disabled;
         PlayerSettings.WebGL.decompressionFallback = false;
         PlayerSettings.WebGL.dataCaching = true;
@@ -78,7 +81,7 @@ public static class BuildScript
         var options = new BuildPlayerOptions
         {
             scenes = new[] { ScenePath },
-            locationPathName = System.Environment.GetEnvironmentVariable("MESHY_WEB_PATH") is string other && other.Length > 0 ? other : "Builds/web/meshy-dungeon",
+            locationPathName = System.Environment.GetEnvironmentVariable("MESHY_WEB_PATH") is string other && other.Length > 0 ? other : "Builds/web/dangerous-dungeon",
             target = BuildTarget.WebGL,
             options = BuildOptions.None,
         };
@@ -87,7 +90,10 @@ public static class BuildScript
         if (report.summary.result != BuildResult.Succeeded) EditorApplication.Exit(1);
     }
 
-    static void CapWebTextures(int max)
+    /// WebGL overrides: 1024 at most, 512 for weapons and props (small on screen), and crunched (a
+    /// fraction of the size in the download, unpacked to the GPU format at load). The painted UI keeps
+    /// its own uncompressed setting, as on the Mac.
+    static void ShrinkWebTextures()
     {
         int changed = 0;
         AssetDatabase.StartAssetEditing();
@@ -95,20 +101,26 @@ public static class BuildScript
         {
             foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { "Assets/Resources" }))
             {
-                if (!(AssetImporter.GetAtPath(AssetDatabase.GUIDToAssetPath(guid)) is TextureImporter ti)) continue;
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                if (!(AssetImporter.GetAtPath(path) is TextureImporter ti)) continue;
+                bool small = path.StartsWith("Assets/Resources/Models/Weapons/") || path.StartsWith("Assets/Resources/Models/Props/");
+                bool crunch = ti.textureCompression != TextureImporterCompression.Uncompressed;
+                int size = Mathf.Min(ti.maxTextureSize, small ? 512 : 1024);
                 var web = ti.GetPlatformTextureSettings("WebGL");
-                int size = Mathf.Min(ti.maxTextureSize, max);
-                if (web.overridden && web.maxTextureSize == size) continue;
+                if (web.overridden && web.maxTextureSize == size && web.crunchedCompression == crunch) continue;
                 web.overridden = true;
                 web.maxTextureSize = size;
                 web.format = TextureImporterFormat.Automatic;
+                web.textureCompression = ti.textureCompression;
+                web.crunchedCompression = crunch;
+                web.compressionQuality = 60;
                 ti.SetPlatformTextureSettings(web);
                 ti.SaveAndReimport();
                 changed++;
             }
         }
         finally { AssetDatabase.StopAssetEditing(); }
-        Debug.Log($"SETUP web texture cap {max}: {changed} changed");
+        Debug.Log($"SETUP web textures: {changed} changed");
     }
 
     /// URP with Forward+ (many brazier lights) and SSAO; post-processing is added at runtime.
@@ -230,6 +242,9 @@ public static class BuildScript
     }
 
     /// Meshy characters: every FBX as legacy animation; action takes renamed in clips.txt order.
+    /// Meshy's animation FBXs (actions, walking, running) each carry a full copy of the model, and
+    /// everything under Resources ships, so they live in CharClips/<id>/ (one dropped beside rigged.fbx
+    /// is moved there) and only their clips are copied into Resources, as Chars/<id>/clips/<name>.anim.
     static void ConfigureCharacters()
     {
         const string root = "Assets/Resources/Models/Chars";
@@ -238,9 +253,20 @@ public static class BuildScript
         {
             var id = Path.GetFileName(dir);
             var order = File.Exists($"{dir}/clips.txt") ? File.ReadAllLines($"{dir}/clips.txt") : new string[0];
+            var src = $"{ClipSource}/{id}";
+            Directory.CreateDirectory(src);
+            Directory.CreateDirectory($"{dir}/clips");
+            AssetDatabase.Refresh();
+            foreach (var file in ClipFiles)
+            {
+                if (!File.Exists($"{dir}/{file}.fbx")) continue;
+                if (File.Exists($"{src}/{file}.fbx")) AssetDatabase.DeleteAsset($"{src}/{file}.fbx"); // the new download wins
+                var error = AssetDatabase.MoveAsset($"{dir}/{file}.fbx", $"{src}/{file}.fbx");
+                Debug.Log($"SETUP char {id}/{file}: moved out of Resources {(error.Length == 0 ? "ok" : error)}");
+            }
             foreach (var file in new[] { "rigged", "actions", "walking", "running" })
             {
-                var path = $"{dir}/{file}.fbx";
+                var path = file == "rigged" ? $"{dir}/rigged.fbx" : $"{src}/{file}.fbx";
                 if (!(AssetImporter.GetAtPath(path) is ModelImporter imp)) continue;
                 imp.animationType = ModelImporterAnimationType.Legacy;
                 imp.importAnimation = file != "rigged";
@@ -261,6 +287,7 @@ public static class BuildScript
                 }
                 imp.SaveAndReimport();
             }
+            CopyClips(id, src, $"{dir}/clips");
             var model = AssetDatabase.LoadAssetAtPath<GameObject>($"{dir}/rigged.fbx");
             if (model && !Directory.Exists($"{dir}/Textures"))
             {
@@ -283,6 +310,34 @@ public static class BuildScript
                 Debug.Log($"SETUP char {id}: bounds={b.size} renderers={model.GetComponentsInChildren<Renderer>().Length} bones={model.GetComponentsInChildren<Transform>().Length} textured={textured}");
             }
         }
+    }
+
+    /// The legacy clips of a character's animation FBXs as .anim files, the first file in ClipFiles order
+    /// winning a name they share (as CharacterAnim used to pick them); clips no longer in any FBX are removed.
+    static void CopyClips(string id, string src, string outDir)
+    {
+        var made = new System.Collections.Generic.HashSet<string>();
+        foreach (var file in ClipFiles)
+            foreach (var asset in AssetDatabase.LoadAllAssetsAtPath($"{src}/{file}.fbx"))
+            {
+                if (!(asset is AnimationClip clip) || clip.name.StartsWith("__preview__") || !clip.legacy || !made.Add(clip.name)) continue;
+                var path = $"{outDir}/{clip.name}.anim";
+                var existing = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
+                if (existing)
+                {
+                    EditorUtility.CopySerialized(clip, existing);
+                    EditorUtility.SetDirty(existing);
+                }
+                else
+                {
+                    var copy = Object.Instantiate(clip);
+                    copy.name = clip.name;
+                    AssetDatabase.CreateAsset(copy, path);
+                }
+            }
+        foreach (var stale in Directory.GetFiles(outDir, "*.anim"))
+            if (!made.Contains(Path.GetFileNameWithoutExtension(stale))) AssetDatabase.DeleteAsset(stale);
+        Debug.Log($"SETUP char {id}: clips {string.Join(",", made)}");
     }
 
     /// Measure each rig's hands from the skinned mesh so held weapons land in the fist (Meshy rigs have

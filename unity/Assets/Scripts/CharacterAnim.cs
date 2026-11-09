@@ -2,12 +2,10 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// Drives a Meshy-rigged character with the legacy Animation component.
-/// Expects Resources/Models/Chars/<id>/rigged (mesh + skeleton) and any of the clip files
-/// actions / walking / running beside it; BuildScript imports them as legacy clips named by
-/// clips.txt (idle, run, shoot, hit, die, ...).
+/// Expects Resources/Models/Chars/<id>/rigged (mesh + skeleton) and its legacy clips in clips/ beside it,
+/// which BuildScript copies out of Meshy's animation FBXs and names by clips.txt (idle, run, shoot, hit, die, ...).
 public class CharacterAnim : MonoBehaviour
 {
-    static readonly string[] ClipFiles = { "actions", "walking", "running" };
     static readonly HashSet<string> Looping = new HashSet<string> { "idle", "walk", "run", "shoot" };
 
     Animation anim;
@@ -60,15 +58,12 @@ public class CharacterAnim : MonoBehaviour
         var ca = go.AddComponent<CharacterAnim>();
         ca.anim = go.GetComponent<Animation>();
         if (!ca.anim) ca.anim = go.AddComponent<Animation>(); // Unity objects must not use ??
-        foreach (var file in ClipFiles)
+        foreach (var clip in Resources.LoadAll<AnimationClip>($"Models/Chars/{id}/clips"))
         {
-            foreach (var clip in Resources.LoadAll<AnimationClip>($"Models/Chars/{id}/{file}"))
-            {
-                if (clip.name.StartsWith("__preview__") || !clip.legacy || ca.anim.GetClip(clip.name)) continue;
-                ca.anim.AddClip(clip, clip.name);
-                var state = ca.anim[clip.name];
-                state.wrapMode = Looping.Contains(clip.name) ? WrapMode.Loop : WrapMode.ClampForever;
-            }
+            if (!clip.legacy || ca.anim.GetClip(clip.name)) continue;
+            ca.anim.AddClip(clip, clip.name);
+            var state = ca.anim[clip.name];
+            state.wrapMode = Looping.Contains(clip.name) ? WrapMode.Loop : WrapMode.ClampForever;
         }
         ca.anim.playAutomatically = false;
         ca.hips = ca.Find("hips");

@@ -1,8 +1,8 @@
-# Meshy Dungeon — 进度与待办
+# Dangerous Dungeon（危险地牢）— 进度与待办
 
 类元气骑士玩法的 3D 第三人称游戏。镜头像永劫无间（跟在角色背后、准星射击）；先做射击，后加近战。
 素材：Meshy API 做角色/敌人/武器/道具，Blender 搭场景拼块和整理素材，Unity 运行游戏。
-最终交付：一个能直接打开游玩的 macOS Unity 客户端（`unity/Builds/MeshyDungeon.app`）。
+最终交付：一个能直接打开游玩的 macOS Unity 客户端（`unity/Builds/DangerousDungeon.app`）。
 
 ## 用户已定（2026-11-07）
 
@@ -26,8 +26,8 @@
 ## 自检方法
 
 - 构建：`Unity -batchmode -quit -projectPath unity -executeMethod BuildScript.BuildMac -logFile logs/build.log`
-- 自动测试：`unity/Builds/MeshyDungeon.app/Contents/MacOS/* -batchmode -nographics -autotest -logFile logs/autotest.log`，看 `AUTOTEST PASS/FAIL` 行。
-- 编译到单独目录：`scripts/check.sh` 编译到 `unity/Builds/check/`（环境变量 `MESHY_APP_PATH`），测试全过且用户没开着游戏时才由 `scripts/publish.sh` 换掉 `unity/Builds/MeshyDungeon.app`（2026-11-08 起；之前编译会在用户玩的时候覆盖游戏）。
+- 自动测试：`unity/Builds/DangerousDungeon.app/Contents/MacOS/* -batchmode -nographics -autotest -logFile logs/autotest.log`，看 `AUTOTEST PASS/FAIL` 行。
+- 编译到单独目录：`scripts/check.sh` 编译到 `unity/Builds/check/`（环境变量 `MESHY_APP_PATH`），测试全过且用户没开着游戏时才由 `scripts/publish.sh` 换掉 `unity/Builds/DangerousDungeon.app`（2026-11-08 起；之前编译会在用户玩的时候覆盖游戏）。
 - 截图：运行 .app 加 `-shots <dir> -screen-width 1600 -screen-height 900 -screen-fullscreen 0`，会弹出窗口跑约 3 分钟。**显示器熄屏/锁屏后窗口不刷新，截图会卡住**（2026-11-08 05:27 之后）。
 - 不依赖显示器的检查：`-batchmode -icons <dir>` 导出全部武器图标和职业立绘（相机显式 Render，无窗口也能渲染）；`-grips <dir>` 要窗口。
 - 跑图（第 59 轮起）：`-batchmode -nographics -soak <局数>` 按职业轮流连打整局（每层所有战斗房、试炼房、首领房），报告会把玩家卡住的情况：怪在墙/柱子/掩体里（`SOAK ISSUE … inside solid`）、跑出房间、掉到地板下、房间没怪了门却不开、清不完，以及游戏报错。看 `SOAK done runs=… issues=… errors=…` 那一行；一局约 8 分钟。
@@ -93,7 +93,7 @@
 
 ### 命名对照（N1，2026-11-08 夜）
 
-游戏名《模境迷城》（MESHY DUNGEON）。风格：两到四字短名，带武侠和一点幽默；武器名后保留类型（玩家要一眼看懂是什么）。
+游戏名《危险地牢》（DANGEROUS DUNGEON；11-09 起，原名《模境迷城》/ Meshy Dungeon 像公司官方游戏，按用户和青和的意见改掉）。风格：两到四字短名，带武侠和一点幽默；武器名后保留类型（玩家要一眼看懂是什么）。
 - 职业/技能：铁誓骑士/誓约壁垒、夜鸦刺客/鸦影遁、焚星法师/天火坠、晨辉牧师/晨光圣域。
 - 武器（新名/类型）：老伙计/左轮、蜂鸣/冲锋枪、开花炮/霰弹枪、穿星/能量步枪、轰天雷/火箭筒、誓约之刃/骑士大剑、震岳/雷霆重锤、追月/猎弓、灼线/激光枪、龙息/喷火器、跳跳雷/弹跳榴弹、群鸦/追踪导弹、惊蛰/雷电法杖、霜语/寒冰法杖、归燕/回旋镖、破阵/长枪、影牙/双匕首。
 - 敌人：哥布林火枪手、蛮猪冲锋兵、鬼火萨满、炸药哥布林、骸骨弓手；首领：贪金王·葛巴、裂地酋长·獠牙、血斧督军·克鲁格。
@@ -103,7 +103,7 @@
 ### UI 设计（N3）
 
 - 风格：「暗夜地宫 + 金边」。面板是深蓝黑半透明圆角（运行时生成九宫格贴图），细金色描边；职业色/品质色只用在重点上；标题字带阴影。默认灰色按钮全部换掉。
-- 标题页：镜头绕起始房缓慢环绕（3°/s，不晕）；大标题《模境迷城》+ MESHY DUNGEON；三个金边按钮；操作说明收进一个小面板；底部致谢（模型 Meshy、场景 Blender、音效 Kenney CC0）。
+- 标题页：镜头绕起始房缓慢环绕（3°/s，不晕）；大标题《危险地牢》+ DANGEROUS DUNGEON；三个金边按钮；操作说明收进一个小面板；底部致谢（模型 Meshy、场景 Blender、音效 Kenney CC0）。
 - 选角页：四张竖卡，上半是该职业的 3D 模型实时预览（RenderTexture，缓慢转身，鼠标悬停时做动作），下半是名字（职业色）、一句话、属性条（生命/护甲/能量/闪避/移速/暴击）、特性、技能、初始武器（带武器图标）。悬停卡片描边变亮。
 - HUD：左上职业徽记 + 分格血条/护甲条 + 能量条；层名/金币/击杀做成一条小标签；右上小地图加边框和层名；右下武器卡（武器图标 + 名字 + 类型/品质 + 耗能），上方小卡是 Q 切换的副武器；左下技能卡（冷却遮罩）+ 无人机条；底部操作提示开局 40 秒后淡出。
 - 武器图标：开局用隐藏相机给每把武器拍一张小图缓存。
@@ -302,6 +302,13 @@
 - 积分：4 张图 × 9 = 36（地砖、墙砖图生图各 1，垂挂苔藓、苔藓团文生图各 1）。
 - 自测新增 5 项：第 1 层墙地是青苔贴图、墙上地上都有苔藓；火点着青苔；烧着的青苔点燃站在上面的怪；烧成灰；墙下的火点着墙上的苔藓。截图新增 `17b_moss_fire`（地上烧着的苔藓和着火的哥布林）、`17c_moss_wall` / `17d_moss_wall_fire`。
 - 砖缝里的青苔是贴图的一部分，烧不掉（只有挂着的和地上成团的会烧）。
+
+第 68 轮（用户 2026-11-09 下午：改名、压包、换正式版、网页版开 PR）：
+- 改名《危险地牢》/ Dangerous Dungeon：同事青和说《模境迷城》/ Meshy Dungeon 像公司官方游戏（公司没买 Unity Pro，本机是 Unity Personal），用户定了新名字。客户端标题页、标语（「地牢每晚都会重生 —— 带上武器，闯到最深处」）、程序名、公司名（tianyaoguan-lab）、Mac 包名（`DangerousDungeon.app`）、网页版文件名都换掉；Meshy 只留在底部致谢里（素材是 Meshy 生成的）。我跟用户说过：改名只改外观，许可问题要靠 Pro 席位 / 不放公司网站 / three.js 重做来解决，由用户决定。
+- 存档搬家：Mac 版的设置和存档在 `com.Meshy.Meshy-Dungeon`（不是 `unity.Meshy.Meshy Dungeon`，那个是编辑器的），用 `defaults export/import` 复制到 `com.tianyaoguan-lab.Dangerous-Dungeon`。检查和截图程序会改写窗口大小那几项，跑完再导入一次。
+- 压包（网页版 381 → 157 MB，数据 334 → 110 MB）：① Meshy 的动画 FBX（actions/walking/running）每个都带一整份模型，Resources 下的东西全部打包 → 搬到 `Assets/CharClips/<id>/`，打包时只把动画拷成 `Chars/<id>/clips/<名字>.anim`（同名时按 actions、walking、running 的顺序取第一个，和原来运行时一样），新下载的 FBX 放回老地方也会被自动搬走。② 8 MB 的 Noto Sans SC 只是备用字体，模境体已含全部常用汉字 → 移到 `assets/fonts/`（build_font.py 从那里取字形）。③ 网页版贴图：最大 1024、武器和道具 512、压缩（crunch，质量 60）；手绘界面图不压缩（和 Mac 一样）。Mac 版贴图不变。
+- 网站图片：`-poster <dir>` 拍标题页和隐藏界面的战斗（战斗按 2 倍窗口拍）；`landing-mini-games/games/dangerous-dungeon/art/make_cover.py` 做卡片、封面（不放 Meshy 标志，按投稿游戏的样式）和预览图。
+- 自检 213/213（`logs/shots/r68`），已发布。
 
 ## 素材不进 git
 

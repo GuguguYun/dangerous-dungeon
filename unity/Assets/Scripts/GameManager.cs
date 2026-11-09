@@ -19,6 +19,7 @@ public class GameManager : MonoBehaviour
     static bool windowApplied;
     Dungeon dungeon;
     string shotDir;
+    bool poster; // -poster <dir>: the website's card, cover and preview shots instead of the check shots
     string gripDir; // -grips <dir>: close-up contact sheets of every weapon grip
     string flickerDir; // -flicker <dir>: consecutive frames of the hero under a slowly turning camera
     string iconDir; // -icons <dir>: save the UI icons and hero portraits (works without a window)
@@ -126,7 +127,7 @@ public class GameManager : MonoBehaviour
         TimeControl.Scripted = Scripted;
         Debug.Log("GAME ready");
         if (autotest) StartCoroutine(RunState.floor == 1 ? AutoTest() : AutoTestNextFloor());
-        else if (shotDir != null) StartCoroutine(Shots());
+        else if (shotDir != null) StartCoroutine(poster ? Posters() : Shots());
         else if (gripDir != null) StartCoroutine(GripSheets());
         else if (flickerDir != null) StartCoroutine(FlickerFrames());
         else if (iconDir != null) StartCoroutine(DumpIcons());
@@ -258,6 +259,7 @@ public class GameManager : MonoBehaviour
         {
             if (args[i] == "-autotest") autotest = true;
             if (args[i] == "-shots" && i + 1 < args.Length) shotDir = args[i + 1];
+            if (args[i] == "-poster" && i + 1 < args.Length) { shotDir = args[i + 1]; poster = true; }
             if (args[i] == "-grips" && i + 1 < args.Length) gripDir = args[i + 1];
             if (args[i] == "-flicker" && i + 1 < args.Length) flickerDir = args[i + 1];
             if (args[i] == "-icons" && i + 1 < args.Length) iconDir = args[i + 1];
@@ -2120,13 +2122,44 @@ public class GameManager : MonoBehaviour
         Application.Quit();
     }
 
-    IEnumerator Shot(string name)
+    IEnumerator Shot(string name, int superSize = 1)
     {
         yield return new WaitForEndOfFrame();
         Directory.CreateDirectory(shotDir);
-        ScreenCapture.CaptureScreenshot(Path.Combine(shotDir, name));
+        ScreenCapture.CaptureScreenshot(Path.Combine(shotDir, name), superSize);
         yield return null;
         yield return null;
+    }
+
+    /// The website's pictures (landing-mini-games docs/site-page.md): the title screen with its menu as a
+    /// visitor first sees it, then the first fight with the HUD hidden: the hero shooting into the first
+    /// wave from the play camera, and a sword swing. The fights at twice the window size, so a 1600x900
+    /// window gives a sharp 1920x1080 card.
+    IEnumerator Posters()
+    {
+        hud.screen = Hud.Screen.Title;
+        player.pitch = 18f;
+        yield return new WaitForSeconds(0.5f);
+        yield return Shot("poster_title.png");
+        hud.screen = Hud.Screen.None;
+        player.pitch = 10f;
+        var room = dungeon.combatRooms[0];
+        player.Teleport(room.Center() + new Vector3(0f, 0.1f, -(room.max.z - room.min.z) * 0.35f));
+        player.yaw = 0f;
+        yield return new WaitForSeconds(3f);
+        hud.enabled = false;
+        for (int i = 0; i < 6; i++)
+        {
+            player.Attack();
+            yield return new WaitForSeconds(0.12f);
+        }
+        yield return Shot("poster_fight.png", 2);
+        player.Swap();
+        player.Attack();
+        yield return new WaitForSeconds(0.2f);
+        yield return Shot("poster_melee.png", 2);
+        Debug.Log("POSTER done");
+        Application.Quit();
     }
 
     IEnumerator Shots()

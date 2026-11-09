@@ -13,6 +13,9 @@ unity/*.sln
 assets/meshy/
 unity/Assets/Resources/Models/
 unity/Assets/Resources/Models.meta
+# Meshy animation FBXs, moved out of Resources by BuildScript.ConfigureCharacters (only their clips ship)
+unity/Assets/CharClips/
+unity/Assets/CharClips.meta
 # run output
 logs/
 .DS_Store

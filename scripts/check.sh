@@ -7,8 +7,8 @@ ROOT=${0:A:h:h}
 UNITY=/Applications/Unity/Hub/Editor/6000.3.28f1/Unity.app/Contents/MacOS/Unity
 # Checks build and run a separate copy; it replaces the playable app only when every self-test
 # passed and the user is not playing (scripts/publish.sh does it later otherwise).
-CHECK_APP="$ROOT/unity/Builds/check/MeshyDungeon.app"
-BIN="$CHECK_APP/Contents/MacOS/Meshy Dungeon"
+CHECK_APP="$ROOT/unity/Builds/check/DangerousDungeon.app"
+BIN="$CHECK_APP/Contents/MacOS/Dangerous Dungeon"
 SHOTS="$ROOT/logs/shots/${1:-latest}"
 mkdir -p "$ROOT/logs"
 
@@ -34,7 +34,7 @@ grep -E "AUTOTEST (FAIL|done)|Exception" "$ROOT/logs/autotest.log"
 
 echo "== shots"
 # The screenshot run opens a window; don't pop it over the game while the user is playing.
-if [[ -z "${FORCE_SHOTS:-}" ]] && ps -axo command | grep -q "^$ROOT/unity/Builds/MeshyDungeon.app/Contents/MacOS"; then
+if [[ -z "${FORCE_SHOTS:-}" ]] && ps -axo command | grep -q "^$ROOT/unity/Builds/DangerousDungeon.app/Contents/MacOS"; then
   echo "SHOTS skipped: the game is open"
   grep -q "AUTOTEST done pass=[0-9]* fail=0" "$ROOT/logs/autotest.log" && "$ROOT/scripts/publish.sh"
   exit 0

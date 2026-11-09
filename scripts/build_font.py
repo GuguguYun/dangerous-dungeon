@@ -19,7 +19,7 @@ from fontTools.ttLib import TTFont
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 BASE = ROOT / "assets/fonts/ZCOOLKuaiLe-Regular.ttf"
-FILL = ROOT / "unity/Assets/Resources/Fonts/NotoSansSC-Regular.otf"
+FILL = ROOT / "assets/fonts/NotoSansSC-Regular.otf"  # outside Resources: only its glyphs ship, inside MoJingTi
 OUT = ROOT / "unity/Assets/Resources/Fonts/MoJingTi.ttf"
 
 font = TTFont(BASE)
@@ -79,7 +79,7 @@ for pid, eid, lid in ((3, 1, 0x409), (3, 1, 0x804)):
     names.setName("模境体 Regular" if zh else "MoJingTi Regular", 4, pid, eid, lid)
     names.setName("MoJingTi-Regular;2026", 3, pid, eid, lid)
 names.setName("MoJingTi-Regular", 6, 3, 1, 0x409)
-names.setName("Modified 2026 for Meshy Dungeon (模境迷城) from ZCOOL KuaiLe, with symbols from Noto Sans SC. "
+names.setName("Modified 2026 for Dangerous Dungeon (危险地牢) from ZCOOL KuaiLe, with symbols from Noto Sans SC. "
               "Licensed under the SIL Open Font License 1.1.", 5, 3, 1, 0x409)
 font.save(OUT)
 print(f"FONT {OUT.name}: {len(font.getGlyphOrder())} glyphs, {added} filled in from Noto Sans SC")
