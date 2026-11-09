@@ -536,6 +536,33 @@ public class GameManager : MonoBehaviour
         Check("a broken save is refused, not half applied", !RunSave.Restore("floor=2\ngold=x") && RunState.floor == 3);
         RunSave.Restore(realRun);
 
+        // UI line breaks (every width, a fake font: Chinese 1 wide, Latin 0.5): no line starts with
+        // closing punctuation or ends with an opening one, "+20%" and "×1.3" stay whole, the tags
+        // survive, and nothing is lost but spaces at the breaks.
+        {
+            string[] texts =
+            {
+                "隐身 5 秒：无敌、不被锁定；手持鸦羽镖，蓄力越久掷出越多（最多 7 枚）",
+                "<b><color=#8A2A10>特性</color></b> 影步：冲刺更远、留下残影，体力恢复快 50%；近战伤害 ×1.3",
+                "震开身边敌人，召唤圣剑圣盾 6 秒：圣盾挡 3 次伤害，圣剑剑气更长、伤害 +20%",
+                "暴击率 +20%（暴击 ×2）",
+            };
+            float Fake(string s) { float n = 0f; foreach (char ch in s) n += ch >= '\u2E80' ? 1f : 0.5f; return n; }
+            string bad = null;
+            foreach (var src in texts)
+                for (float max = 4f; max <= 30f && bad == null; max += 1f)
+                {
+                    string o = UiKit.Breaks(src, Fake, max);
+                    string plain = System.Text.RegularExpressions.Regex.Replace(o, "<[^>]*>", "");
+                    foreach (var ln in plain.Split('\n'))
+                        if (ln.Length > 0 && ("，。、；：！？）》」』】%".IndexOf(ln[0]) >= 0 || "（《「『【".IndexOf(ln[ln.Length - 1]) >= 0)) bad = $"max {max}: [{ln}]";
+                    if (bad == null && plain.Replace("\n", "").Replace(" ", "") != System.Text.RegularExpressions.Regex.Replace(src, "<[^>]*>", "").Replace(" ", "")) bad = $"max {max}: text changed: {o}";
+                    if (bad == null && o.Replace("\n", "").Replace(" ", "") != src.Replace(" ", "")) bad = $"max {max}: tags moved: {o}";
+                    if (bad == null && (plain.Contains("+2\n") || plain.Contains("×1.\n") || plain.Contains("5\n0%"))) bad = $"max {max}: number split: {o}";
+                }
+            Check("UI line breaks: no line starts with '，' or '）', numbers stay whole", bad == null, bad ?? "");
+        }
+
         // Evasion: stamina limits, jumping over chest-height orbs, shockwaves need a jump.
         yield return new WaitForSeconds(1.5f);
         player.armor = player.maxArmor;

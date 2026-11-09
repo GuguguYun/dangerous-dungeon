@@ -278,9 +278,13 @@ public partial class Hud : MonoBehaviour
         if (GameSettings.flashes && perfect > 0f) UiKit.EdgeGlow(w, h, new Color(0.3f, 0.9f, 1f, perfect / 0.6f * 0.45f));
         if (GameSettings.showFps) DrawFps(w);
 
-        if (player)
+        // Under a blessing choice or the end-of-run summary the HUD only gets in the way (on narrow
+        // screens their cards and buttons run into it); paused, the bottom row goes (the menu buttons
+        // need the room) and the bars and map stay.
+        bool covered = screen == Screen.Buff || screen == Screen.Dead || screen == Screen.Won;
+        if (player && !covered) DrawStatus();
+        if (player && !covered && screen != Screen.Pause)
         {
-            DrawStatus();
             // The companion drone's health, just above the skill card.
             var pet = Pet.Current;
             if (pet && pet.isActiveAndEnabled)
@@ -302,13 +306,16 @@ public partial class Hud : MonoBehaviour
             }
         }
 
-        DrawCrosshair(w, h);
-        DrawEliteTags();
-        DrawLootTags();
-        DrawCombo(w, h);
-        DrawNumbers();
-        DrawBoss(w);
-        DrawMinimap(w);
+        if (!covered)
+        {
+            DrawCrosshair(w, h);
+            DrawEliteTags();
+            DrawLootTags();
+            DrawCombo(w, h);
+            DrawNumbers();
+            DrawBoss(w);
+            DrawMinimap(w);
+        }
 
         if (screen == Screen.None) DrawPrompt(w, h);
         if (bannerT > 0f && screen == Screen.None)
@@ -446,22 +453,24 @@ public partial class Hud : MonoBehaviour
             var r = over ? new Rect(slot.x - cw * 0.03f, slot.y - 12f, cw * 1.06f, ch * 1.06f) : slot;
             if (over) UiKit.Halo(r, new Color(cc.r, cc.g, cc.b, 0.9f), 22f);
             DrawHeroCard(r, c, i + 1);
-            // Under the card: dodges, speed, crit and the starting weapons.
-            var sr = new Rect(slot.x, slot.yMax + 16, cw, 78);
-            UiKit.DrawPanel(sr);
+            // Under the card, one line each: dodges, speed and crit, the starting weapons. Small corner
+            // ornaments (22 tall, 25 wide) and the text kept inside them, on narrow screens too.
+            var sr = new Rect(slot.x, slot.yMax + 16, cw, StatStrip);
+            UiKit.DrawPanel(sr, 22f);
             var st = new GUIStyle(left) { fontSize = Mathf.RoundToInt(Mathf.Clamp(cw * 0.045f, 13f, 16f)) };
-            UiKit.Text(new Rect(sr.x + 18, sr.y + 8, 50, 24), "闪避", st, UiKit.Dim);
+            float sx = sr.x + 28;
+            UiKit.Text(new Rect(sx, sr.y + 8, 50, 22), "闪避", st, UiKit.Dim);
             for (int k = 0; k < c.stamina; k++)
-                UiKit.Fill(new Rect(sr.x + 58 + k * 15, sr.y + 15, 11, 11), new Color(0.45f, 0.95f, 1f));
-            UiKit.Text(new Rect(sr.x + 58 + 5 * 15 + 8, sr.y + 8, cw, 24), $"移速 {c.speed:0.0} · 暴击 {c.crit * 100f:0}%", st, UiKit.Dim);
-            float wx = sr.x + 16;
+                UiKit.Fill(new Rect(sx + 40 + k * 15, sr.y + 14, 11, 11), new Color(0.45f, 0.95f, 1f));
+            UiKit.Text(new Rect(sx, sr.y + 31, cw - 56, 22), $"移速 {c.speed:0.0} · 暴击 {c.crit * 100f:0}%", st, UiKit.Dim);
+            float wx = sx, ww = (cw - 56) / 2;
             foreach (var id in c.weapons)
             {
                 var wd = Weapons.Get(id);
                 var ic = IconStudio.I ? IconStudio.I.Weapon(id) : null;
-                if (ic) GUI.DrawTexture(new Rect(wx, sr.y + 36, 52, 32), ic, ScaleMode.ScaleToFit);
-                UiKit.Text(new Rect(wx + 54, sr.y + 36, cw / 2 - 70, 32), wd.name, st, Weapons.RarityColors[wd.rarity]);
-                wx += (cw - 32) / 2;
+                if (ic) GUI.DrawTexture(new Rect(wx, sr.y + 56, 42, 28), ic, ScaleMode.ScaleToFit);
+                UiKit.Text(new Rect(wx + 44, sr.y + 56, ww - 46, 28), wd.name, st, Weapons.RarityColors[wd.rarity]);
+                wx += ww;
             }
             if (Event.current.type == EventType.MouseDown && over)
             {
@@ -471,8 +480,10 @@ public partial class Hud : MonoBehaviour
             }
         }
         if (IconStudio.I) IconStudio.I.hovered = hover;
-        UiKit.Text(new Rect(0, y + ch + 104, w, 30), "点击卡牌或按 1 – 4 选择", small);
+        UiKit.Text(new Rect(0, y + ch + 26 + StatStrip, w, 30), "点击卡牌或按 1 – 4 选择", small);
     }
+
+    const float StatStrip = 92f;
 
     /// A painted hero card: portrait in the arch, name on the ribbon, trait and skill on the
     /// parchment, health / armour / energy as gems on the corners.
@@ -540,7 +551,8 @@ public partial class Hud : MonoBehaviour
     {
         var st = new GUIStyle(style);
         st.normal.textColor = color;
-        float hgt = st.CalcHeight(new GUIContent(text), r.width);
+        // As many lines as Label will draw: it puts the line breaks in itself (UiKit.Wrapped).
+        float hgt = st.CalcHeight(new GUIContent(UiKit.Wrapped(text, st, r.width)), 100000f);
         UiKit.Label(new Rect(r.x, r.y, r.width, Mathf.Min(hgt, Mathf.Max(r.height, 1f))), text, st);
         return r.y + hgt;
     }

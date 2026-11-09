@@ -209,12 +209,14 @@ public static class UiKit
     }
 
     /// The stone plate with gold corners behind every HUD block.
-    public static void DrawPanel(Rect r)
+    /// A stone plate with gold corners; corner is the most height a corner ornament takes (its width
+    /// is about 1.1 times that), for small plates with text close to the edges.
+    public static void DrawPanel(Rect r, float corner = 38f)
     {
         var t = Art("panel");
         if (!t) { GUI.Box(r, GUIContent.none, Panel); return; }
         float bx = t.width * 0.18f, by = t.height * 0.34f;
-        Nine(r, t, bx, by, bx, by, Mathf.Min(38f, r.height * 0.42f) / by);
+        Nine(r, t, bx, by, bx, by, Mathf.Min(corner, r.height * 0.42f) / by);
     }
 
     /// A soft coloured halo just outside r (hovered cards and buttons).
@@ -514,12 +516,116 @@ public static class UiKit
 
     public static void Label(Rect r, string text, GUIStyle style)
     {
+        text = Wrapped(text, style, r.width);
         if (Mathf.Abs(Scale - 1f) < 0.01f) { GUI.Label(r, text, style); return; }
         var keep = GUI.matrix;
         GUI.matrix = Matrix4x4.identity;
         var s = new GUIStyle(style) { fontSize = Mathf.RoundToInt((style.fontSize > 0 ? style.fontSize : 13) * Scale) };
         GUI.Label(new Rect(r.x * Scale, r.y * Scale, r.width * Scale, r.height * Scale), ScaleSizeTags(text), s);
         GUI.matrix = keep;
+    }
+
+    static readonly Dictionary<(string, int, int, int, FontStyle), string> wrapped = new Dictionary<(string, int, int, int, FontStyle), string>();
+    static readonly GUIContent probe = new GUIContent();
+
+    /// A wrapping style's text with its line breaks put in by Breaks, at the size Label draws it
+    /// (remembered: texts repeat every frame). Unity's own wrapping would start a line with "，" or
+    /// "）" whenever the width happened to fall there.
+    public static string Wrapped(string text, GUIStyle style, float width)
+    {
+        if (!style.wordWrap || string.IsNullOrEmpty(text) || text.IndexOf("<size=", System.StringComparison.Ordinal) >= 0) return text;
+        int px = Mathf.RoundToInt((style.fontSize > 0 ? style.fontSize : 13) * Scale);
+        var key = (text, px, Mathf.RoundToInt(width * Scale), style.font ? style.font.GetInstanceID() : 0, style.fontStyle);
+        if (wrapped.TryGetValue(key, out var done)) return done;
+        if (wrapped.Count > 2000) wrapped.Clear();
+        var s = new GUIStyle(style) { fontSize = px, wordWrap = false, richText = false };
+        float pad = s.padding.horizontal;
+        // A little to spare: bold tags are measured as plain text, and Unity must not wrap a line again.
+        return wrapped[key] = Breaks(text, t => { probe.text = t; return s.CalcSize(probe).x - pad; }, width * Scale - pad - 2f - 0.1f * px);
+    }
+
+    // Chinese line-breaking rules: closing punctuation never starts a line, opening never ends one.
+    const string NoStart = "，。、；：！？）》」』】”’…%,.;:!?)]";
+    const string NoEnd = "（《「『【“‘([";
+    static readonly System.Text.RegularExpressions.Regex Tag = new System.Text.RegularExpressions.Regex(@"\G</?(b|i|color|size)(=[^>]*)?>");
+
+    static bool Wide(char c) => c >= '\u2E80';
+
+    /// Breaks text into lines no wider than max (measure gives a line's width). A line may break
+    /// between any two Chinese characters, but closing punctuation takes the character before it
+    /// down with it, and opening punctuation goes down with what follows; a run of Latin letters
+    /// and digits ("+20%", "×1.3") stays whole. Rich-text tags pass through and take no room;
+    /// spaces where a line breaks are dropped, newlines in the text are kept.
+    public static string Breaks(string text, System.Func<string, float> measure, float max)
+    {
+        // Units: one Chinese character, a run of other characters, a space or a newline, each with
+        // its tags (raw) beside what it shows (vis).
+        var units = new List<(string raw, string vis)>();
+        var pre = new System.Text.StringBuilder();
+        for (int i = 0; i < text.Length;)
+        {
+            var m = text[i] == '<' ? Tag.Match(text, i) : null;
+            if (m != null && m.Success)
+            {
+                // A closing tag stays with the character before it, an opening one goes with the next.
+                if (text[i + 1] == '/' && pre.Length == 0 && units.Count > 0) units[units.Count - 1] = (units[units.Count - 1].raw + m.Value, units[units.Count - 1].vis);
+                else pre.Append(m.Value);
+                i += m.Length;
+                continue;
+            }
+            int j = i + 1;
+            if (text[i] != ' ' && text[i] != '\n' && !Wide(text[i]))
+                while (j < text.Length && text[j] != ' ' && text[j] != '\n' && text[j] != '<' && !Wide(text[j])) j++;
+            string v = text.Substring(i, j - i);
+            units.Add((pre + v, v));
+            pre.Clear();
+            i = j;
+        }
+        if (pre.Length > 0) units.Add((pre.ToString(), ""));
+
+        var output = new System.Text.StringBuilder();
+        var line = new List<(string raw, string vis)>();
+        string Shown(List<(string raw, string vis)> l)
+        {
+            var b = new System.Text.StringBuilder();
+            foreach (var u in l) b.Append(u.vis);
+            return b.ToString();
+        }
+        void Put(bool trimEnd)
+        {
+            int end = line.Count;
+            while (trimEnd && end > 0 && line[end - 1].vis == " ") end--;
+            for (int k = 0; k < line.Count; k++) output.Append(k < end ? line[k].raw : line[k].raw.Replace(" ", ""));
+            line.Clear();
+        }
+        bool broke = false;
+        foreach (var u in units)
+        {
+            if (u.vis == "\n") { Put(false); output.Append(u.raw); broke = false; continue; }
+            if (u.vis == " " && line.Count == 0 && broke) { output.Append(u.raw.Replace(" ", "")); continue; }
+            if (line.Count == 0 || u.vis == " " || u.vis.Length == 0 || measure(Shown(line) + u.vis) <= max) { line.Add(u); continue; }
+            // u does not fit: it starts the next line, taking along whatever the rules say must go with it.
+            var rest = new List<(string raw, string vis)> { u };
+            while (true)
+            {
+                int last = line.Count - 1;
+                while (last >= 0 && (line[last].vis == " " || line[last].vis.Length == 0)) last--;
+                int words = 0;
+                foreach (var x in line) if (x.vis != " " && x.vis.Length > 0) words++;
+                bool bad = NoStart.IndexOf(rest[0].vis[0]) >= 0 || (last >= 0 && NoEnd.IndexOf(line[last].vis[line[last].vis.Length - 1]) >= 0);
+                if (!bad || words < 2) break;
+                rest.InsertRange(0, line.GetRange(last, line.Count - last));
+                line.RemoveRange(last, line.Count - last);
+            }
+            Put(true);
+            output.Append('\n');
+            broke = true;
+            foreach (var x in rest)
+                if (line.Count == 0 && x.vis == " ") output.Append(x.raw.Replace(" ", ""));
+                else line.Add(x);
+        }
+        Put(true);
+        return output.ToString();
     }
 
     // <size=N> in rich text is in pixels: scale it with the rest (remembered, texts repeat every frame).
