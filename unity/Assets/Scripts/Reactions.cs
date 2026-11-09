@@ -60,9 +60,11 @@ public static class Reactions
         Object.Destroy(cloud.gameObject);
     }
 
-    /// Fire sources near any poison cloud set it off: flame shots, burning enemies, an erupting pit, a blast.
+    /// Fire sources near any poison cloud set it off: flame shots, burning enemies, an erupting pit, a
+    /// blast. The same fire catches moss (青苔地宫).
     public static void CheckClouds(Vector3 fireAt, float reach)
     {
+        Moss.Fire(fireAt, reach);
         foreach (var t in Trap.Live.ToArray())
             if (t is PoisonCloud cloud && !cloud.ignited)
             {

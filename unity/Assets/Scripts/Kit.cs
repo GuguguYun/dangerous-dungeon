@@ -38,6 +38,12 @@ public static class Kit
                 {
                     // An instance per floor so the theme tint never touches the imported asset.
                     var m = new Material(src);
+                    // 青苔地宫: the floor and wall pictures with moss grown on them (same layout).
+                    if (theme != null && theme.mossy && Resources.Load<Texture2D>("Kit/" + src.mainTexture.name + "_moss") is Texture2D moss && moss)
+                    {
+                        m.mainTexture = moss;
+                        if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", moss);
+                    }
                     var tint = theme != null ? theme.TintFor(CleanName(src.name)) : Color.white;
                     if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", tint);
                     m.color = tint;

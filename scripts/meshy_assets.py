@@ -278,6 +278,26 @@ ASSETS = {
         "Seamless tileable texture of dark carved stone with worn edges, deep purple-gray granite. ")),
     "tex_wood": dict(kind="texture", prompt=(
         "Seamless tileable texture of warm brown wooden planks with visible grain and a few iron nails. ")),
+    # 青苔地宫 (floor 1): the same floor and wall with moss grown on them (image edits of the
+    # textures above, so the slabs and bricks line up as before), plus cut-out moss to hang on walls
+    # and lay on the floor.
+    "tex_floor_moss": dict(kind="texture_edit", base="tex_floor", prompt=(
+        "Edit this seamless tileable stone floor texture: grow lush green moss in the dark grout lines "
+        "between the slabs, creeping a little onto the slab edges and corners, with a few small soft moss "
+        "tufts on some slabs. Keep exactly the same slab layout, sizes, stone colour and hand-painted "
+        "stylized look, top-down, flat even lighting, seamless tileable edges, no objects, no text.")),
+    "tex_wall_moss": dict(kind="texture_edit", base="tex_wall", prompt=(
+        "Edit this seamless tileable stone brick wall texture: grow green moss in the mortar lines between "
+        "the bricks and a few soft patches of moss on some bricks. Keep exactly the same brick layout, "
+        "sizes, stone colour and hand-painted stylized look, front view, flat even lighting, seamless "
+        "tileable edges, no objects, no text.")),
+    "decal_moss_hang": dict(kind="decal", aspect="16:9", prompt=(
+        "A wide strip of hanging green moss and small ivy vines drooping down from a straight horizontal top "
+        "edge, uneven ragged lower edge with a few longer strands, hand-painted stylized game texture, "
+        "front view, flat even lighting, isolated on a plain background, no wall, no text.")),
+    "decal_moss_patch": dict(kind="decal", aspect="1:1", prompt=(
+        "A flat irregular clump of soft green moss with a few tiny leaves, seen from directly above, "
+        "hand-painted stylized game texture, flat even lighting, isolated on a plain background, no text.")),
 }
 TEXTURE = ("Top-down orthographic view filling the whole square image edge to edge, hand-painted stylized "
            "game texture, flat even lighting with no shadows or highlights, no perspective, no objects, no text.")
@@ -420,9 +440,13 @@ def stage_images(names):
         a = ASSETS[n]
         if a["kind"] == "texture":
             prompt = a["prompt"] + TEXTURE
+        elif a["kind"] == "decal":
+            prompt = a["prompt"]
         else:
             prompt = a["prompt"] + a.get("suffix", CHAR if a["kind"] == "char" else PROP) + STYLE
-        args = ["--ai-model", "nano-banana-pro", "--prompt", prompt, "--aspect-ratio", "1:1"]
+        args = ["--ai-model", "nano-banana-pro", "--prompt", prompt, "--aspect-ratio", a.get("aspect", "1:1")]
+        if a["kind"] == "decal":
+            args += ["--remove-background", "true"]
         if a["kind"] == "char":
             args += ["--pose-mode", "a-pose"]
         return submit("text-to-image", *args)
@@ -430,7 +454,18 @@ def stage_images(names):
     def finish(n, s, t):
         s["image"] = fetch(t["image_urls"][0], OUT / "images" / f"{n}.png")
 
-    run_stage(names, "image", "text-to-image", make, finish)
+    plain = [n for n in names if ASSETS[n]["kind"] != "texture_edit"]
+    edits = [n for n in names if ASSETS[n]["kind"] == "texture_edit"]
+    run_stage(plain, "image", "text-to-image", make, finish)
+
+    # Texture edits: the base texture's own image is the reference.
+    def make_edit(n, s):
+        a = ASSETS[n]
+        base = state.get(a["base"], {}).get("image")
+        return submit("image-to-image", "--ai-model", "nano-banana-pro", "--prompt", a["prompt"],
+                      "--reference-image-urls", str(ROOT / base), "--aspect-ratio", "1:1")
+
+    run_stage(edits, "image", "image-to-image", make_edit, finish)
 
 
 def stage_models(names):

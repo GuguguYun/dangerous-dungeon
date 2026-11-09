@@ -37,6 +37,7 @@ public static class BuildScript
         LogModels();
         CreatePaletteAssets();
         CreateVfxAssets();
+        CreateMossAssets();
         CreateScene();
         AssetDatabase.SaveAssets();
         Debug.Log("SETUP done");
@@ -382,6 +383,32 @@ public static class BuildScript
             Debug.Log($"SETUP glow_{id} shader={glow.shader.name} texture={(bool)glow.GetTexture("_EmissionMap")}");
         }
         Debug.Log($"SETUP vfx shader={Vfx.CreateMaterial(true, tex).shader.name}");
+    }
+
+    /// 青苔地宫: the mossy floor and wall textures (sharp at grazing angles like the kit's own) and the
+    /// cut-out moss pictures with their materials.
+    static void CreateMossAssets()
+    {
+        const string dir = "Assets/Resources/Kit";
+        foreach (var name in new[] { "kit_tex_floor_moss", "kit_tex_wall_moss" })
+            if (AssetImporter.GetAtPath($"{dir}/{name}.png") is TextureImporter ti && ti.anisoLevel != 8)
+            {
+                ti.anisoLevel = 8;
+                ti.SaveAndReimport();
+            }
+        foreach (var name in new[] { Moss.Hang, Moss.Patch })
+        {
+            var path = $"{dir}/{name}.png";
+            if (!(AssetImporter.GetAtPath(path) is TextureImporter ti)) continue;
+            if (!ti.alphaIsTransparency || ti.wrapMode != TextureWrapMode.Clamp)
+            {
+                ti.alphaIsTransparency = true;
+                ti.wrapMode = TextureWrapMode.Clamp;
+                ti.SaveAndReimport();
+            }
+            Save(Moss.CreateMaterial(AssetDatabase.LoadAssetAtPath<Texture2D>(path)), $"{dir}/{name}.mat");
+        }
+        Debug.Log($"SETUP moss materials={(bool)AssetDatabase.LoadAssetAtPath<Material>($"{dir}/{Moss.Hang}.mat")}");
     }
 
     static void CreatePaletteAssets()

@@ -1,7 +1,8 @@
 using UnityEngine;
 
-/// Per-floor look: tints on the Meshy stone/wood textures, fog, ambient and sun colours, brazier
-/// fire colour, sky tint and the ambient particles drifting around the player.
+/// Per-floor look: tints on the Meshy stone/wood textures (on the first floor, their mossy versions),
+/// fog, ambient and sun colours, brazier fire colour, sky tint and the ambient particles drifting
+/// around the player.
 public class ThemeDef
 {
     public string name;
@@ -9,6 +10,7 @@ public class ThemeDef
     public Color fog, ambient, sun, fire, sky;
     public float fogDensity = 0.012f;
     public string particles; // dust, embers, snow
+    public bool mossy;       // mossy floor and wall textures, moss on the walls and floors (Moss)
 
     public static ThemeDef ForFloor(int floor) => floor switch
     {
@@ -37,7 +39,8 @@ public class ThemeDef
         _ => new ThemeDef
         {
             name = "青苔地宫",
-            fog = new Color(0.10f, 0.08f, 0.15f), ambient = new Color(0.58f, 0.6f, 0.7f),
+            mossy = true,
+            fog = new Color(0.07f, 0.11f, 0.10f), ambient = new Color(0.56f, 0.62f, 0.62f),
             sun = new Color(1f, 0.96f, 0.9f), fire = new Color(1f, 0.6f, 0.3f), sky = new Color(0.35f, 0.25f, 0.55f), particles = "dust",
         },
     };

@@ -56,6 +56,7 @@ public class Dungeon : MonoBehaviour
         public int room;
     }
     readonly List<WallSlot> wallSlots = new List<WallSlot>();
+    readonly List<(Vector3 pos, Vector3 inward)> plainWalls = new List<(Vector3, Vector3)>(); // rooms and corridors
     RoomInfo endRoom;
     public int loops;                                       // extra corridors that make the floor a loop
     public readonly List<Room> trialRooms = new List<Room>();
@@ -73,7 +74,9 @@ public class Dungeon : MonoBehaviour
         BuildRooms(floor);
         PlaceTraps(floor);
         Decorate();
-        Debug.Log($"DUNGEON floor={floor} seed={seed} rooms={rooms.Count} tiles={tiles.Count}");
+        Moss.Hanging = Moss.Patches = 0;
+        if (ThemeDef.ForFloor(floor).mossy) GrowMoss(seed);
+        Debug.Log($"DUNGEON floor={floor} seed={seed} rooms={rooms.Count} tiles={tiles.Count} moss={Moss.Hanging}+{Moss.Patches}");
     }
 
     public void SetPlayer(PlayerController p)
@@ -267,7 +270,11 @@ public class Dungeon : MonoBehaviour
                 var rot = d.x != 0 ? Quaternion.Euler(0f, 90f, 0f) : Quaternion.identity;
                 Kit.Spawn(piece, pos, rot, transform);
                 if (piece == "wall_door") doors.Add(new Door { pos = pos, rot = rot, a = kv.Value, b = other });
-                else if (kv.Value >= 0) wallSlots.Add(new WallSlot { pos = pos, inward = -new Vector3(d.x, 0f, d.y), room = kv.Value });
+                else
+                {
+                    plainWalls.Add((pos, -new Vector3(d.x, 0f, d.y)));
+                    if (kv.Value >= 0) wallSlots.Add(new WallSlot { pos = pos, inward = -new Vector3(d.x, 0f, d.y), room = kv.Value });
+                }
                 if (d.x != 0)
                 {
                     corners.Add(new Vector2Int(2 * t.x + d.x, 2 * t.y + 1));
@@ -506,6 +513,31 @@ public class Dungeon : MonoBehaviour
                 }
                 room.blocked.Add(p);
                 k++;
+            }
+        }
+    }
+
+    /// 青苔地宫: moss on the walls and at their feet, and two carpets of it on each combat room's floor
+    /// (lure enemies onto one and set it alight). Its own random numbers: the same seed still gives
+    /// the same map and decoration as before (a continued run).
+    void GrowMoss(int seed)
+    {
+        var mrng = new System.Random(seed * 31 + 7);
+        var parent = new GameObject("Moss").transform;
+        parent.SetParent(transform, false);
+        Moss.Dress(plainWalls, mrng, parent);
+        foreach (var info in rooms)
+        {
+            if (info.kind != Kind.Combat || !info.combat) continue;
+            float span = info.half * T - 2.5f;
+            for (int n = 0, tries = 0; n < 2 && tries < 30; tries++)
+            {
+                var p = info.Center + new Vector3((float)(mrng.NextDouble() * 2 - 1) * span, 0f, (float)(mrng.NextDouble() * 2 - 1) * span);
+                // Off the spawn middle, the doors and anything standing or set in the floor (pillars, cover, traps).
+                if (Vector3.Distance(p, info.Center) < 3f || info.combat.blocked.Exists(b => Vector3.Distance(b, p) < 2.6f)
+                    || doors.Exists(dr => Vector3.Distance(dr.pos, p) < 4f)) continue;
+                Moss.Carpet(p, 1.6f + (float)mrng.NextDouble() * 0.7f, null, (float)mrng.NextDouble() * 360f, parent);
+                n++;
             }
         }
     }

@@ -1328,6 +1328,35 @@ public class GameManager : MonoBehaviour
         Destroy(burnt.gameObject);
         Destroy(pit.gameObject);
         player.Teleport(home);
+
+        // 青苔地宫: mossy floor and walls, moss on them, and it burns.
+        if (ThemeDef.ForFloor(RunState.floor).mossy)
+        {
+            bool mossFloor = false, mossWall = false;
+            foreach (var r in dungeon.GetComponentsInChildren<MeshRenderer>())
+                foreach (var m in r.sharedMaterials)
+                {
+                    if (!m || !m.mainTexture) continue;
+                    mossFloor |= m.mainTexture.name == "kit_tex_floor_moss";
+                    mossWall |= m.mainTexture.name == "kit_tex_wall_moss";
+                }
+            Check("青苔地宫 has moss: mossy floor and walls, moss hanging and lying along them", mossFloor && mossWall && Moss.Hanging >= 5 && Moss.Patches >= 5,
+                $"floor={mossFloor} wall={mossWall} hanging={Moss.Hanging} patches={Moss.Patches}");
+            var carpet = Moss.Carpet(home + fwdDir * 3.5f, 2f, null, 0f, null);
+            var standing = Dummy(carpet.transform.position + side * 0.3f);
+            Reactions.CheckClouds(carpet.transform.position + Vector3.up * 0.5f, 0.3f); // a flame lands on it
+            Check("fire catches moss", carpet.state == MossPiece.State.Burning);
+            yield return new WaitForSeconds(1.2f);
+            Check("burning moss sets the enemy standing in it alight", standing.hp < 100 && standing.Burning, $"hp={standing.hp} burning={standing.Burning}");
+            yield return new WaitForSeconds(2.2f);
+            Check("moss burns out to ash", carpet.state == MossPiece.State.Ash);
+            Destroy(standing.gameObject);
+            Destroy(carpet.gameObject);
+            // Flames on the floor in front of a wall climb to the moss hanging over them.
+            var hung = MossPiece.Live.Find(x => x.hanging && x.state == MossPiece.State.Green);
+            if (hung) Moss.Fire(hung.transform.position - hung.transform.up * (hung.size.y / 2f + 1.5f) - hung.transform.forward * 0.6f, 0.3f);
+            Check("fire below a wall catches the moss hanging over it", hung && hung.state == MossPiece.State.Burning);
+        }
         yield return new WaitForSeconds(0.8f);
 
         // Spikes: step on, 0.4 s later they come up.
@@ -2262,6 +2291,37 @@ public class GameManager : MonoBehaviour
         if (shotCloud) Destroy(shotCloud.gameObject);
         if (floorTrap) Destroy(floorTrap);
         if (walker) Destroy(walker.gameObject);
+
+        // 青苔地宫: a carpet of moss alight under a goblin, then the moss on the nearest wall before and
+        // after flames below it climb up.
+        if (ThemeDef.ForFloor(RunState.floor).mossy)
+        {
+            var shotMoss = Moss.Carpet(tp + Vector3.forward * 4f, 2f, null, 30f, null);
+            var mossWalker = Dummy(shotMoss.transform.position + Vector3.right * 0.3f);
+            Moss.Fire(shotMoss.transform.position, 0.3f);
+            player.pitch = 12f;
+            yield return new WaitForSeconds(0.9f);
+            yield return Shot("17b_moss_fire.png");
+            if (mossWalker) Destroy(mossWalker.gameObject);
+            MossPiece wallMoss = null;
+            foreach (var m in MossPiece.Live)
+                if (m.hanging && m.state == MossPiece.State.Green && (!wallMoss || Vector3.Distance(m.transform.position, tp) < Vector3.Distance(wallMoss.transform.position, tp)))
+                    wallMoss = m;
+            if (wallMoss)
+            {
+                var into = wallMoss.transform.forward;
+                player.Teleport(new Vector3(wallMoss.transform.position.x, 0.05f, wallMoss.transform.position.z) - into * 6f);
+                player.yaw = Mathf.Atan2(into.x, into.z) * Mathf.Rad2Deg;
+                player.pitch = -8f;
+                yield return new WaitForSeconds(0.5f);
+                yield return Shot("17c_moss_wall.png");
+                Moss.Fire(wallMoss.transform.position - wallMoss.transform.up * (wallMoss.size.y / 2f + 1.5f) - into * 0.6f, 0.3f);
+                yield return new WaitForSeconds(1f);
+                yield return Shot("17d_moss_wall_fire.png");
+                player.Teleport(tp);
+            }
+            if (shotMoss) Destroy(shotMoss.gameObject);
+        }
 
         // Mechs: one parked (boarding prompt), the light one firing, the heavy one's missile salvo.
         Vector3 mp = player.transform.position;
