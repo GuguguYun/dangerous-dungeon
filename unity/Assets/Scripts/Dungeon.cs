@@ -333,12 +333,7 @@ public class Dungeon : MonoBehaviour
                     trialRooms.Add(trialRoom);
                     trialRoom.manual = true;
                     trialRoom.forceElite = true;
-                    trialRoom.waves = new[]
-                    {
-                        new[] { EnemyKind.Gunner, EnemyKind.Charger },
-                        new[] { EnemyKind.Spreader, EnemyKind.Bomber, EnemyKind.Gunner },
-                        new[] { EnemyKind.Archer, EnemyKind.Charger, EnemyKind.Bomber },
-                    };
+                    trialRoom.waves = Waves(floor, 3, 3, 4);
                     var statue = TrialStatue.Create(info.Center, trialRoom, transform);
                     trialRoom.blocked.Add(info.Center);
                     trialRoom.Cleared += r =>
@@ -376,10 +371,11 @@ public class Dungeon : MonoBehaviour
         room.hud = hud;
         room.floor = floor;
         room.boss = info.kind == Kind.Boss;
+        // Three waves, one more enemy each time: 12 in a small floor-1 room, 3 more a floor and in a big room.
         int baseCount = 2 + floor + (info.half >= 3 ? 1 : 0);
         room.waves = room.boss
             ? new[] { new[] { EnemyKind.Boss } }
-            : new[] { Wave(baseCount, floor), Wave(baseCount + 1, floor) };
+            : Waves(floor, baseCount, baseCount + 1, baseCount + 2);
         foreach (var door in doors)
             if (door.a == index || door.b == index)
                 room.gates.Add(Kit.Spawn("gate", door.pos, door.rot, room.transform));
@@ -462,18 +458,43 @@ public class Dungeon : MonoBehaviour
         return room;
     }
 
-    /// Floor 1 meets gunners and chargers; spreaders join from floor 2.
-    EnemyKind[] Wave(int count, int floor)
+    /// A room's enemies: 80% melee, 20% ranged, counted over all its waves.
+    public const float MeleeShare = 0.8f;
+    public static bool IsMelee(EnemyKind k) => k == EnemyKind.Charger || k == EnemyKind.Guard || k == EnemyKind.Slime || k == EnemyKind.Mimic;
+
+    /// Waves of the given sizes. Melee: chargers, shield guards (more from floor 2) and slimes. Ranged: goblin
+    /// gunners and the odd bomber on floor 1; shamans and skeleton archers join from floor 2.
+    EnemyKind[][] Waves(int floor, params int[] sizes)
     {
-        // Floor 1 adds the odd bomber, shield guard and slime; skeleton archers join from floor 2, more guards on 3+.
-        var pool = floor == 1
-            ? new[] { EnemyKind.Gunner, EnemyKind.Gunner, EnemyKind.Charger, EnemyKind.Gunner, EnemyKind.Bomber, EnemyKind.Guard, EnemyKind.Slime }
+        var melee = floor == 1
+            ? new[] { EnemyKind.Charger, EnemyKind.Charger, EnemyKind.Charger, EnemyKind.Slime, EnemyKind.Slime, EnemyKind.Guard }
+            : new[] { EnemyKind.Charger, EnemyKind.Charger, EnemyKind.Charger, EnemyKind.Slime, EnemyKind.Slime, EnemyKind.Guard, EnemyKind.Guard };
+        var ranged = floor == 1
+            ? new[] { EnemyKind.Gunner, EnemyKind.Gunner, EnemyKind.Gunner, EnemyKind.Bomber }
             : floor == 2
-                ? new[] { EnemyKind.Gunner, EnemyKind.Charger, EnemyKind.Spreader, EnemyKind.Bomber, EnemyKind.Archer, EnemyKind.Guard, EnemyKind.Slime }
-                : new[] { EnemyKind.Gunner, EnemyKind.Charger, EnemyKind.Spreader, EnemyKind.Bomber, EnemyKind.Archer, EnemyKind.Archer, EnemyKind.Guard, EnemyKind.Guard, EnemyKind.Slime };
-        var wave = new EnemyKind[count];
-        for (int i = 0; i < count; i++) wave[i] = pool[rng.Next(pool.Length)];
-        return wave;
+                ? new[] { EnemyKind.Gunner, EnemyKind.Spreader, EnemyKind.Bomber, EnemyKind.Archer }
+                : new[] { EnemyKind.Gunner, EnemyKind.Spreader, EnemyKind.Bomber, EnemyKind.Archer, EnemyKind.Archer };
+        int total = 0;
+        foreach (int s in sizes) total += s;
+        // The ranged ones go round the waves from the last (biggest) one.
+        var rangedIn = new int[sizes.Length];
+        int shooters = Mathf.RoundToInt(total * (1f - MeleeShare));
+        for (int k = 0; k < shooters; k++) rangedIn[sizes.Length - 1 - k % sizes.Length]++;
+        var waves = new EnemyKind[sizes.Length][];
+        for (int w = 0; w < sizes.Length; w++)
+        {
+            var wave = new EnemyKind[sizes[w]];
+            for (int i = 0; i < wave.Length; i++)
+                wave[i] = i < rangedIn[w] ? ranged[rng.Next(ranged.Length)] : melee[rng.Next(melee.Length)];
+            // Shuffled, so the shooters are not always the first to appear.
+            for (int i = wave.Length - 1; i > 0; i--)
+            {
+                int j = rng.Next(i + 1);
+                (wave[i], wave[j]) = (wave[j], wave[i]);
+            }
+            waves[w] = wave;
+        }
+        return waves;
     }
 
     /// Hazards on tile centres inside fight rooms (never the middle tile, door mouths or cover):

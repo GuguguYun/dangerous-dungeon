@@ -18,7 +18,7 @@ public class PlayerSkill : MonoBehaviour
     Material[][] saved;
     Material ghostMat;
     float ghostFade;
-    ParticleSystem motes, wisps, feathers;
+    ParticleSystem wisps, feathers;
 
     public static readonly Color ShieldGold = new Color(1f, 0.84f, 0.42f);
     // How long each class holds its skill weapon.
@@ -35,6 +35,9 @@ public class PlayerSkill : MonoBehaviour
         def = d;
         cooldownLeft = 0f;
         activeLeft = 0f;
+        // The magic circle's textures are drawn once; do it now rather than on the first cast.
+        if (d != null && d.skill == SkillKind.Meteor) MagicCircle.Warm(MagicCircle.Style.Fire);
+        if (d != null && d.skill == SkillKind.Sanctuary) MagicCircle.Warm(MagicCircle.Style.Holy);
     }
 
     public bool TryUse()
@@ -177,12 +180,9 @@ public class PlayerSkill : MonoBehaviour
     {
         centre.y = 0f;
         const float radius = 5f;
-        var ring = GroundRing(centre, radius, new Color(1f, 0.45f, 0.1f));
-        for (float t = 0f; t < 0.8f; t += Time.deltaTime)
-        {
-            ring.widthMultiplier = 0.12f + 0.12f * Mathf.PingPong(t * 8f, 1f);
-            yield return null;
-        }
+        var circle = MagicCircle.Spawn(centre, radius, MagicCircle.Style.Fire, 0.5f);
+        yield return new WaitForSeconds(0.8f);
+        circle.Pulse();
         // Half the meteors seek enemies inside the circle, the rest carpet it at random.
         var inside = new System.Collections.Generic.List<Enemy>();
         foreach (var e in FindObjectsByType<Enemy>(FindObjectsSortMode.None))
@@ -204,7 +204,7 @@ public class PlayerSkill : MonoBehaviour
             yield return new WaitForSeconds(0.12f);
         }
         yield return new WaitForSeconds(0.6f);
-        Destroy(ring.gameObject);
+        if (circle) circle.End();
     }
 
     // ---------- priest: sanctuary ----------
@@ -213,22 +213,12 @@ public class PlayerSkill : MonoBehaviour
     {
         centre.y = 0f;
         const float radius = 4.5f;
-        var ring = GroundRing(centre, radius, new Color(1f, 0.85f, 0.35f));
-        var moteHost = new GameObject("sanctuary_motes").transform;
-        moteHost.position = centre + Vector3.up * 0.1f;
-        motes = Vfx.Trail(moteHost, "motes");
-        var glow = new GameObject("sanctuary_light").AddComponent<Light>();
-        glow.transform.position = centre + Vector3.up * 2f;
-        glow.type = LightType.Point;
-        glow.color = new Color(1f, 0.9f, 0.6f);
-        glow.range = radius * 2f;
-        glow.intensity = 3f;
+        var circle = MagicCircle.Spawn(centre, radius, MagicCircle.Style.Holy, 0.45f);
         float armorT = 0f, hpT = 0f;
         for (float t = 0f; t < 5f; t += Time.deltaTime)
         {
             armorT -= Time.deltaTime;
             hpT -= Time.deltaTime;
-            ring.widthMultiplier = 0.15f + 0.08f * Mathf.Sin(t * 6f);
             // Friendly units inside benefit: the player here, the companion drone below.
             var ally = PlayerController.Current;
             if (ally && !ally.dead && Vector3.Distance(new Vector3(ally.transform.position.x, 0f, ally.transform.position.z), centre) <= radius)
@@ -251,28 +241,6 @@ public class PlayerSkill : MonoBehaviour
             if (hpT <= 0f) hpT = 1f;
             yield return null;
         }
-        Destroy(glow.gameObject);
-        Destroy(ring.gameObject);
-        Vfx.Detach(motes);
-        Destroy(moteHost.gameObject, 2f);
-    }
-
-    static LineRenderer GroundRing(Vector3 centre, float radius, Color c)
-    {
-        var lr = new GameObject("skill_ring").AddComponent<LineRenderer>();
-        lr.transform.position = centre;
-        lr.loop = true;
-        lr.useWorldSpace = false;
-        lr.positionCount = 64;
-        lr.sharedMaterial = Palette.Trail("shockwave");
-        lr.startColor = lr.endColor = c * 2.5f;
-        lr.widthMultiplier = 0.15f;
-        lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        for (int i = 0; i < 64; i++)
-        {
-            float a = i * Mathf.PI * 2f / 64f;
-            lr.SetPosition(i, new Vector3(Mathf.Cos(a) * radius, 0.08f, Mathf.Sin(a) * radius));
-        }
-        return lr;
+        if (circle) circle.End();
     }
 }

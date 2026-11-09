@@ -642,6 +642,19 @@ public class GameManager : MonoBehaviour
         yield return new WaitForSeconds(1.5f);
         Check("room locks on entry", room.state == Room.State.Fighting && room.GatesClosed(), $"state={room.state}");
         Check("wave 1 spawned", room.alive == room.waves[0].Length, $"alive={room.alive}");
+        // Three waves, one bigger each time; across the floor's fight rooms 80% melee, 20% ranged.
+        Check("fight rooms have three growing waves", room.waves.Length == 3 && room.waves[2].Length == room.waves[0].Length + 2 && room.waves[0].Length >= 3,
+            $"waves={string.Join("/", System.Array.ConvertAll(room.waves, w => w.Length))}");
+        int floorFoes = 0, meleeFoes = 0;
+        foreach (var fightRoom in dungeon.combatRooms)
+            if (!fightRoom.boss)
+                foreach (var foes in fightRoom.waves)
+                    foreach (var foe in foes)
+                    {
+                        floorFoes++;
+                        if (Dungeon.IsMelee(foe)) meleeFoes++;
+                    }
+        Check("the floor's enemies are about 80% melee", floorFoes > 0 && Mathf.Abs(meleeFoes / (float)floorFoes - Dungeon.MeleeShare) < 0.05f, $"melee {meleeFoes}/{floorFoes}");
         int taken0 = player.damageTaken;
         // Up to 12 s: with pillars or low walls in the room, enemies may first have to move to see you,
         // and a wave of slow shield guards or lobbing bombers takes a while to land a hit.
@@ -1104,8 +1117,11 @@ public class GameManager : MonoBehaviour
         yield return AimAt(4f);
         var target = Dummy(CrosshairGround());
         yield return new WaitForSeconds(0.4f);
+        int circles = MagicCircle.Live;
         skill.TryUse();
-        yield return new WaitForSeconds(2.6f);
+        yield return new WaitForSeconds(0.4f);
+        Check("the meteor storm draws a magic circle", MagicCircle.Live == circles + 1, $"circles={MagicCircle.Live - circles}");
+        yield return new WaitForSeconds(2.2f);
         Check("meteor storm hits the target area", target.hp < 100, $"hp={target.hp}");
         Destroy(target.gameObject);
         var staffTarget = Dummy(CrosshairGround());
@@ -1115,6 +1131,8 @@ public class GameManager : MonoBehaviour
         yield return new WaitForSeconds(1.2f);
         Check("the star staff drops a meteor on the crosshair", staffTarget.hp < 100, $"hp={staffTarget.hp}");
         Destroy(staffTarget.gameObject);
+        yield return new WaitForSeconds(0.6f);
+        Check("the magic circles fade once their spells are over", MagicCircle.Live == circles, $"circles={MagicCircle.Live - circles}");
 
         // Priest: sanctuary heals hp and armor.
         skill.Setup(player, Classes.Get("priest"));

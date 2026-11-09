@@ -428,20 +428,6 @@ public static class Vfx
                 Flames(ps);
                 Shrink(ps, 0.3f);
                 break;
-            case "motes":
-                // Golden motes rising out of the priest's sanctuary circle.
-                m.startLifetime = new ParticleSystem.MinMaxCurve(1.0f, 1.8f);
-                m.startSpeed = new ParticleSystem.MinMaxCurve(0.6f, 1.4f);
-                m.startSize = new ParticleSystem.MinMaxCurve(0.06f, 0.16f);
-                m.startColor = Grad(new Color(1f, 0.95f, 0.6f), new Color(1f, 0.8f, 0.35f));
-                m.gravityModifier = -0.05f;
-                em.rateOverTime = 40f;
-                sh.shapeType = ParticleSystemShapeType.Circle;
-                sh.radius = 4.3f;
-                sh.radiusThickness = 1f;
-                sh.rotation = new Vector3(-90f, 0f, 0f);
-                Fade(ps, new Color(1f, 0.95f, 0.7f), new Color(1f, 0.75f, 0.3f));
-                break;
             case "bubbles":
                 // Bubbles that rise and pop out of a poison cloud.
                 ps.GetComponent<ParticleSystemRenderer>().sharedMaterial = AlphaBlend;
@@ -819,6 +805,41 @@ public static class Vfx
                 Fade(ps, new Color(1f, 0.95f, 0.85f), new Color(1f, 0.9f, 0.8f));
                 break;
         }
+        ps.Play();
+        return ps;
+    }
+
+    /// Sparks rising off a magic circle (MagicCircle) for as long as it lasts: embers that drift and wink
+    /// out for fire, slow golden motes for holy light. Most come off the rim, a few from inside.
+    public static ParticleSystem CircleSparks(Transform parent, float radius, bool embers)
+    {
+        var ps = Make("circle_sparks", parent.position, Additive, 1f, parent);
+        ps.transform.localPosition = Vector3.zero;
+        var m = ps.main;
+        m.loop = true;
+        m.startLifetime = embers ? new ParticleSystem.MinMaxCurve(0.6f, 1.2f) : new ParticleSystem.MinMaxCurve(1.0f, 1.8f);
+        m.startSpeed = embers ? new ParticleSystem.MinMaxCurve(1.2f, 2.6f) : new ParticleSystem.MinMaxCurve(0.5f, 1.3f);
+        m.startSize = new ParticleSystem.MinMaxCurve(0.09f, 0.2f);
+        var hot = embers ? new Color(1f, 0.8f, 0.4f) : new Color(1f, 0.95f, 0.65f);
+        var cool = embers ? new Color(1f, 0.32f, 0.06f) : new Color(1f, 0.78f, 0.32f);
+        m.startColor = Grad(hot, cool);
+        m.gravityModifier = -0.05f;
+        var em = ps.emission;
+        em.rateOverTime = 14f * radius;
+        var sh = ps.shape;
+        sh.shapeType = ParticleSystemShapeType.Circle;
+        sh.radius = radius * 0.98f;
+        sh.radiusThickness = 0.25f;
+        sh.rotation = new Vector3(-90f, 0f, 0f);
+        if (embers)
+        {
+            var noise = ps.noise;
+            noise.enabled = true;
+            noise.strength = 0.6f;
+            noise.frequency = 0.8f;
+        }
+        Fade(ps, hot, cool);
+        Shrink(ps, 0.3f);
         ps.Play();
         return ps;
     }

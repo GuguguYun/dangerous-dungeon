@@ -91,7 +91,8 @@ public partial class PlayerController
     {
         Vector3 at = AimPoint();
         if (Physics.Raycast(at + Vector3.up * 0.5f, Vector3.down, out var ground, 8f, Layers.WorldMask, QueryTriggerInteraction.Ignore)) at = ground.point;
-        var ring = GroundCircle(at, w.explode, new Color(1f, 0.45f, 0.1f));
+        // A small magic circle where it will land, drawn in fast, swelling as the meteor strikes.
+        var circle = MagicCircle.Spawn(at, w.explode, MagicCircle.Style.Fire, 0.22f, 2f);
         Vfx.Sparks(muzzle.position, new Color(1f, 0.55f, 0.2f), 8, 3f);
         Sfx.Play("buff", 0.35f, 0.1f, 0.8f);
         yield return new WaitForSeconds(0.3f);
@@ -99,28 +100,11 @@ public partial class PlayerController
         int dmg = RollDamage(w.damage, out bool crit);
         var m = Bullet.Fire(from, (at - from).normalized * 34f, true, w.radius, w.mat, 3f, dmg, w.explode, crit);
         m.burn = 2f;
-        yield return new WaitForSeconds(0.4f);
-        if (ring) Destroy(ring.gameObject);
-    }
-
-    /// A glowing circle on the floor (where a meteor will land).
-    static LineRenderer GroundCircle(Vector3 centre, float radius, Color c)
-    {
-        var lr = new GameObject("meteor_mark").AddComponent<LineRenderer>();
-        lr.transform.position = centre;
-        lr.loop = true;
-        lr.useWorldSpace = false;
-        lr.positionCount = 40;
-        lr.sharedMaterial = Palette.Trail("shockwave");
-        lr.startColor = lr.endColor = c * 2.5f;
-        lr.widthMultiplier = 0.12f;
-        lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        for (int i = 0; i < 40; i++)
-        {
-            float a = i * Mathf.PI * 2f / 40f;
-            lr.SetPosition(i, new Vector3(Mathf.Cos(a) * radius, 0.08f, Mathf.Sin(a) * radius));
-        }
-        return lr;
+        yield return new WaitForSeconds(0.35f); // about when it strikes (12 m at 34 m/s)
+        if (!circle) yield break;
+        circle.Pulse();
+        yield return new WaitForSeconds(0.1f);
+        if (circle) circle.End();
     }
 
     // ---------- 晨曦权杖: light that shields you ----------

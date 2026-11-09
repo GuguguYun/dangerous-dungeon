@@ -5,7 +5,8 @@ using UnityEngine;
 
 /// -vfxshots <dir>: a quick look at the loot pillars, the energy shields, the potion / crystal pickups,
 /// the assassin's stealth and every enemy / boss shot, as close-ups and from the normal play camera,
-/// saved as PNGs; then quit. -vfxpart shots: only the enemy shots.
+/// saved as PNGs; then quit. -vfxpart shots: only the enemy shots; -vfxpart circles: only the spells'
+/// magic circles (the mage's storm and star staff, the priest's sanctuary).
 /// It hooks itself in (no GameManager change) and takes over once the floor is built. Run with -class
 /// knight so the dome is the knight's own, -class assassin for the stealth. Needs a window
 /// (screenshots), like -shots.
@@ -57,8 +58,12 @@ public class VfxShots : MonoBehaviour
         F = Quaternion.Euler(0f, player.yaw, 0f) * Vector3.forward;
         R = Quaternion.Euler(0f, player.yaw + 90f, 0f) * Vector3.forward;
         yield return new WaitForSeconds(1f);
-        if (part != "shots") yield return Effects();
-        yield return EnemyShots();
+        if (part == "circles") yield return Circles();
+        else
+        {
+            if (part != "shots") yield return Effects();
+            yield return EnemyShots();
+        }
         Debug.Log("VFXSHOTS done");
         Application.Quit();
     }
@@ -390,6 +395,60 @@ public class VfxShots : MonoBehaviour
     }
 
     /// A fixed close-up camera with the HUD hidden.
+    /// The magic circles: each drawing itself in, then whole from the play camera and from above, and the
+    /// storm as the mage really casts it (meteors falling) and the star staff's small one.
+    IEnumerator Circles()
+    {
+        foreach (var style in new[] { MagicCircle.Style.Fire, MagicCircle.Style.Holy })
+        {
+            string name = style == MagicCircle.Style.Fire ? "fire" : "holy";
+            float radius = style == MagicCircle.Style.Fire ? 5f : 4.5f;
+            Vector3 at = P + F * 7f;
+            PlayCam();
+            var c = MagicCircle.Spawn(at, radius, style, 0.5f);
+            yield return new WaitForSeconds(0.2f);
+            yield return Shot($"circle_{name}_drawing.png");
+            yield return new WaitForSeconds(0.7f);
+            yield return Shot($"circle_{name}_game.png");
+            Look(at - F * 0.5f + Vector3.up * 11f, at);
+            yield return Shot($"circle_{name}_top.png");
+            Look(at - F * (radius + 3.5f) + R * 1.5f + Vector3.up * 1.4f, at + Vector3.up * 0.4f);
+            yield return Shot($"circle_{name}_low.png");
+            c.Pulse();
+            yield return new WaitForSeconds(0.08f);
+            yield return Shot($"circle_{name}_pulse.png");
+            c.End();
+            PlayCam();
+            yield return new WaitForSeconds(1.2f);
+        }
+
+        // The real thing: the mage casts the storm on the crosshair, then the staff.
+        player.skill.Setup(player, Classes.Get("mage"));
+        player.skill.cooldownLeft = 0f;
+        player.pitch = 18f;
+        yield return new WaitForSeconds(0.3f);
+        player.skill.TryUse();
+        yield return new WaitForSeconds(0.45f);
+        yield return Shot("storm_cast.png");
+        yield return new WaitForSeconds(0.6f);
+        yield return Shot("storm_meteors.png");
+        yield return new WaitForSeconds(1.6f);
+        player.Attack();
+        yield return new WaitForSeconds(0.25f);
+        yield return Shot("staff_mark.png");
+        yield return new WaitForSeconds(0.4f);
+        yield return Shot("staff_strike.png");
+        yield return new WaitForSeconds(1.5f);
+        // The priest's sanctuary round the player.
+        player.skill.Setup(player, Classes.Get("priest"));
+        player.skill.cooldownLeft = 0f;
+        player.skill.TryUse();
+        yield return new WaitForSeconds(0.8f);
+        yield return Shot("sanctuary_game.png");
+        yield return new WaitForSeconds(5f);
+        Debug.Log($"VFXSHOTS circles left={MagicCircle.Live}");
+    }
+
     void Look(Vector3 from, Vector3 at)
     {
         player.externalCamera = true;
