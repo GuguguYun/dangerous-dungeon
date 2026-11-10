@@ -327,6 +327,12 @@
 - 自测新增 4 项：三波逐波变多；本层近战约 80%（实测 34/42）；陨石雨出现法阵；法术结束后法阵全部消失。
 - 自检 217/217；跑图 `-soak 2`：50 个房间全清、问题 0、报错 0。一个房间算上史莱姆分裂的小史莱姆：第 1 层 16–25 只，第 4 层 35–44 只；同时在场最多 10 只，帧耗时一直在 60 帧上限内，> 25 ms 的停顿 36 次、都不在出怪的那一帧。
 
+第 71 轮（用户 2026-11-10 上午：「发布到正式版本和开了最新的网页版pr了吗」）：
+- 第 70 轮只发了 Mac 正式版，网页版 PR 没开。用户的预期是两边一起发（11-09 也说过「先替换为本地客户端正式版，然后开个pr推送最新的网页版本」）→ 以后每次发布：publish.sh 换 Mac 版 + 导出网页版 + 在 landing-mini-games 开 PR，一起做完。
+- 网页版：`BuildScript.BuildWeb`（157 MB 不变，MagicCircle 着色器在 WebGL 下编译通过）→ landing-mini-games 分支 `dangerous-dungeon-more-monsters`，PR #214。
+- 浏览器自测（无头 Edge + CDP，`pnpm preview` 带 CDN 的 CSP）：法师陨石雨、牧师圣域的法阵在网页里和 Mac 版一样。测试脚本要等日志里的「GAME ready」再按键（加载时页面主线程忙，按键会被吞掉）；无头 Edge 有时不出新画面，等待时每 2 秒截一张小图把它推下去。
+- 顺带修了一个网页版老问题：Unity 请求鼠标锁定被浏览器拒绝时（Chrome 在按 Esc 后一秒内再点就会拒绝），Unity 没接住这个 Promise → Unity 加载器弹 alert「An error occurred running the Unity content…」，外层页面的 inject.js 也会把游戏报成加载失败。landing-mini-games 的 `main.js` 包了一层 `canvas.requestPointerLock`，接住拒绝。
+
 ## 素材不进 git
 
 代码仓库：只在本机（git，分支 dev）。11-09 曾推到 meshy-dev/meshy-dungeon，用户要求删掉；我删不了（组织不允许成员删仓库，HTTP 403），11-09 中午再查时已经不存在（404），本地已去掉 origin，不再推送。公司 SSH 证书只允许推到 Meshy 企业名下的仓库，推不到个人账号 tianyaoguan-lab。
